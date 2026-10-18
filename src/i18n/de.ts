@@ -10,7 +10,7 @@ const de = {
   },
   nav: {
     home: "Start", products: "Artikel", receive: "Wareneingang", stock: "Lager", writeOffs: "Verluste",
-    suppliers: "Lieferanten", settings: "Einstellungen", sales: "Verkauf", reports: "Berichte", expenses: "Ausgaben",
+    customers: "Kunden", suppliers: "Lieferanten", settings: "Einstellungen", sales: "Verkauf", reports: "Berichte", expenses: "Ausgaben",
   },
   home: {
     greeting: "Hallo", subtitle: "Was möchtest du tun?",
@@ -62,6 +62,34 @@ const de = {
   supplier: {
     title: "Lieferanten", new: "Neuer Lieferant", name: "Name", contact: "Ansprechpartner", email: "E-Mail", phone: "Telefon",
     country: "Land", vatId: "USt-IdNr.", empty: "Noch keine Lieferanten.",
+  },
+  customer: {
+    title: "Kunden", new: "Neuer Kunde", type: "Art", COMPANY: "Firma", PERSON: "Privatperson", name: "Name / Firma",
+    contact: "Ansprechpartner", priceGroup: "Preisgruppe", WHOLESALE: "Großhandel", RETAIL: "Einzelhandel",
+    creditLimit: "Kreditlimit", paymentDays: "Zahlungsziel (Tage)", vatId: "USt-IdNr.", vatPending: "USt-IdNr. beantragt – noch nicht da",
+    vatStatus: { NONE: "keine", PENDING: "ausstehend", VALID: "geprüft & gültig", INVALID: "ungültig" },
+    check: "Jetzt prüfen", checks: "Prüfungen", checkUnavailable: "Prüfdienst gerade nicht erreichbar – später erneut versuchen.",
+    taxMode: "Steuer", empty: "Noch keine Kunden.", number: "Kd.-Nr.", documents: "Belege", ownVatMissing: "Für die Prüfung fehlt die eigene USt-IdNr. in den Einstellungen.",
+  },
+  taxMode: { DOMESTIC: "Inland", EU_REVERSE_CHARGE: "EU steuerfrei", EU_PENDING_VATID: "EU – Nr. ausstehend", EU_B2C: "EU privat", EXPORT: "Ausfuhr (steuerfrei)" },
+  sales: {
+    invoice: "Rechnung", offer: "Angebot", title: "Verkauf", newOffer: "Neues Angebot", newInvoice: "Direkt-Rechnung", offers: "Angebote", invoices: "Rechnungen",
+    customer: "Kunde", pickCustomer: "Kunde wählen", lines: "Positionen", price: "Einzelpreis netto", lineDiscount: "Rabatt %",
+    docDiscount: "Gesamtrabatt %", skonto: "Skonto %", skontoDays: "Skonto-Tage", subtotal: "Zwischensumme", discount: "Rabatt",
+    net: "Netto", vat: "USt.", gross: "Gesamt", validUntil: "Gültig bis", channel: "Verkaufsweg",
+    channels: { STORE: "Laden / direkt", BRAND_SHOP: "Marken-Shop", GENERAL_SHOP: "Allgemeiner Shop" },
+    status: { DRAFT: "Entwurf", SENT: "Gesendet", ACCEPTED: "Angenommen", REJECTED: "Abgelehnt", EXPIRED: "Abgelaufen", CONVERTED: "In Rechnung", ISSUED: "Ausgestellt", CANCELLED: "Storniert" },
+    saveDraft: "Entwurf speichern", send: "Als gesendet markieren", accept: "Kunde hat zugestimmt", acceptedVia: "Wie zugestimmt? (z. B. Telefon)",
+    reject: "Abgelehnt", toInvoice: "In Rechnung umwandeln", issue: "Rechnung ausstellen", issueConfirm: "Danach ist die Rechnung festgeschrieben. Änderungen laufen automatisch über eine Korrektur.",
+    edit: "Bearbeiten", correct: "Korrigieren", correctHint: "Die alte Rechnung wird automatisch storniert und eine korrigierte neue erstellt.",
+    cancel: "Stornieren", cancelConfirm: "Rechnung wirklich stornieren? Die Ware wird zurück ins Lager gebucht.",
+    pdf: "PDF", deliveryNote: "Ladeliste", reservedUntil: "Ware reserviert bis", notEnough: "Nicht genug verfügbar", available: "verfügbar",
+    deliveryDate: "Lieferdatum", dueDate: "Fällig am", issueDate: "Rechnungsdatum", number: "Nummer", empty: "Noch keine Belege.",
+    noCustomer: "Bitte zuerst einen Kunden wählen.", noLines: "Bitte mindestens eine Position.", freeText: "Freitext-Position",
+    vatIdNowValid: "USt-IdNr. liegt jetzt vor", fixVat: "Rechnung ohne USt. neu ausstellen", refund: "Zu erstatten",
+    cancellationOf: "Storno zu", replacedBy: "ersetzt durch", replaces: "ersetzt", oss: "OSS: Steuer des Ziellandes",
+    exportProof: "Ausfuhrnachweis", uploadProof: "Nachweis hochladen", email: "Per E-Mail senden", notes: "Hinweis auf dem Beleg",
+    retention: "Eigentumsvorbehalt", reservation: "Reservierung",
   },
   settings: {
     title: "Einstellungen", company: "Firmendaten", bank: "Bank", invoice: "Rechnungen", owner: "Inhaber",

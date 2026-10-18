@@ -12,7 +12,7 @@ const en: Dict = {
   },
   nav: {
     home: "Home", products: "Products", receive: "Goods in", stock: "Stock", writeOffs: "Losses",
-    suppliers: "Suppliers", settings: "Settings", sales: "Sales", reports: "Reports", expenses: "Expenses",
+    customers: "Customers", suppliers: "Suppliers", settings: "Settings", sales: "Sales", reports: "Reports", expenses: "Expenses",
   },
   home: {
     greeting: "Hello", subtitle: "What would you like to do?",
@@ -64,6 +64,34 @@ const en: Dict = {
   supplier: {
     title: "Suppliers", new: "New supplier", name: "Name", contact: "Contact person", email: "Email", phone: "Phone",
     country: "Country", vatId: "VAT ID", empty: "No suppliers yet.",
+  },
+  customer: {
+    title: "Customers", new: "New customer", type: "Type", COMPANY: "Company", PERSON: "Private person", name: "Name / company",
+    contact: "Contact person", priceGroup: "Price group", WHOLESALE: "Wholesale", RETAIL: "Retail",
+    creditLimit: "Credit limit", paymentDays: "Payment term (days)", vatId: "VAT ID", vatPending: "VAT ID applied for – not yet received",
+    vatStatus: { NONE: "none", PENDING: "pending", VALID: "checked & valid", INVALID: "invalid" },
+    check: "Check now", checks: "Checks", checkUnavailable: "Checking service unavailable – try again later.",
+    taxMode: "Tax", empty: "No customers yet.", number: "Cust. no.", documents: "Documents", ownVatMissing: "Enter your own VAT ID in Settings first.",
+  },
+  taxMode: { DOMESTIC: "Domestic", EU_REVERSE_CHARGE: "EU tax-free", EU_PENDING_VATID: "EU – VAT ID pending", EU_B2C: "EU private", EXPORT: "Export (tax-free)" },
+  sales: {
+    invoice: "Invoice", offer: "Quote", title: "Sales", newOffer: "New quote", newInvoice: "Direct invoice", offers: "Quotes", invoices: "Invoices",
+    customer: "Customer", pickCustomer: "Choose customer", lines: "Lines", price: "Unit price (net)", lineDiscount: "Disc. %",
+    docDiscount: "Overall discount %", skonto: "Early-payment discount %", skontoDays: "Within days", subtotal: "Subtotal", discount: "Discount",
+    net: "Net", vat: "VAT", gross: "Total", validUntil: "Valid until", channel: "Sales channel",
+    channels: { STORE: "Store / direct", BRAND_SHOP: "Brand shop", GENERAL_SHOP: "General shop" },
+    status: { DRAFT: "Draft", SENT: "Sent", ACCEPTED: "Accepted", REJECTED: "Rejected", EXPIRED: "Expired", CONVERTED: "Invoiced", ISSUED: "Issued", CANCELLED: "Cancelled" },
+    saveDraft: "Save draft", send: "Mark as sent", accept: "Customer accepted", acceptedVia: "How? (e.g. phone)",
+    reject: "Rejected", toInvoice: "Convert to invoice", issue: "Issue invoice", issueConfirm: "The invoice is locked after issuing. Changes go through an automatic correction.",
+    edit: "Edit", correct: "Edit", correctHint: "The old invoice is cancelled automatically and a corrected one is created.",
+    cancel: "Cancel invoice", cancelConfirm: "Really cancel this invoice? Goods go back into stock.",
+    pdf: "PDF", deliveryNote: "Loading list", reservedUntil: "Goods reserved until", notEnough: "Not enough available", available: "available",
+    deliveryDate: "Delivery date", dueDate: "Due date", issueDate: "Invoice date", number: "Number", empty: "No documents yet.",
+    noCustomer: "Please choose a customer first.", noLines: "Please add at least one line.", freeText: "Free-text line",
+    vatIdNowValid: "VAT ID received", fixVat: "Re-issue invoice without VAT", refund: "To refund",
+    cancellationOf: "Cancellation of", replacedBy: "replaced by", replaces: "replaces", oss: "OSS: destination-country VAT",
+    exportProof: "Export proof", uploadProof: "Upload proof", email: "Send by email", notes: "Note on document",
+    retention: "Retention of title", reservation: "Reservation",
   },
   settings: {
     title: "Settings", company: "Company details", bank: "Bank", invoice: "Invoices", owner: "Owner",

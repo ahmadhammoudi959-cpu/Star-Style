@@ -12,17 +12,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { t, locale } = await getI18n();
   const items: NavItem[] = [
     { href: "/", label: t.nav.home, icon: "home" },
-    { href: "/sales", label: t.nav.sales, icon: "cart", soon: true },
+    { href: "/sales", label: t.nav.sales, icon: "cart" },
+    { href: "/customers", label: t.nav.customers, icon: "users" },
     { href: "/products", label: t.nav.products, icon: "box" },
     { href: "/receive", label: t.nav.receive, icon: "truck" },
     { href: "/stock", label: t.nav.stock, icon: "layers" },
     { href: "/write-offs", label: t.nav.writeOffs, icon: "alert" },
     { href: "/expenses", label: t.nav.expenses, icon: "receipt", soon: true },
     { href: "/reports", label: t.nav.reports, icon: "chart", soon: true },
-    { href: "/suppliers", label: t.nav.suppliers, icon: "users" },
+    { href: "/suppliers", label: t.nav.suppliers, icon: "truck" },
     { href: "/settings", label: t.nav.settings, icon: "settings" },
   ];
-  const mobile = [items[0], items[2], items[3], items[4], items[5]];
+  const mobile = [items[0], items[1], items[2], items[5], items[4]];
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[250px_1fr]">
       <aside className="sticky top-0 hidden h-screen print:!hidden flex-col justify-between bg-gradient-to-b from-brand-700 to-brand-900 p-4 text-white lg:flex">

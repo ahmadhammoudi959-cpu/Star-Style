@@ -12,7 +12,7 @@ const ar: Dict = {
   },
   nav: {
     home: "الرئيسية", products: "المنتجات", receive: "إدخال بضاعة", stock: "المخزون", writeOffs: "التالف",
-    suppliers: "الموردين", settings: "الإعدادات", sales: "المبيعات", reports: "التقارير", expenses: "المصاريف",
+    customers: "الزبائن", suppliers: "الموردين", settings: "الإعدادات", sales: "المبيعات", reports: "التقارير", expenses: "المصاريف",
   },
   home: {
     greeting: "أهلاً", subtitle: "شو بدك تعمل اليوم؟",
@@ -64,6 +64,34 @@ const ar: Dict = {
   supplier: {
     title: "الموردين", new: "مورّد جديد", name: "الاسم", contact: "الشخص المسؤول", email: "الإيميل", phone: "التلفون",
     country: "البلد", vatId: "الرقم الضريبي", empty: "ما في موردين لسا.",
+  },
+  customer: {
+    title: "الزبائن", new: "زبون جديد", type: "النوع", COMPANY: "شركة", PERSON: "شخص", name: "الاسم أو الشركة",
+    contact: "الشخص المسؤول", priceGroup: "فئة الأسعار", WHOLESALE: "جملة", RETAIL: "مفرق",
+    creditLimit: "حد الدين", paymentDays: "مهلة الدفع بالأيام", vatId: "الرقم الضريبي", vatPending: "الرقم الضريبي مطلوب ولسا ما وصل",
+    vatStatus: { NONE: "ما في", PENDING: "بالانتظار", VALID: "مفحوص وصالح", INVALID: "غير صالح" },
+    check: "افحص هلق", checks: "الفحوصات", checkUnavailable: "خدمة الفحص مو شغالة هلق، جرّب بعدين.",
+    taxMode: "الضريبة", empty: "ما في زبائن لسا.", number: "رقم الزبون", documents: "المستندات", ownVatMissing: "لازم تحط الرقم الضريبي للشركة بالإعدادات أول.",
+  },
+  taxMode: { DOMESTIC: "داخل ألمانيا", EU_REVERSE_CHARGE: "أوروبا بدون ضريبة", EU_PENDING_VATID: "أوروبا – الرقم بالانتظار", EU_B2C: "أوروبا – أفراد", EXPORT: "تصدير بدون ضريبة" },
+  sales: {
+    invoice: "فاتورة", offer: "عرض سعر", title: "المبيعات", newOffer: "عرض سعر جديد", newInvoice: "فاتورة مباشرة", offers: "عروض الأسعار", invoices: "الفواتير",
+    customer: "الزبون", pickCustomer: "اختار الزبون", lines: "البنود", price: "سعر القطعة بدون ضريبة", lineDiscount: "خصم %",
+    docDiscount: "خصم على كل الفاتورة %", skonto: "خصم الدفع المبكر %", skontoDays: "خلال كم يوم", subtotal: "المجموع قبل الخصم", discount: "الخصم",
+    net: "الصافي", vat: "الضريبة", gross: "المجموع الكلي", validUntil: "صالح لغاية", channel: "مصدر البيع",
+    channels: { STORE: "المحل / مباشر", BRAND_SHOP: "متجر البراند", GENERAL_SHOP: "المتجر العام" },
+    status: { DRAFT: "مسودة", SENT: "مبعوت", ACCEPTED: "مقبول", REJECTED: "مرفوض", EXPIRED: "منتهي", CONVERTED: "صار فاتورة", ISSUED: "صادرة", CANCELLED: "ملغاة" },
+    saveDraft: "حفظ كمسودة", send: "تعليم كمبعوت", accept: "الزبون وافق", acceptedVia: "كيف وافق؟ مثلاً بالتلفون",
+    reject: "رفض", toInvoice: "حوّل لفاتورة", issue: "إصدار الفاتورة", issueConfirm: "بعد الإصدار الفاتورة بتثبت، وأي تعديل بيصير تلقائياً عن طريق تصحيح.",
+    edit: "تعديل", correct: "تعديل", correctHint: "الفاتورة القديمة بتنلغى تلقائياً وبتطلع فاتورة جديدة مصححة.",
+    cancel: "إلغاء الفاتورة", cancelConfirm: "أكيد بدك تلغي الفاتورة؟ البضاعة بترجع عالمخزون.",
+    pdf: "ملف الطباعة", deliveryNote: "ورقة التحميل", reservedUntil: "البضاعة محجوزة لغاية", notEnough: "الكمية المتاحة ما بتكفي", available: "متاح",
+    deliveryDate: "تاريخ التسليم", dueDate: "تاريخ الاستحقاق", issueDate: "تاريخ الفاتورة", number: "الرقم", empty: "ما في مستندات لسا.",
+    noCustomer: "اختار زبون أول.", noLines: "لازم بند واحد على الأقل.", freeText: "بند نصي حر",
+    vatIdNowValid: "الرقم الضريبي وصل", fixVat: "إصدار الفاتورة من جديد بدون ضريبة", refund: "المبلغ يلي لازم يرجع",
+    cancellationOf: "إلغاء للفاتورة", replacedBy: "انستبدلت بـ", replaces: "بدل", oss: "النظام الأوروبي الموحد: ضريبة بلد الزبون",
+    exportProof: "إثبات التصدير", uploadProof: "رفع الإثبات", email: "بعت بالإيميل", notes: "ملاحظة على المستند",
+    retention: "الاحتفاظ بالملكية", reservation: "الحجز",
   },
   settings: {
     title: "الإعدادات", company: "بيانات الشركة", bank: "البنك", invoice: "الفواتير", owner: "صاحب الشركة",

@@ -24,9 +24,14 @@ Next.js 15 (App Router, Server Actions) · TypeScript strict · Drizzle ORM + Po
 8. Gestaltung: jede Karte hat Schatten und leichte Bewegung, Icons animiert beim Hover (`.card`, `.card-hover`, `.icon-pop`).
 9. Sehr einfache Bedienung: ein Nutzer, wenig Vorkenntnisse. Max. 3 Schritte pro Vorgang, klare Fehlermeldungen in seiner Sprache.
 
+## Bekannte Punkte
+- `npm audit`: verbleibend nur `postcss` innerhalb von Next (Build-Zeit, verarbeitet nur eigenes CSS) – beim nächsten Next-Update erneut prüfen.
+- Formulare mit zwei Absende-Knöpfen: Absicht als **kontrolliertes** Hidden-Feld übergeben (`DocEditor`), nicht über name/value am Knopf – sonst geht der Wert verloren.
+
 ## Ausbaustufen
 - [x] **1 Fundament**: Login/Ersteinrichtung, Artikel (Name DE+NL, Varianten Größe/Farbe, EAN), Lieferanten, Wareneingang mit Charge/MHD, Lager mit Bewegungen, Inventur, Verluste mit Protokoll + Foto, Einstellungen, Dashboard mit Hinweisen.
-- [ ] **2 Verkauf**: Kunden (USt-IdNr.-Prüfung VIES + BZSt eVatR), Angebot → Rechnung (eigenes PDF-Design, ZUGFeRD), Lieferschein ohne Preise, Rabatt %, Skonto, Steuerlogik (Inland / Reverse-Charge / USt-IdNr. ausstehend / EU-Privat mit OSS-Schwelle 10.000 € / Export), Storno + Korrektur.
+- [x] **2 Verkauf**: Kunden (USt-IdNr.-Prüfung BZSt eVatR qualifiziert + VIES, Ergebnisse gespeichert), Angebot mit Reservierung → Rechnung, eigenes PDF-Design (pdf-lib) mit eingebetteter E-Rechnung (CII/Factur-X EN16931), Ladeliste ohne Preise mit Unterschriftfeldern, Positions- und Gesamtrabatt, Skonto, Steuerlogik in `src/lib/tax.ts`, Storno (ST-) und „Bearbeiten“ = Korrekturentwurf, der beim Ausstellen die alte Rechnung storniert, E-Mail-Versand per SMTP (optional, `SMTP_*`).
+  - Offen: PDF/A-3-Konformität der ZUGFeRD-Datei mit einem Validator prüfen (z. B. Mustang/Validool) – die XML selbst folgt EN16931; OSS-Steuersätze in `EU_STANDARD_RATES_BP` vom Steuerberater bestätigen lassen.
 - [ ] **3 Zahlungen**: Teilzahlungen, Ratenplan, Offene Posten mit Ampel, Mahnungen, Kundenkonto, Kreditlimit, Eigentumsvorbehalt.
 - [ ] **4 Shop-Anbindung**: zwei Shops (Plattform noch offen), Echtzeit-Bestandsabgleich, Kanal je Verkauf, Abgleich alle 5 Min.
 - [ ] **5 Ausgaben & Berichte**: Eingangsrechnungen (Reverse-Charge z. B. Meta/Irland), Kategorien, GuV pro Monat und Kanal, DATEV-Export, Monatspaket für Steuerberater.

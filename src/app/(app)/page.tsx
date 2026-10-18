@@ -13,7 +13,7 @@ export default async function Home() {
   const today = todayIso();
 
   const actions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean }[] = [
-    { href: "/sales", label: t.home.sell, hint: t.home.sellHint, icon: "cart", tone: "from-brand-500 to-brand-700", soon: true },
+    { href: "/sales/invoices/new", label: t.home.sell, hint: t.home.sellHint, icon: "cart", tone: "from-brand-500 to-brand-700" },
     { href: "/receive", label: t.home.receive, hint: t.home.receiveHint, icon: "truck", tone: "from-sky-500 to-sky-700" },
     { href: "/write-offs", label: t.home.loss, hint: t.home.lossHint, icon: "alert", tone: "from-amber-500 to-orange-600" },
     { href: "/reports", label: t.home.reports, hint: t.home.reportsHint, icon: "chart", tone: "from-violet-500 to-indigo-700", soon: true },

@@ -265,6 +265,7 @@ export const offers = pgTable("offers", {
   validUntil: date("valid_until", { mode: "string" }).notNull(),
   discountBp: integer("discount_bp").notNull().default(0),
   acceptedVia: text("accepted_via").notNull().default(""),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),
   notes: text("notes").notNull().default(""),
   createdAt: createdAt(),
@@ -318,9 +319,13 @@ export const invoices = pgTable("invoices", {
   discountBp: integer("discount_bp").notNull().default(0),
   skontoBp: integer("skonto_bp").notNull().default(0),
   skontoDays: integer("skonto_days").notNull().default(0),
+  subtotalCents: integer("subtotal_cents").notNull().default(0),
+  discountCents: integer("discount_cents").notNull().default(0),
   netCents: integer("net_cents").notNull().default(0),
   vatCents: integer("vat_cents").notNull().default(0),
   grossCents: integer("gross_cents").notNull().default(0),
+  vatBreakdown: jsonb("vat_breakdown").$type<{ rateBp: number; netCents: number; vatCents: number }[]>().notNull().default([]),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
   retentionOfTitle: boolean("retention_of_title").notNull().default(true),
   notes: text("notes").notNull().default(""),
   exportProofFileId: text("export_proof_file_id"),
@@ -414,3 +419,32 @@ export const writeOffLinesRelations = relations(writeOffLines, ({ one }) => ({
   variant: one(variants, { fields: [writeOffLines.variantId], references: [variants.id] }),
 }));
 export const suppliersRelations = relations(suppliers, ({ many }) => ({ products: many(products) }));
+
+export const customersRelations = relations(customers, ({ many }) => ({ offers: many(offers), invoices: many(invoices), vatChecks: many(vatChecks) }));
+export const vatChecksRelations = relations(vatChecks, ({ one }) => ({ customer: one(customers, { fields: [vatChecks.customerId], references: [customers.id] }) }));
+export const offersRelations = relations(offers, ({ one, many }) => ({
+  customer: one(customers, { fields: [offers.customerId], references: [customers.id] }),
+  lines: many(offerLines),
+  reservations: many(reservations),
+}));
+export const offerLinesRelations = relations(offerLines, ({ one }) => ({
+  offer: one(offers, { fields: [offerLines.offerId], references: [offers.id] }),
+  variant: one(variants, { fields: [offerLines.variantId], references: [variants.id] }),
+}));
+export const reservationsRelations = relations(reservations, ({ one }) => ({
+  offer: one(offers, { fields: [reservations.offerId], references: [offers.id] }),
+  variant: one(variants, { fields: [reservations.variantId], references: [variants.id] }),
+}));
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
+  customer: one(customers, { fields: [invoices.customerId], references: [customers.id] }),
+  offer: one(offers, { fields: [invoices.offerId], references: [offers.id] }),
+  lines: many(invoiceLines),
+  payments: many(payments),
+  installments: many(installments),
+}));
+export const invoiceLinesRelations = relations(invoiceLines, ({ one }) => ({
+  invoice: one(invoices, { fields: [invoiceLines.invoiceId], references: [invoices.id] }),
+  variant: one(variants, { fields: [invoiceLines.variantId], references: [variants.id] }),
+}));
+export const paymentsRelations = relations(payments, ({ one }) => ({ invoice: one(invoices, { fields: [payments.invoiceId], references: [invoices.id] }) }));
+export const installmentsRelations = relations(installments, ({ one }) => ({ invoice: one(invoices, { fields: [installments.invoiceId], references: [invoices.id] }) }));
