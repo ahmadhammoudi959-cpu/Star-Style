@@ -366,9 +366,13 @@ export const invoices = pgTable("invoices", {
   notes: text("notes").notNull().default(""),
   exportProofFileId: text("export_proof_file_id"),
   pdfFileId: text("pdf_file_id"),
+  /** Preise der Positionen sind Bruttopreise (Shop-Bestellungen) */
+  pricesGross: boolean("prices_gross").notNull().default(false),
+  /** Steuer nicht neu berechnen (Shop hat Steuer bereits festgelegt und kassiert) */
+  taxLocked: boolean("tax_locked").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-}, (t) => [index("invoice_status_date").on(t.status, t.issueDate), index("invoice_customer").on(t.customerId)]);
+}, (t) => [index("invoice_status_date").on(t.status, t.issueDate), index("invoice_customer").on(t.customerId), index("invoice_external").on(t.channel, t.externalOrderId)]);
 
 export const invoiceLines = pgTable("invoice_lines", {
   id: id(),
@@ -382,6 +386,7 @@ export const invoiceLines = pgTable("invoice_lines", {
   vatRateBp: integer("vat_rate_bp").notNull().default(1900),
   netCents: integer("net_cents").notNull().default(0),
   vatCents: integer("vat_cents").notNull().default(0),
+  externalLineId: text("external_line_id"), // Position im Shop (gid://shopify/LineItem/…) bzw. „shipping“
 });
 
 export const installments = pgTable("installments", {
@@ -442,6 +447,72 @@ export const expenses = pgTable("expenses", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => [index("expense_date").on(t.date)]);
+
+// ───────────────────────── Shopify ─────────────────────────
+/** Verbindung je Shop (Kanal BRAND_SHOP / GENERAL_SHOP). Geheimnisse verschlüsselt (AES-GCM, Schlüssel aus SESSION_SECRET). */
+export const shops = pgTable("shops", {
+  channel: channel("channel").primaryKey(),
+  domain: text("domain").notNull().default(""),          // xyz.myshopify.com
+  clientId: text("client_id").notNull().default(""),
+  clientSecretEnc: text("client_secret_enc").notNull().default(""),
+  staticTokenEnc: text("static_token_enc").notNull().default(""), // ältere „Custom App“ (shpat_…)
+  tokenEnc: text("token_enc").notNull().default(""),     // zwischengespeicherter Zugriffstoken (24 h)
+  tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+  locationId: text("location_id").notNull().default(""),
+  locationName: text("location_name").notNull().default(""),
+  active: boolean("active").notNull().default(false),
+  stockBuffer: integer("stock_buffer").notNull().default(0), // so viele Stück im Shop zurückhalten
+  importTestOrders: boolean("import_test_orders").notNull().default(false),
+  ordersSince: timestamp("orders_since", { withTimezone: true }), // Bestellungen vor diesem Zeitpunkt nicht importieren
+  lastOrderSync: timestamp("last_order_sync", { withTimezone: true }),
+  lastStockSync: timestamp("last_stock_sync", { withTimezone: true }),
+  lastProductSync: timestamp("last_product_sync", { withTimezone: true }),
+  webhooksAt: timestamp("webhooks_at", { withTimezone: true }),
+  lastError: text("last_error").notNull().default(""),
+  updatedAt: updatedAt(),
+});
+
+/** Varianten im Shop und ihre Zuordnung zu unseren Varianten */
+export const shopVariants = pgTable("shop_variants", {
+  id: id(),
+  channel: channel("channel").notNull(),
+  shopVariantId: text("shop_variant_id").notNull(),       // gid://shopify/ProductVariant/…
+  inventoryItemId: text("inventory_item_id").notNull().default(""),
+  title: text("title").notNull().default(""),
+  sku: text("sku").notNull().default(""),
+  barcode: text("barcode").notNull().default(""),
+  tracked: boolean("tracked").notNull().default(true),
+  variantId: text("variant_id").references(() => variants.id, { onDelete: "set null" }),
+  matchedBy: text("matched_by").notNull().default(""),     // barcode | sku | manual
+  lastPushedQty: integer("last_pushed_qty"),
+  lastPushedAt: timestamp("last_pushed_at", { withTimezone: true }),
+  pushError: text("push_error").notNull().default(""),
+  seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("shop_variant_unique").on(t.channel, t.shopVariantId), index("shop_variant_ours").on(t.variantId)]);
+
+/** Protokoll für den Nutzer: Importe, Bestandsabgleich, Fehler */
+export const shopEvents = pgTable("shop_events", {
+  id: id(),
+  channel: channel("channel").notNull(),
+  level: text("level").notNull().default("info"),          // info | warn | error
+  kind: text("kind").notNull(),                            // order | cancel | refund | payment | stock | products | connect | webhook
+  ref: text("ref").notNull().default(""),                  // z. B. Bestellnummer #1001
+  invoiceId: text("invoice_id"),
+  message: text("message").notNull().default(""),
+  createdAt: createdAt(),
+}, (t) => [index("shop_event_time").on(t.channel, t.createdAt)]);
+
+/** Bereits verarbeitete Vorgänge (Erstattungen, Webhooks) – verhindert doppelte Buchungen */
+export const shopProcessed = pgTable("shop_processed", {
+  key: text("key").primaryKey(),                           // z. B. refund:gid://shopify/Refund/123
+  createdAt: createdAt(),
+});
+
+/** Varianten, deren Bestand sich geändert hat und an die Shops gemeldet werden muss */
+export const stockDirty = pgTable("stock_dirty", {
+  variantId: text("variant_id").primaryKey(),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ───────────────────────── Relationen ─────────────────────────
 export const productsRelations = relations(products, ({ one, many }) => ({

@@ -70,7 +70,8 @@ export type Totals = {
  * Positionsbetrag = Menge × Preis − Positionsrabatt; Gesamtrabatt anteilig auf jede Position,
  * USt je Steuersatz auf die Nettosumme dieses Satzes (eine Rundung pro Satz).
  */
-export function computeTotals(lines: LineIn[], documentDiscountBp = 0): Totals {
+export function computeTotals(lines: LineIn[], documentDiscountBp = 0, opts: { gross?: boolean } = {}): Totals {
+  if (opts.gross) return computeGrossTotals(lines, documentDiscountBp);
   const out: LineOut[] = lines.map((l) => {
     const raw = l.qty * l.unitPriceCents;
     const afterLine = raw - applyBp(raw, l.discountBp);
@@ -94,6 +95,44 @@ export function computeTotals(lines: LineIn[], documentDiscountBp = 0): Totals {
   }
   const vatCents = vatByRate.reduce((s, g) => s + g.vatCents, 0);
   return { lines: out, subtotalCents, discountCents: subtotalCents - netCents, netCents, vatByRate, vatCents, grossCents: netCents + vatCents };
+}
+
+/**
+ * Bruttopreise (z. B. Shop-Bestellungen „inkl. MwSt.“): Der Endbetrag steht fest,
+ * die USt wird je Steuersatz aus der Bruttosumme herausgerechnet (eine Rundung pro Satz).
+ * So stimmt die Rechnung auf den Cent mit dem überein, was der Kunde im Shop bezahlt hat.
+ */
+function computeGrossTotals(lines: LineIn[], documentDiscountBp: number): Totals {
+  const out: LineOut[] = lines.map((l) => {
+    const raw = l.qty * l.unitPriceCents;
+    const afterLine = raw - applyBp(raw, l.discountBp);
+    const gross = afterLine - applyBp(afterLine, documentDiscountBp);
+    return { ...l, grossLineCents: gross, netCents: 0, vatCents: 0 };
+  });
+  const extract = (g: number, rateBp: number) => Math.round((g * rateBp) / (10000 + rateBp));
+  const groups = new Map<number, number>();
+  for (const l of out) groups.set(l.vatRateBp, (groups.get(l.vatRateBp) ?? 0) + l.grossLineCents);
+  const vatByRate = [...groups.entries()].sort((a, b) => b[0] - a[0]).map(([rateBp, g]) => {
+    const vat = extract(g, rateBp);
+    return { rateBp, netCents: g - vat, vatCents: vat };
+  });
+  for (const g of vatByRate) {
+    const ls = out.filter((l) => l.vatRateBp === g.rateBp);
+    let rest = g.vatCents;
+    ls.forEach((l, i) => {
+      l.vatCents = i === ls.length - 1 ? rest : extract(l.grossLineCents, l.vatRateBp);
+      rest -= l.vatCents;
+      l.netCents = l.grossLineCents - l.vatCents;
+    });
+  }
+  const netCents = vatByRate.reduce((s, g) => s + g.netCents, 0);
+  const vatCents = vatByRate.reduce((s, g) => s + g.vatCents, 0);
+  const subtotalGross = lines.reduce((s, l) => { const raw = l.qty * l.unitPriceCents; return s + raw - applyBp(raw, l.discountBp); }, 0);
+  const grossCents = netCents + vatCents;
+  // Zwischensumme/Rabatt in Netto ausdrücken, damit die Anzeige „Zwischensumme − Rabatt = Netto“ stimmt
+  const discountGross = subtotalGross - grossCents;
+  const discountNet = discountGross ? Math.round((discountGross * netCents) / Math.max(grossCents, 1)) : 0;
+  return { lines: out, subtotalCents: netCents + discountNet, discountCents: discountNet, netCents, vatByRate, vatCents, grossCents };
 }
 
 /** Betrag bei Zahlung innerhalb der Skontofrist */

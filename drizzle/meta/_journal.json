@@ -29,6 +29,20 @@
       "when": 1792350316978,
       "tag": "0003_expenses",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792353483579,
+      "tag": "0004_shopify",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792353624403,
+      "tag": "0005_shop_lines",
+      "breakpoints": true
     }
   ]
 }

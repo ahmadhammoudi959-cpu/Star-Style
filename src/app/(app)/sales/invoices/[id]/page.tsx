@@ -78,13 +78,14 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             <Info k={t.sales.deliveryDate} v={formatDate(inv.deliveryDate, intl)} />
             <Info k={t.sales.dueDate} v={inv.kind === "INVOICE" ? formatDate(inv.dueDate, intl) : "—"} />
             <Info k={t.customer.taxMode} v={t.taxMode[inv.taxMode]} />
+            {inv.channel !== "STORE" && <Info k={t.sales.channel} v={`${t.sales.channels[inv.channel]}${inv.notes.startsWith("Shop-Bestellung") ? " · " + inv.notes.replace("Shop-Bestellung ", "").split(" ")[0] : ""}`} />}
           </div>
           <div className="table-wrap"><table className="tbl">
-            <thead><tr><th>#</th><th>{t.product.nameDe}</th><th className="text-end">{t.common.qty}</th><th className="text-end">{t.sales.price}</th><th className="text-end">{t.sales.lineDiscount}</th><th className="text-end">{t.sales.net}</th></tr></thead>
+            <thead><tr><th>#</th><th>{t.product.nameDe}</th><th className="text-end">{t.common.qty}</th><th className="text-end">{t.sales.price}{inv.pricesGross ? ` (${t.exp.gross})` : ""}</th><th className="text-end">{t.sales.lineDiscount}</th><th className="text-end">{inv.pricesGross ? t.exp.gross : t.sales.net}</th></tr></thead>
             <tbody>{lines.map((l) => (
               <tr key={l.id}><td className="text-ink-soft">{l.position}</td><td>{l.description}</td><td className="num text-end">{l.qty}</td>
                 <td className="num text-end">{formatCents(l.unitPriceCents, intl)}</td><td className="num text-end">{l.discountBp ? `${bpToPercent(l.discountBp)} %` : ""}</td>
-                <td className="num text-end font-semibold">{formatCents(l.netCents, intl)}</td></tr>
+                <td className="num text-end font-semibold">{formatCents(inv.pricesGross ? l.netCents + l.vatCents : l.netCents, intl)}</td></tr>
             ))}</tbody>
           </table></div>
           <dl className="ms-auto max-w-sm space-y-1.5 p-5 text-sm">

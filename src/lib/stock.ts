@@ -24,6 +24,14 @@ export async function bookMovement(tx: Tx, m: {
     refType: m.refType, refId: m.refId, note: m.note ?? "", userId: m.userId, channel: m.channel ?? null,
   });
   await tx.update(variants).set({ stockQty: sql`${variants.stockQty} + ${m.qty}` }).where(eq(variants.id, m.variantId));
+  await markDirty(tx, [m.variantId]);
+}
+
+/** Bestand an die Shops melden (wird nach dem Speichern im Hintergrund erledigt) */
+export async function markDirty(tx: Tx, variantIds: string[]) {
+  for (const v of new Set(variantIds)) {
+    await tx.execute(sql`insert into stock_dirty (variant_id, at) values (${v}, now()) on conflict (variant_id) do update set at = now()`);
+  }
 }
 
 /** Sperrt die Variante für die Dauer der Transaktion (verhindert Doppelverkäufe). */

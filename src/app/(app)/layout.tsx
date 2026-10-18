@@ -23,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/reports", label: t.nav.reports, icon: "chart" },
     { href: "/insights", label: t.nav.insights, icon: "bulb" },
     { href: "/ask", label: t.nav.ask, icon: "spark" },
+    { href: "/shops", label: t.nav.shops, icon: "globe" },
     { href: "/suppliers", label: t.nav.suppliers, icon: "truck" },
     { href: "/settings", label: t.nav.settings, icon: "settings" },
   ];

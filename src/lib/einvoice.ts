@@ -9,7 +9,7 @@ export type EInvoiceData = {
   seller: { name: string; street: string; zip: string; city: string; country: string; vatId: string; taxNumber: string; email: string; iban: string; bic: string; bankName: string };
   buyer: { id: string; name: string; street: string; zip: string; city: string; country: string; vatId: string };
   taxMode: "DOMESTIC" | "EU_REVERSE_CHARGE" | "EU_PENDING_VATID" | "EU_B2C" | "EXPORT";
-  lines: { position: number; name: string; sku: string; ean: string | null; qty: number; unitPriceCents: number; netCents: number; vatRateBp: number }[];
+  lines: { position: number; name: string; sku: string; ean: string | null; qty: number; unitPriceCents: number; netCents: number; vatRateBp: number; netUnitPrice?: string }[];
   vatBreakdown: { rateBp: number; netCents: number; vatCents: number }[];
   netCents: number; vatCents: number; grossCents: number;
   paymentTermsText: string;
@@ -34,7 +34,7 @@ export function buildCiiXml(d: EInvoiceData): string {
   const lines = d.lines.map((l) => {
     const qty = l.qty * sign;
     const gross = qty * l.unitPriceCents;
-    const allowance = gross - l.netCents * sign;
+    const allowance = l.netUnitPrice ? 0 : gross - l.netCents * sign;
     const cat = category(d.taxMode, l.vatRateBp);
     return `
     <ram:IncludedSupplyChainTradeLineItem>
@@ -45,7 +45,7 @@ export function buildCiiXml(d: EInvoiceData): string {
         <ram:Name>${esc(l.name)}</ram:Name>
       </ram:SpecifiedTradeProduct>
       <ram:SpecifiedLineTradeAgreement>
-        <ram:NetPriceProductTradePrice><ram:ChargeAmount>${amt(l.unitPriceCents)}</ram:ChargeAmount></ram:NetPriceProductTradePrice>
+        <ram:NetPriceProductTradePrice><ram:ChargeAmount>${l.netUnitPrice ?? amt(l.unitPriceCents)}</ram:ChargeAmount></ram:NetPriceProductTradePrice>
       </ram:SpecifiedLineTradeAgreement>
       <ram:SpecifiedLineTradeDelivery><ram:BilledQuantity unitCode="H87">${qty}</ram:BilledQuantity></ram:SpecifiedLineTradeDelivery>
       <ram:SpecifiedLineTradeSettlement>

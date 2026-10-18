@@ -23,7 +23,7 @@ type Fonts = { r: PDFFont; s: PDFFont; b: PDFFont };
 type DocKind = "invoice" | "cancellation" | "offer" | "delivery";
 
 type Party = { name: string; street: string; zip: string; city: string; country: string; vatId: string };
-type Line = { position: number; sku: string; ean: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; netCents: number; vatRateBp: number };
+type Line = { position: number; sku: string; ean: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; netCents: number; vatRateBp: number; vatCents?: number };
 type DocData = {
   kind: DocKind; number: string; date: string; deliveryDate: string | null; dueDate: string | null; validUntil: string | null;
   customerNo: number; customerId: string; buyer: Party; lines: Line[];
@@ -33,6 +33,8 @@ type DocData = {
   skontoBp: number; skontoDays: number; retentionOfTitle: boolean; notes: string; refNumber: string | null;
   /** nur Rechnung: bei Ausstellung bereits erhaltene Zahlungen und Ratenplan */
   received?: { amountCents: number; method: string }[]; installments?: { dueDate: string; amountCents: number }[];
+  /** Positionen mit Bruttopreisen (Shop-Bestellungen) */
+  pricesGross?: boolean;
 };
 const METHOD_DE: Record<string, string> = { CASH: "bar", BANK: "per Überweisung", CARD: "per Karte", ONLINE: "online" };
 
@@ -172,9 +174,9 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
     w.text(priced ? "Artikel" : "Art.-Nr. · Artikel", X.desc, hy, 8, f.s, rgb(1, 1, 1));
     w.right("Menge", X.qty + 10 * MM, hy, 8, f.s, rgb(1, 1, 1));
     if (priced) {
-      w.right("Einzelpreis", X.price, hy, 8, f.s, rgb(1, 1, 1));
+      w.right(d.pricesGross ? "Preis brutto" : "Einzelpreis", X.price, hy, 8, f.s, rgb(1, 1, 1));
       w.right("Rabatt", X.disc, hy, 8, f.s, rgb(1, 1, 1));
-      w.right("Betrag netto", X.total - 1.5 * MM, hy, 8, f.s, rgb(1, 1, 1));
+      w.right(d.pricesGross ? "Betrag brutto" : "Betrag netto", X.total - 1.5 * MM, hy, 8, f.s, rgb(1, 1, 1));
     } else {
       w.right("geladen", X.total - 1.5 * MM, hy, 8, f.s, rgb(1, 1, 1));
     }
@@ -195,7 +197,7 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
     if (priced) {
       w.right(formatCents(l.unitPriceCents), X.price, w.y, 9);
       w.right(l.discountBp ? `${bpToPercent(l.discountBp)} %` : "", X.disc, w.y, 9, f.r, SOFT);
-      w.right(formatCents(l.netCents), X.total - 1.5 * MM, w.y, 9, f.s);
+      w.right(formatCents(d.pricesGross ? l.netCents + (l.vatCents ?? 0) : l.netCents), X.total - 1.5 * MM, w.y, 9, f.s);
     } else {
       w.page.drawRectangle({ x: X.total - 7 * MM, y: w.y - 1 * MM, width: 4 * MM, height: 4 * MM, borderColor: INK, borderWidth: 0.7 });
     }
@@ -239,6 +241,7 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
     } else if (rest > 0 && d.dueDate) notes.push(`Zahlbar ohne Abzug bis ${formatDate(d.dueDate)}.`);
     if (rest > 0 && d.skontoBp && d.skontoDays) notes.push(`Bei Zahlung bis ${formatDate(addDaysIso(d.date, d.skontoDays))} gewähren wir ${bpToPercent(d.skontoBp)} % Skonto: zu zahlen ${formatCents(skontoAmount(d.grossCents, d.skontoBp))}.`);
     if (d.deliveryDate === d.date) notes.push("Das Lieferdatum entspricht dem Rechnungsdatum.");
+    if (d.pricesGross) notes.push("Alle Preise inklusive der ausgewiesenen Umsatzsteuer.");
   }
   if (d.kind === "offer" && d.validUntil) notes.push(`Dieses Angebot ist gültig bis ${formatDate(d.validUntil)}. Die Ware ist bis dahin für Sie reserviert.`);
   if (d.kind !== "delivery") notes.push(...legalNotes(d.taxMode, { ossCountry: d.ossCountry, retentionOfTitle: d.kind === "invoice" && d.retentionOfTitle }));
@@ -297,7 +300,7 @@ function setFacturXMetadata(doc: PDFDocument, title: string, author: string) {
 
 // ───────────────────────── Daten laden ─────────────────────────
 
-async function linesWithProducts(lines: { position: number; variantId: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; netCents?: number; vatRateBp: number }[]) {
+async function linesWithProducts(lines: { position: number; variantId: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; netCents?: number; vatRateBp: number; vatCents?: number }[]) {
   const out: Line[] = [];
   for (const l of lines.sort((a, b) => a.position - b.position)) {
     let sku = "", ean: string | null = null;
@@ -306,7 +309,7 @@ async function linesWithProducts(lines: { position: number; variantId: string | 
       sku = v?.product.sku ?? ""; ean = v?.barcode ?? null;
     }
     const raw = l.qty * l.unitPriceCents;
-    out.push({ position: l.position, sku, ean, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, netCents: l.netCents ?? raw - Math.round((raw * l.discountBp) / 10000), vatRateBp: l.vatRateBp });
+    out.push({ position: l.position, sku, ean, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, netCents: l.netCents ?? raw - Math.round((raw * l.discountBp) / 10000), vatRateBp: l.vatRateBp, vatCents: l.vatCents });
   }
   return out;
 }
@@ -331,6 +334,7 @@ export async function invoicePdf(invoiceId: string, variant: "invoice" | "delive
     grossCents: inv.grossCents, vatBreakdown: inv.vatBreakdown, taxMode: inv.taxMode, ossCountry: inv.ossCountry,
     skontoBp: inv.skontoBp, skontoDays: inv.skontoDays, retentionOfTitle: inv.retentionOfTitle, notes: inv.notes, refNumber: ref,
     installments: [...inv.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+    pricesGross: inv.pricesGross,
     // Entwurf: geplante Zahlung bei Ausstellung; ausgestellt: Zahlungen bis zum Rechnungsdatum (PDF wird beim ersten Abruf archiviert)
     received: isDraft
       ? (inv.initialPaymentCents > 0 ? [{ amountCents: inv.initialPaymentCents, method: inv.initialPaymentMethod ?? "CASH" }] : [])
@@ -343,7 +347,8 @@ export async function invoicePdf(invoiceId: string, variant: "invoice" | "delive
     notes: legalNotes(inv.taxMode, { ossCountry: inv.ossCountry, retentionOfTitle: inv.retentionOfTitle && kind === "invoice" }),
     seller: { name: company?.name ?? "", street: company?.street ?? "", zip: company?.zip ?? "", city: company?.city ?? "", country: company?.country ?? "DE", vatId: company?.vatId ?? "", taxNumber: company?.taxNumber ?? "", email: company?.email ?? "", iban: company?.iban ?? "", bic: company?.bic ?? "", bankName: company?.bankName ?? "" },
     buyer: { id: String(c.number), ...buyer },
-    taxMode: inv.taxMode, lines: data.lines.map((l) => ({ position: l.position, name: l.description, sku: l.sku, ean: l.ean, qty: l.qty, unitPriceCents: l.unitPriceCents, netCents: l.netCents, vatRateBp: l.vatRateBp })),
+    taxMode: inv.taxMode, lines: data.lines.map((l) => ({ position: l.position, name: l.description, sku: l.sku, ean: l.ean, qty: l.qty, unitPriceCents: l.unitPriceCents, netCents: l.netCents, vatRateBp: l.vatRateBp,
+      netUnitPrice: inv.pricesGross && l.qty ? (Math.abs(l.netCents) / Math.abs(l.qty) / 100).toFixed(4) : undefined })),
     vatBreakdown: inv.vatBreakdown, netCents: inv.netCents, vatCents: inv.vatCents, grossCents: inv.grossCents,
     paymentTermsText: inv.dueDate ? `Zahlbar bis ${formatDate(inv.dueDate)} ohne Abzug.` : "Sofort fällig.",
   });

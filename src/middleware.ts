@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
-const PUBLIC = ["/login", "/setup", "/api/health"];
+const PUBLIC = ["/login", "/setup", "/api/health", "/api/shopify/webhook"]; // Webhook prüft selbst per HMAC
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

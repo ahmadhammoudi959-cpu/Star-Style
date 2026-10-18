@@ -5,7 +5,7 @@
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { db, schema, type Tx } from "@/db";
 import { nextNumber } from "./numbering";
-import { addStock, audit, removeStock, StockError } from "./stock";
+import { addStock, audit, markDirty, removeStock, StockError } from "./stock";
 import { computeTotals, determineTaxMode, effectiveRateBp, OSS_THRESHOLD_CENTS, type TaxMode } from "./tax";
 import { addDaysIso, formatDate, todayIso } from "./dates";
 import { fitPlanToGross, movePayments, recordPaymentTx } from "./payments";
@@ -18,6 +18,7 @@ type Channel = (typeof schema.channel.enumValues)[number];
 
 export type LineInput = {
   variantId: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; vatRateBp: number;
+  externalLineId?: string | null;
 };
 
 function validateLines(lines: LineInput[]) {
@@ -44,16 +45,16 @@ export async function ossExceeded(tx: Tx | typeof db, year: number, additionalNe
 }
 
 /** Steuerbehandlung + Steuersätze der Positionen für einen Kunden bestimmen. */
-export async function applyTax(tx: Tx | typeof db, customer: typeof schema.customers.$inferSelect, lines: LineInput[], productRates: Map<string, number>, docDiscountBp: number, year: number) {
+export async function applyTax(tx: Tx | typeof db, customer: typeof schema.customers.$inferSelect, lines: LineInput[], productRates: Map<string, number>, docDiscountBp: number, year: number, gross = false) {
   const mode: TaxMode = determineTaxMode(customer);
   const base = lines.map((l) => ({ ...l, vatRateBp: l.variantId ? productRates.get(l.variantId) ?? l.vatRateBp : l.vatRateBp }));
   let exceeded = false;
   if (mode === "EU_B2C") {
-    const netGuess = computeTotals(base, docDiscountBp).netCents;
+    const netGuess = computeTotals(base, docDiscountBp, { gross }).netCents;
     exceeded = await ossExceeded(tx, year, netGuess);
   }
   const taxed = base.map((l) => ({ ...l, vatRateBp: effectiveRateBp(mode, l.vatRateBp, { country: customer.country, ossExceeded: exceeded }) }));
-  return { mode, ossCountry: mode === "EU_B2C" && exceeded ? customer.country : null, lines: taxed, totals: computeTotals(taxed, docDiscountBp) };
+  return { mode, ossCountry: mode === "EU_B2C" && exceeded ? customer.country : null, lines: taxed, totals: computeTotals(taxed, docDiscountBp, { gross }) };
 }
 
 async function productRatesFor(tx: Tx | typeof db, variantIds: string[]) {
@@ -103,7 +104,8 @@ export async function saveOffer(input: OfferInput, userId?: string) {
         customerId: input.customerId, date: input.date, validUntil: input.validUntil, discountBp: input.discountBp, notes: input.notes,
       }).where(eq(schema.offers.id, offerId));
       await tx.delete(schema.offerLines).where(eq(schema.offerLines.offerId, offerId));
-      await tx.delete(schema.reservations).where(eq(schema.reservations.offerId, offerId));
+      const oldRes = await tx.delete(schema.reservations).where(eq(schema.reservations.offerId, offerId)).returning({ v: schema.reservations.variantId });
+      await markDirty(tx, oldRes.map((r) => r.v));
     } else {
       const number = await nextNumber(tx, "OFFER", Number(input.date.slice(0, 4)));
       const [o] = await tx.insert(schema.offers).values({
@@ -119,6 +121,7 @@ export async function saveOffer(input: OfferInput, userId?: string) {
     for (const [variantId, qty] of perVariant) {
       await tx.insert(schema.reservations).values({ offerId: offerId!, variantId, qty, expiresAt });
     }
+    await markDirty(tx, [...perVariant.keys()]);
     await audit(tx, { entity: "offer", entityId: offerId!, action: input.id ? "update" : "create", after: input, userId });
     return offerId!;
   });
@@ -134,7 +137,10 @@ export async function setOfferStatus(offerId: string, status: "SENT" | "ACCEPTED
       ...(status === "SENT" ? { sentAt: new Date() } : {}),
       ...(status === "ACCEPTED" ? { acceptedAt: new Date(), acceptedVia } : {}),
     }).where(eq(schema.offers.id, offerId));
-    if (status === "REJECTED") await tx.update(schema.reservations).set({ active: false }).where(eq(schema.reservations.offerId, offerId));
+    if (status === "REJECTED") {
+      const r = await tx.update(schema.reservations).set({ active: false }).where(eq(schema.reservations.offerId, offerId)).returning({ v: schema.reservations.variantId });
+      await markDirty(tx, r.map((x) => x.v));
+    }
     await audit(tx, { entity: "offer", entityId: offerId, action: status.toLowerCase(), before: { status: o.status }, after: { status, acceptedVia }, userId });
   });
 }
@@ -148,7 +154,8 @@ export async function expireOffers() {
     if (!old.length) return;
     const ids = old.map((o) => o.id);
     await tx.update(schema.offers).set({ status: "EXPIRED" }).where(inArray(schema.offers.id, ids));
-    await tx.update(schema.reservations).set({ active: false }).where(inArray(schema.reservations.offerId, ids));
+    const r = await tx.update(schema.reservations).set({ active: false }).where(inArray(schema.reservations.offerId, ids)).returning({ v: schema.reservations.variantId });
+    await markDirty(tx, r.map((x) => x.v));
   });
 }
 
@@ -184,14 +191,20 @@ export type InvoiceDraftInput = {
   initialPaymentCents?: number; initialPaymentMethod?: (typeof schema.paymentMethod.enumValues)[number] | null;
   /** Ratenplan; undefined = unverändert lassen, [] = keinen Plan */
   installments?: { dueDate: string; amountCents: number }[];
+  /** Shop-Bestellungen: Bruttopreise, Steuer wie vom Shop kassiert, Bestellnummer im Shop */
+  pricesGross?: boolean;
+  taxOverride?: { mode: TaxMode; ossCountry: string | null };
+  externalOrderId?: string | null;
 };
 
 async function createDraft(tx: Tx, input: InvoiceDraftInput) {
   validateLines(input.lines);
   const customer = await tx.query.customers.findFirst({ where: eq(schema.customers.id, input.customerId) });
   if (!customer) throw new SalesError("noCustomer");
-  const rates = await productRatesFor(tx, input.lines.flatMap((l) => (l.variantId ? [l.variantId] : [])));
-  const t = await applyTax(tx, customer, input.lines, rates, input.discountBp, new Date().getFullYear());
+  const gross = input.pricesGross ?? false;
+  const t = input.taxOverride
+    ? { mode: input.taxOverride.mode, ossCountry: input.taxOverride.ossCountry, lines: input.lines, totals: computeTotals(input.lines, input.discountBp, { gross }) }
+    : await applyTax(tx, customer, input.lines, await productRatesFor(tx, input.lines.flatMap((l) => (l.variantId ? [l.variantId] : []))), input.discountBp, new Date().getFullYear(), gross);
   const values = {
     customerId: input.customerId, offerId: input.offerId ?? null, replacesInvoiceId: input.replacesInvoiceId ?? null,
     channel: input.channel, deliveryDate: input.deliveryDate || null, discountBp: input.discountBp,
@@ -201,6 +214,7 @@ async function createDraft(tx: Tx, input: InvoiceDraftInput) {
     retentionOfTitle: input.retentionOfTitle ?? true,
     initialPaymentCents: input.initialPaymentCents ?? 0,
     initialPaymentMethod: input.initialPaymentCents ? input.initialPaymentMethod ?? "CASH" : null,
+    pricesGross: gross, taxLocked: Boolean(input.taxOverride), externalOrderId: input.externalOrderId ?? null,
   };
   if (values.initialPaymentCents < 0 || values.initialPaymentCents > values.grossCents) throw new SalesError("initialPayment");
   let id = input.id;
@@ -217,6 +231,7 @@ async function createDraft(tx: Tx, input: InvoiceDraftInput) {
   await tx.insert(schema.invoiceLines).values(t.totals.lines.map((l, i) => ({
     invoiceId: id!, position: i + 1, variantId: t.lines[i].variantId, description: t.lines[i].description,
     qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, vatRateBp: l.vatRateBp, netCents: l.netCents, vatCents: l.vatCents,
+    externalLineId: t.lines[i].externalLineId ?? null,
   })));
   if (input.installments) {
     await tx.delete(schema.installments).where(eq(schema.installments.invoiceId, id!));
@@ -264,14 +279,18 @@ export async function issueInvoice(id: string, userId?: string, opts: { allowNeg
 
     // Steuer mit dem aktuellen Kundenstatus neu rechnen (z. B. USt-IdNr. inzwischen gültig)
     const lines = inv.lines.sort((a, b) => a.position - b.position);
-    const rates = await productRatesFor(tx, lines.flatMap((l) => (l.variantId ? [l.variantId] : [])));
-    const t = await applyTax(tx, inv.customer, lines.map((l) => ({
+    const lineIn = lines.map((l) => ({
       variantId: l.variantId, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, vatRateBp: l.vatRateBp,
-    })), rates, inv.discountBp, year);
+      externalLineId: l.externalLineId,
+    }));
+    const t = inv.taxLocked
+      ? { mode: inv.taxMode, ossCountry: inv.ossCountry, lines: lineIn, totals: computeTotals(lineIn, inv.discountBp, { gross: inv.pricesGross }) }
+      : await applyTax(tx, inv.customer, lineIn, await productRatesFor(tx, lines.flatMap((l) => (l.variantId ? [l.variantId] : []))), inv.discountBp, year, inv.pricesGross);
     await tx.delete(schema.invoiceLines).where(eq(schema.invoiceLines.invoiceId, id));
     await tx.insert(schema.invoiceLines).values(t.totals.lines.map((l, i) => ({
       invoiceId: id, position: i + 1, variantId: t.lines[i].variantId, description: t.lines[i].description,
       qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, vatRateBp: l.vatRateBp, netCents: l.netCents, vatCents: l.vatCents,
+      externalLineId: t.lines[i].externalLineId ?? null,
     })));
 
     const number = await nextNumber(tx, "INVOICE", year);
@@ -371,8 +390,11 @@ export async function startCorrection(invoiceId: string, userId?: string) {
       customerId: inv.customerId, replacesInvoiceId: inv.id, channel: inv.channel, deliveryDate: inv.deliveryDate,
       discountBp: inv.discountBp, skontoBp: inv.skontoBp, skontoDays: inv.skontoDays, notes: inv.notes, retentionOfTitle: inv.retentionOfTitle,
       installments: inv.installments.map((r) => ({ dueDate: r.dueDate, amountCents: r.amountCents })),
+      pricesGross: inv.pricesGross, externalOrderId: inv.externalOrderId,
+      taxOverride: inv.taxLocked ? { mode: inv.taxMode, ossCountry: inv.ossCountry } : undefined,
       lines: inv.lines.sort((a, b) => a.position - b.position).map((l) => ({
         variantId: l.variantId, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, vatRateBp: l.vatRateBp,
+        externalLineId: l.externalLineId,
       })),
     });
     await audit(tx, { entity: "invoice", entityId: invoiceId, action: "start_correction", after: { draftId: id }, userId });

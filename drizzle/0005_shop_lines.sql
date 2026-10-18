@@ -1,0 +1,1 @@
+ALTER TABLE "invoice_lines" ADD COLUMN "external_line_id" text;
