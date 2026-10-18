@@ -7,14 +7,17 @@ import { VariantPicker, optionLabel, type PickerOption } from "@/components/Vari
 import { bpToPercent, formatCents, parseMoney, parsePercentToBp } from "@/lib/money";
 import { computeTotals, determineTaxMode, effectiveRateBp } from "@/lib/tax";
 import type { Dict } from "@/i18n/de";
+import { PlanEditor, fromPlanRows, toPlanRows, type PlanRow } from "./PlanEditor";
 
-export type CustomerOpt = { id: string; number: number; name: string; city: string; type: "COMPANY" | "PERSON"; country: string; vatIdStatus: "NONE" | "PENDING" | "VALID" | "INVALID"; priceGroup: "WHOLESALE" | "RETAIL" };
+export type CustomerOpt = { id: string; number: number; name: string; city: string; type: "COMPANY" | "PERSON"; country: string; vatIdStatus: "NONE" | "PENDING" | "VALID" | "INVALID"; priceGroup: "WHOLESALE" | "RETAIL"; openCents?: number; creditLimitCents?: number | null };
 export type SaleOption = PickerOption & { wholesalePriceCents: number; retailPriceCents: number; vatRateBp: number; available: number };
 export type EditorLine = { variantId: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; vatRateBp: number };
 export type EditorInitial = {
   id?: string; customerId: string; date: string; validUntil?: string; channel?: string; deliveryDate?: string;
   discountBp: number; skontoBp?: number; skontoDays?: number; notes: string; retentionOfTitle?: boolean;
   offerId?: string | null; replacesInvoiceId?: string | null; lines: EditorLine[];
+  initialPaymentCents?: number; initialPaymentMethod?: "CASH" | "BANK" | "CARD" | "ONLINE" | null;
+  installments?: { dueDate: string; amountCents: number }[];
 };
 
 type L = { key: string; variantId: string | null; description: string; qty: string; price: string; disc: string; vatRateBp: number; available?: number };
@@ -48,6 +51,19 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
   }));
   const valid = parsed.every((l) => l.qty > 0 && l.unitPriceCents >= 0 && l.discountBp >= 0 && l.description) && (parsePercentToBp(docDisc) ?? -1) >= 0;
   const totals = valid ? computeTotals(parsed, parsePercentToBp(docDisc) ?? 0) : null;
+  const gross = totals?.grossCents ?? 0;
+
+  // Zahlung bei Ausstellung + Ratenplan (nur Rechnungen)
+  const [payMode, setPayMode] = useState<"none" | "full" | "partial">(initial.initialPaymentCents ? "partial" : "none");
+  const [partial, setPartial] = useState(initial.initialPaymentCents ? toInput(initial.initialPaymentCents) : "");
+  const [payMethod, setPayMethod] = useState<"CASH" | "BANK" | "CARD" | "ONLINE">(initial.initialPaymentMethod ?? "CASH");
+  const [planOn, setPlanOn] = useState(Boolean(initial.installments?.length));
+  const [planRows, setPlanRows] = useState<PlanRow[]>(toPlanRows(initial.installments ?? []));
+  const initialPaid = payMode === "full" ? gross : payMode === "partial" ? Math.min(parseMoney(partial) ?? 0, gross) : 0;
+  const plan = planOn ? fromPlanRows(planRows) : [];
+  const planOk = !planOn || (plan.length > 0 && plan.every((r) => r.amountCents > 0 && r.dueDate) && plan.reduce((s, r) => s + r.amountCents, 0) === gross);
+  const overLimit = kind === "invoice" && customer?.creditLimitCents != null && (customer.openCents ?? 0) + gross - initialPaid > customer.creditLimitCents;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
 
   const pick = (o: PickerOption) => {
     const s = o as SaleOption;
@@ -72,6 +88,11 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
       <input type="hidden" name="customerId" value={customerId} />
       <input type="hidden" name="intent" value={clicked ?? "save"} readOnly />
       <input type="hidden" name="discountBp" value={parsePercentToBp(docDisc) ?? 0} />
+      {kind === "invoice" && <>
+        <input type="hidden" name="initialPaymentCents" value={initialPaid} />
+        <input type="hidden" name="initialPaymentMethod" value={payMethod} />
+        <input type="hidden" name="installments" value={JSON.stringify(plan)} />
+      </>}
       <input type="hidden" name="lines" value={JSON.stringify(parsed.map((l, i) => ({ ...l, vatRateBp: lines[i].vatRateBp })))} />
       <ErrorBox message={err ? `${err}${state?.detail ? `: ${state.detail}` : ""}` : undefined} />
 
@@ -189,6 +210,35 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
             </>
           )}
           <Field label={t.sales.notes} className="sm:col-span-2"><textarea name="notes" rows={2} defaultValue={initial.notes} className="input" /></Field>
+          {kind === "invoice" && (
+            <div className="space-y-4 rounded-xl bg-sky-50/50 p-4 ring-1 ring-sky-100 sm:col-span-2">
+              <div>
+                <span className="label">{t.pay.atIssue}</span>
+                <div className="flex flex-wrap gap-2">
+                  {(["none", "full", "partial"] as const).map((m) => (
+                    <button type="button" key={m} onClick={() => setPayMode(m)}
+                      className={`btn px-3 py-2 ${payMode === m ? "bg-sky-600 text-white shadow-card" : "bg-white ring-1 ring-black/10 hover:bg-sky-50"}`}>{t.pay[m]}</button>
+                  ))}
+                </div>
+              </div>
+              {payMode !== "none" && (
+                <div className="grid animate-rise grid-cols-2 gap-3">
+                  {payMode === "partial"
+                    ? <Field label={t.pay.amount}><input value={partial} onChange={(e) => setPartial(e.target.value)} inputMode="decimal" dir="ltr" className="input num" placeholder="0,00" /></Field>
+                    : <div><span className="label">{t.pay.amount}</span><div className="num py-2.5 font-bold">{formatCents(gross, intl)}</div></div>}
+                  <Field label={t.pay.method}>
+                    <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as "CASH")} className="input">
+                      {(["CASH", "BANK", "CARD", "ONLINE"] as const).map((m) => <option key={m} value={m}>{t.pay.methods[m]}</option>)}
+                    </select>
+                  </Field>
+                </div>
+              )}
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                <input type="checkbox" checked={planOn} onChange={(e) => setPlanOn(e.target.checked)} className="h-5 w-5 accent-sky-600" />{t.pay.planOn}
+              </label>
+              {planOn && <PlanEditor t={t} grossCents={gross} rows={planRows} setRows={setPlanRows} today={today} intl={intl} />}
+            </div>
+          )}
         </div>
         <div className="card h-fit p-5 animate-rise">
           {totals ? (
@@ -203,15 +253,19 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
                 <span className="font-bold">{t.sales.gross}</span><span className="num text-xl font-bold">{formatCents(totals.grossCents, intl)}</span>
               </div>
               {mode === "EU_B2C" && <p className="pt-2 text-xs text-ink-soft">{t.sales.oss}</p>}
+              {initialPaid > 0 && <Row k={`${t.pay.paid} (${t.pay.methods[payMethod]})`} v={formatCents(initialPaid, intl)} />}
+              {initialPaid > 0 && <Row k={t.pay.open} v={formatCents(gross - initialPaid, intl)} />}
             </dl>
           ) : <p className="text-sm text-ink-soft">{t.sales.noLines}</p>}
+          {overLimit && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">{t.pay.creditWarn} {t.pay.openNow}: {formatCents(customer?.openCents ?? 0, intl)} · {t.pay.creditLimit}: {formatCents(customer?.creditLimitCents ?? 0, intl)}</p>}
+          {!planOk && <p className="mt-3 text-xs font-semibold text-red-600">{t.pay.planSum}</p>}
           <div className="mt-4 grid gap-2">
             <button type="submit" onClick={(e) => { if (pending) e.preventDefault(); else choose("save"); }}
-              disabled={!customer || !valid || !lines.length} className={`${kind === "offer" ? "btn-primary py-3" : "btn-ghost py-3"} ${pending ? "opacity-60" : ""}`}>
+              disabled={!customer || !valid || !lines.length || !planOk} className={`${kind === "offer" ? "btn-primary py-3" : "btn-ghost py-3"} ${pending ? "opacity-60" : ""}`}>
               {pending && clicked === "save" && <Spinner />}{t.sales.saveDraft}
             </button>
             {kind === "invoice" && (
-              <button type="submit" disabled={!customer || !valid || !lines.length} className={`btn-primary py-3 ${pending ? "opacity-60" : ""}`}
+              <button type="submit" disabled={!customer || !valid || !lines.length || !planOk} className={`btn-primary py-3 ${pending ? "opacity-60" : ""}`}
                 onClick={(e) => { if (pending || !confirm(t.sales.issueConfirm)) e.preventDefault(); else choose("issue"); }}>
                 {pending && clicked === "issue" && <Spinner />}<Icon name="receipt" className="h-4 w-4" />{t.sales.issue}
               </button>

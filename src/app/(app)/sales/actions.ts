@@ -5,6 +5,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { sendMail } from "@/lib/mail";
+import { validatePlan } from "@/lib/payments";
 import { archivedInvoicePdf, offerPdf } from "@/lib/pdf";
 import { formatDate } from "@/lib/dates";
 import { requireSession } from "@/lib/auth";
@@ -69,6 +70,9 @@ const InvoiceIn = z.object({
   discountBp: z.coerce.number().int().min(0).max(10000), skontoBp: z.coerce.number().int().min(0).max(10000).default(0),
   skontoDays: z.coerce.number().int().min(0).max(365).default(0), notes: z.string().max(2000).default(""),
   retentionOfTitle: z.string().optional().transform((v) => v === "on"), intent: z.enum(["save", "issue"]).default("save"), lines,
+  initialPaymentCents: z.coerce.number().int().min(0).default(0),
+  initialPaymentMethod: z.enum(["CASH", "BANK", "CARD", "ONLINE"]).default("CASH"),
+  installments: z.string().default("[]").transform((s) => JSON.parse(s)).pipe(z.array(z.object({ dueDate: date, amountCents: z.number().int().positive() }))),
 });
 
 export async function saveInvoiceAction(_: DocState, fd: FormData): Promise<DocState> {
@@ -79,6 +83,7 @@ export async function saveInvoiceAction(_: DocState, fd: FormData): Promise<DocS
   const { intent, ...d } = p.data;
   let id: string;
   try {
+    if (d.installments.length) validatePlan(d.installments, d.installments.reduce((s, r) => s + r.amountCents, 0));
     id = await saveInvoiceDraft({ ...d, deliveryDate: d.deliveryDate || null, offerId: d.offerId || null, replacesInvoiceId: d.replacesInvoiceId || null }, s.uid);
     if (intent === "issue") await issueInvoice(id, s.uid);
   } catch (e) {

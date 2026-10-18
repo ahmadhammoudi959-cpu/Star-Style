@@ -12,7 +12,7 @@ const en: Dict = {
   },
   nav: {
     home: "Home", products: "Products", receive: "Goods in", stock: "Stock", writeOffs: "Losses",
-    customers: "Customers", suppliers: "Suppliers", settings: "Settings", sales: "Sales", reports: "Reports", expenses: "Expenses",
+    receivables: "Receivables", customers: "Customers", suppliers: "Suppliers", settings: "Settings", sales: "Sales", reports: "Reports", expenses: "Expenses",
   },
   home: {
     greeting: "Hello", subtitle: "What would you like to do?",
@@ -93,7 +93,24 @@ const en: Dict = {
     exportProof: "Export proof", uploadProof: "Upload proof", email: "Send by email", notes: "Note on document",
     retention: "Retention of title", reservation: "Reservation",
   },
+  pay: {
+    amountInvalid: "Please enter a valid amount", planInvalid: "Plan incomplete (check dates and amounts)", planOrder: "Please sort instalments by date", reason: "Please enter a reason", notOverdue: "Nothing overdue – no reminder needed", notPayable: "No payment can be recorded for this invoice", alreadyCancelled: "Already cancelled", dunningsDone: "Reminders issued", schedule: "Payment schedule", payments: "Payments received", noPayments: "No payment yet", fee: "Fee", newDue: "New deadline", editPlan: "Change instalment plan", kpiOpen: "Receivables", openInvoices: "open invoices", days: "days",
+    title: "Payments", receivables: "Receivables", paid: "Paid", open: "Open", overdue: "Overdue", credit: "Credit",
+    status: { PAID: "Paid", OPEN: "Open", PARTIAL: "Partly paid", OVERDUE: "Overdue", CREDIT: "Credit – refund" },
+    add: "Record payment", amount: "Amount", method: "Method", methods: { CASH: "Cash", BANK: "Bank transfer", CARD: "Card", ONLINE: "Online" },
+    receipt: "Receipt", cancel: "Cancel", cancelReason: "Reason (e.g. chargeback)", cancelled: "cancelled",
+    atIssue: "Payment on issue", none: "None", full: "Paid in full", partial: "Deposit", plan: "Instalments",
+    planOn: "Pay in instalments", firstAmount: "First instalment / deposit", count: "Number of instalments", every: "Every (days)", generate: "Create plan",
+    rate: "Instalment", due: "Due", difference: "Difference to total", savePlan: "Save plan", removePlan: "Remove plan",
+    nextDue: "Next due", daysOverdue: "days overdue", overpay: "Amount is higher than the open balance", planSum: "Instalments don't add up to the total",
+    dunning: "Reminders", remind: "Create reminder", dunningLevels: { 1: "Payment reminder", 2: "1st dunning notice", 3: "2nd dunning notice" },
+    statement: "Statement", balance: "Balance", totalOpen: "Total open", totalOverdue: "Of which overdue", dueSoon: "Due in 7 days",
+    creditLimit: "Credit limit", creditWarn: "Warning: this invoice exceeds the customer's credit limit.", openNow: "Currently open",
+    customer: "Customer", invoice: "Invoice", sinceMoved: "carried over from old invoice", nothingOpen: "Nothing open. Everything paid.",
+    byCustomer: "By customer", byInvoice: "By invoice", charge: "Charge", payment: "Payment", print: "Print",
+  },
   settings: {
+    logo: "Logo (PNG or JPG)", logoHint: "Shown at the top of invoices, quotes and letters. Invoices already issued stay unchanged.", removeLogo: "Remove logo", logoType: "Please choose a PNG or JPG image up to 2 MB",
     title: "Settings", company: "Company details", bank: "Bank", invoice: "Invoices", owner: "Owner",
     taxNumber: "Tax number", bankName: "Bank", iban: "IBAN", bic: "BIC", paymentDays: "Payment term (days)",
     offerDays: "Quote valid (days)", footer: "Invoice footer", website: "Website",

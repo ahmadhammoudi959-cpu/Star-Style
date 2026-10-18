@@ -8,6 +8,7 @@ import { nextNumber } from "./numbering";
 import { addStock, audit, removeStock, StockError } from "./stock";
 import { computeTotals, determineTaxMode, effectiveRateBp, OSS_THRESHOLD_CENTS, type TaxMode } from "./tax";
 import { addDaysIso, formatDate, todayIso } from "./dates";
+import { fitPlanToGross, movePayments, recordPaymentTx } from "./payments";
 
 export class SalesError extends Error {
   constructor(public code: string, public detail?: string) { super(code); }
@@ -179,6 +180,10 @@ export type InvoiceDraftInput = {
   id?: string; customerId: string; offerId?: string | null; replacesInvoiceId?: string | null; channel: Channel;
   deliveryDate?: string | null; discountBp: number; skontoBp?: number; skontoDays?: number; notes: string; lines: LineInput[];
   retentionOfTitle?: boolean;
+  /** Zahlung bei Ausstellung (z. B. bar im Laden oder Anzahlung) */
+  initialPaymentCents?: number; initialPaymentMethod?: (typeof schema.paymentMethod.enumValues)[number] | null;
+  /** Ratenplan; undefined = unverändert lassen, [] = keinen Plan */
+  installments?: { dueDate: string; amountCents: number }[];
 };
 
 async function createDraft(tx: Tx, input: InvoiceDraftInput) {
@@ -194,7 +199,10 @@ async function createDraft(tx: Tx, input: InvoiceDraftInput) {
     subtotalCents: t.totals.subtotalCents, discountCents: t.totals.discountCents, netCents: t.totals.netCents,
     vatCents: t.totals.vatCents, grossCents: t.totals.grossCents, vatBreakdown: t.totals.vatByRate,
     retentionOfTitle: input.retentionOfTitle ?? true,
+    initialPaymentCents: input.initialPaymentCents ?? 0,
+    initialPaymentMethod: input.initialPaymentCents ? input.initialPaymentMethod ?? "CASH" : null,
   };
+  if (values.initialPaymentCents < 0 || values.initialPaymentCents > values.grossCents) throw new SalesError("initialPayment");
   let id = input.id;
   if (id) {
     const ex = await tx.query.invoices.findFirst({ where: eq(schema.invoices.id, id) });
@@ -210,6 +218,10 @@ async function createDraft(tx: Tx, input: InvoiceDraftInput) {
     invoiceId: id!, position: i + 1, variantId: t.lines[i].variantId, description: t.lines[i].description,
     qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, vatRateBp: l.vatRateBp, netCents: l.netCents, vatCents: l.vatCents,
   })));
+  if (input.installments) {
+    await tx.delete(schema.installments).where(eq(schema.installments.invoiceId, id!));
+    if (input.installments.length) await tx.insert(schema.installments).values(input.installments.map((r) => ({ invoiceId: id!, ...r })));
+  }
   return id!;
 }
 
@@ -287,6 +299,21 @@ export async function issueInvoice(id: string, userId?: string, opts: { allowNeg
       }
     }
     if (inv.offerId) await tx.update(schema.reservations).set({ active: false }).where(eq(schema.reservations.offerId, inv.offerId));
+
+    // Zahlungen: von der ersetzten Rechnung übernehmen, Ratenplan an Betrag anpassen, Zahlung bei Ausstellung buchen
+    if (inv.replacesInvoiceId) await movePayments(tx, inv.replacesInvoiceId, id, userId);
+    await fitPlanToGross(tx, id, t.totals.grossCents);
+    const plan = await tx.select().from(schema.installments).where(eq(schema.installments.invoiceId, id));
+    if (plan.length) {
+      const last = plan.map((r) => r.dueDate).sort().at(-1)!;
+      await tx.update(schema.invoices).set({ dueDate: last }).where(eq(schema.invoices.id, id));
+    }
+    if (inv.initialPaymentCents > 0) {
+      await recordPaymentTx(tx, {
+        invoiceId: id, date: today, amountCents: Math.min(inv.initialPaymentCents, t.totals.grossCents),
+        method: inv.initialPaymentMethod ?? "CASH", note: "bei Ausstellung", userId, allowOverpay: true,
+      });
+    }
     await audit(tx, { entity: "invoice", entityId: id, action: "issue", after: { number, cancellationId }, userId });
     return { number, cancellationId };
   });
@@ -335,7 +362,7 @@ export async function cancelInvoice(invoiceId: string, userId?: string) {
  */
 export async function startCorrection(invoiceId: string, userId?: string) {
   return db.transaction(async (tx) => {
-    const inv = await tx.query.invoices.findFirst({ where: eq(schema.invoices.id, invoiceId), with: { lines: true } });
+    const inv = await tx.query.invoices.findFirst({ where: eq(schema.invoices.id, invoiceId), with: { lines: true, installments: true } });
     if (!inv) throw new SalesError("notFound");
     if (inv.status !== "ISSUED" || inv.kind !== "INVOICE") throw new SalesError("locked");
     const open = await tx.query.invoices.findFirst({ where: and(eq(schema.invoices.replacesInvoiceId, invoiceId), eq(schema.invoices.status, "DRAFT")) });
@@ -343,6 +370,7 @@ export async function startCorrection(invoiceId: string, userId?: string) {
     const id = await createDraft(tx, {
       customerId: inv.customerId, replacesInvoiceId: inv.id, channel: inv.channel, deliveryDate: inv.deliveryDate,
       discountBp: inv.discountBp, skontoBp: inv.skontoBp, skontoDays: inv.skontoDays, notes: inv.notes, retentionOfTitle: inv.retentionOfTitle,
+      installments: inv.installments.map((r) => ({ dueDate: r.dueDate, amountCents: r.amountCents })),
       lines: inv.lines.sort((a, b) => a.position - b.position).map((l) => ({
         variantId: l.variantId, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, vatRateBp: l.vatRateBp,
       })),

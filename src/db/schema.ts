@@ -327,6 +327,8 @@ export const invoices = pgTable("invoices", {
   vatBreakdown: jsonb("vat_breakdown").$type<{ rateBp: number; netCents: number; vatCents: number }[]>().notNull().default([]),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   retentionOfTitle: boolean("retention_of_title").notNull().default(true),
+  initialPaymentCents: integer("initial_payment_cents").notNull().default(0),
+  initialPaymentMethod: paymentMethod("initial_payment_method"),
   notes: text("notes").notNull().default(""),
   exportProofFileId: text("export_proof_file_id"),
   pdfFileId: text("pdf_file_id"),
@@ -363,6 +365,22 @@ export const payments = pgTable("payments", {
   amountCents: integer("amount_cents").notNull(),
   method: paymentMethod("method").notNull(),
   note: text("note").notNull().default(""),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelReason: text("cancel_reason").notNull().default(""),
+  movedFromInvoiceId: text("moved_from_invoice_id"),
+  createdAt: createdAt(),
+});
+
+/** Zahlungserinnerungen und Mahnungen */
+export const dunnings = pgTable("dunnings", {
+  id: id(),
+  invoiceId: text("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  level: integer("level").notNull(), // 1 = Zahlungserinnerung, 2 = 1. Mahnung, 3 = 2. Mahnung
+  date: date("date", { mode: "string" }).notNull(),
+  openCents: integer("open_cents").notNull(),
+  feeCents: integer("fee_cents").notNull().default(0),
+  newDueDate: date("new_due_date", { mode: "string" }).notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
 
@@ -441,7 +459,9 @@ export const invoicesRelations = relations(invoices, ({ one, many }) => ({
   lines: many(invoiceLines),
   payments: many(payments),
   installments: many(installments),
+  dunnings: many(dunnings),
 }));
+export const dunningsRelations = relations(dunnings, ({ one }) => ({ invoice: one(invoices, { fields: [dunnings.invoiceId], references: [invoices.id] }) }));
 export const invoiceLinesRelations = relations(invoiceLines, ({ one }) => ({
   invoice: one(invoices, { fields: [invoiceLines.invoiceId], references: [invoices.id] }),
   variant: one(variants, { fields: [invoiceLines.variantId], references: [variants.id] }),

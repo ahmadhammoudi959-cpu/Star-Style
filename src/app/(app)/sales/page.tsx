@@ -8,6 +8,7 @@ import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { expireOffers } from "@/lib/sales";
 import { StatusBadge } from "./StatusBadge";
+import { openItems } from "@/lib/receivables";
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string }> }) {
   const { tab = "invoices", q = "" } = await searchParams;
@@ -28,6 +29,13 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         where (${like}::text is null or lower(coalesce(i.number,'')) like ${like} or lower(c.name) like ${like})
         order by i.created_at desc limit 200`)).rows;
 
+  const pay = tab === "invoices" ? new Map((await openItems()).map((r) => [r.invoiceId, r])) : new Map();
+  const PAY_TONE = { PAID: "bg-brand-100 text-brand-800", OPEN: "bg-slate-100 text-slate-700", PARTIAL: "bg-sky-100 text-sky-800", OVERDUE: "bg-red-100 text-red-800", CREDIT: "bg-violet-100 text-violet-800" } as const;
+  const payBadge = (r: Record<string, unknown>) => {
+    if (r.status !== "ISSUED" || r.kind !== "INVOICE") return null;
+    const s = (pay.get(String(r.id))?.state.status ?? "PAID") as keyof typeof PAY_TONE;
+    return <span className={`badge ms-1 ${PAY_TONE[s]}`}>{t.pay.status[s]}</span>;
+  };
   return (
     <div>
       <PageHeader title={t.sales.title} actions={<>
@@ -61,7 +69,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                 <td><Link href={`/sales/${tab}/${r.id}`} className="num font-semibold hover:text-brand-700" dir="ltr">{String(r.number)}</Link></td>
                 <td className="num">{formatDate(String(r.d), intl)}</td>
                 <td>{String(r.customer)}</td>
-                <td><StatusBadge t={t} status={String(r.status)} />{r.kind === "CANCELLATION" && <span className="badge ms-1 bg-red-50 text-red-700">Storno</span>}</td>
+                <td><StatusBadge t={t} status={String(r.status)} />{r.kind === "CANCELLATION" && <span className="badge ms-1 bg-red-50 text-red-700">Storno</span>}{payBadge(r)}</td>
                 <td className="num hidden md:table-cell">{tab === "offers" ? formatDate(String(r.valid_until), intl) : t.sales.channels[r.channel as "STORE"]}</td>
                 <td className={`num text-end font-semibold ${Number(r.amount) < 0 ? "text-red-600" : ""}`}>{formatCents(Number(r.amount), intl)}</td>
               </tr>

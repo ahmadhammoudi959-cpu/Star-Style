@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { audit } from "@/lib/stock";
+import { storeUpload } from "@/lib/files";
 
 export type SettingsState = { error?: string; ok?: boolean } | undefined;
 const str = (max = 200) => z.string().trim().max(max).default("");
@@ -19,12 +20,18 @@ const S = z.object({
 
 export async function saveSettings(_: SettingsState, fd: FormData): Promise<SettingsState> {
   const session = await requireSession();
-  const p = S.safeParse(Object.fromEntries(fd));
+  const p = S.safeParse(Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === "string")));
   if (!p.success) return { error: "required" };
+  const data: typeof p.data & { logoFileId?: string | null } = { ...p.data };
+  const logo = fd.get("logo");
+  if (logo instanceof File && logo.size > 0) {
+    if (!["image/png", "image/jpeg"].includes(logo.type) || logo.size > 2 * 1024 * 1024) return { error: "logoType" };
+    data.logoFileId = await storeUpload(logo);
+  } else if (fd.get("removeLogo") === "on") data.logoFileId = null;
   await db.transaction(async (tx) => {
-    await tx.insert(schema.companySettings).values({ id: "company", ...p.data })
-      .onConflictDoUpdate({ target: schema.companySettings.id, set: p.data });
-    await audit(tx, { entity: "company_settings", entityId: "company", action: "update", after: p.data, userId: session.uid });
+    await tx.insert(schema.companySettings).values({ id: "company", ...data })
+      .onConflictDoUpdate({ target: schema.companySettings.id, set: data });
+    await audit(tx, { entity: "company_settings", entityId: "company", action: "update", after: data, userId: session.uid });
   });
   revalidatePath("/settings");
   return { ok: true };

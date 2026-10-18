@@ -10,7 +10,7 @@ const de = {
   },
   nav: {
     home: "Start", products: "Artikel", receive: "Wareneingang", stock: "Lager", writeOffs: "Verluste",
-    customers: "Kunden", suppliers: "Lieferanten", settings: "Einstellungen", sales: "Verkauf", reports: "Berichte", expenses: "Ausgaben",
+    receivables: "Offene Posten", customers: "Kunden", suppliers: "Lieferanten", settings: "Einstellungen", sales: "Verkauf", reports: "Berichte", expenses: "Ausgaben",
   },
   home: {
     greeting: "Hallo", subtitle: "Was möchtest du tun?",
@@ -91,7 +91,24 @@ const de = {
     exportProof: "Ausfuhrnachweis", uploadProof: "Nachweis hochladen", email: "Per E-Mail senden", notes: "Hinweis auf dem Beleg",
     retention: "Eigentumsvorbehalt", reservation: "Reservierung",
   },
+  pay: {
+    amountInvalid: "Bitte einen gültigen Betrag eingeben", planInvalid: "Ratenplan unvollständig (Datum und Betrag prüfen)", planOrder: "Raten bitte nach Datum sortieren", reason: "Bitte einen Grund angeben", notOverdue: "Nichts überfällig – keine Mahnung nötig", notPayable: "Für diese Rechnung kann keine Zahlung erfasst werden", alreadyCancelled: "Schon storniert", dunningsDone: "Erstellte Mahnungen", schedule: "Zahlungsplan", payments: "Eingegangene Zahlungen", noPayments: "Noch keine Zahlung", fee: "Gebühr", newDue: "Neue Frist", editPlan: "Ratenplan ändern", kpiOpen: "Offene Forderungen", openInvoices: "offene Rechnungen", days: "Tage",
+    title: "Zahlungen", receivables: "Offene Posten", paid: "Bezahlt", open: "Offen", overdue: "Überfällig", credit: "Guthaben",
+    status: { PAID: "Bezahlt", OPEN: "Offen", PARTIAL: "Teilweise bezahlt", OVERDUE: "Überfällig", CREDIT: "Guthaben – erstatten" },
+    add: "Zahlung erfassen", amount: "Betrag", method: "Zahlungsart", methods: { CASH: "Bar", BANK: "Überweisung", CARD: "Karte", ONLINE: "Online" },
+    receipt: "Quittung", cancel: "Stornieren", cancelReason: "Grund (z. B. Rücklastschrift)", cancelled: "storniert",
+    atIssue: "Zahlung bei Ausstellung", none: "Keine", full: "Voll bezahlt", partial: "Anzahlung", plan: "Ratenzahlung",
+    planOn: "In Raten zahlen", firstAmount: "Erste Rate / Anzahlung", count: "Anzahl Raten", every: "Abstand (Tage)", generate: "Plan erstellen",
+    rate: "Rate", due: "Fällig", difference: "Differenz zum Gesamtbetrag", savePlan: "Ratenplan speichern", removePlan: "Plan entfernen",
+    nextDue: "Nächste Fälligkeit", daysOverdue: "Tage überfällig", overpay: "Betrag ist höher als der offene Rest", planSum: "Die Raten ergeben nicht den Gesamtbetrag",
+    dunning: "Mahnwesen", remind: "Zahlungserinnerung erstellen", dunningLevels: { 1: "Zahlungserinnerung", 2: "1. Mahnung", 3: "2. Mahnung" },
+    statement: "Kontoauszug", balance: "Saldo", totalOpen: "Offen gesamt", totalOverdue: "Davon überfällig", dueSoon: "Fällig in 7 Tagen",
+    creditLimit: "Kreditlimit", creditWarn: "Achtung: Mit dieser Rechnung wird das Kreditlimit überschritten.", openNow: "Aktuell offen",
+    customer: "Kunde", invoice: "Rechnung", sinceMoved: "von alter Rechnung übernommen", nothingOpen: "Keine offenen Posten. Alles bezahlt.",
+    byCustomer: "Nach Kunde", byInvoice: "Nach Rechnung", charge: "Belastung", payment: "Zahlung", print: "Drucken",
+  },
   settings: {
+    logo: "Logo (PNG oder JPG)", logoHint: "Erscheint oben auf Rechnungen, Angeboten und Briefen. Bereits ausgestellte Rechnungen bleiben unverändert.", removeLogo: "Logo entfernen", logoType: "Bitte ein PNG- oder JPG-Bild bis 2 MB wählen",
     title: "Einstellungen", company: "Firmendaten", bank: "Bank", invoice: "Rechnungen", owner: "Inhaber",
     taxNumber: "Steuernummer", bankName: "Bank", iban: "IBAN", bic: "BIC", paymentDays: "Zahlungsziel (Tage)",
     offerDays: "Angebot gültig (Tage)", footer: "Fußzeile auf Rechnungen", website: "Webseite",

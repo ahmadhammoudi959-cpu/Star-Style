@@ -10,6 +10,7 @@ import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { CustomerForm, type CustomerData } from "../CustomerForm";
 import { VatCheckButton } from "../VatCheckButton";
+import { openItems } from "@/lib/receivables";
 
 export default async function CustomerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const { id } = await params;
@@ -28,6 +29,9 @@ export default async function CustomerPage({ params, searchParams }: { params: P
       select 'invoice', id, coalesce(number, '—'), status::text, coalesce(issue_date, created_at::date), gross_cents from invoices where customer_id = ${id}
       order by d desc limit 30`),
   ]);
+  const items = await openItems(id);
+  const openC = items.reduce((s, r) => s + r.state.openCents, 0);
+  const overdueC = items.reduce((s, r) => s + r.state.overdueCents, 0);
   const mode = determineTaxMode(c);
   const statusTone = { NONE: "bg-gray-100 text-gray-700", PENDING: "bg-amber-100 text-amber-800", VALID: "bg-brand-100 text-brand-700", INVALID: "bg-red-100 text-red-800" }[c.vatIdStatus];
 
@@ -62,6 +66,18 @@ export default async function CustomerPage({ params, searchParams }: { params: P
           </section>
         </div>
         <aside className="space-y-4">
+          <div className="card p-5 animate-rise">
+            <div className="text-sm text-ink-soft">{openC < 0 ? t.pay.credit : t.pay.openNow}</div>
+            <div className={`num text-2xl font-bold ${overdueC ? "text-red-600" : openC < 0 ? "text-violet-700" : ""}`}>{formatCents(Math.abs(openC), intl)}</div>
+            {overdueC > 0 && <div className="text-sm font-semibold text-red-600">{t.pay.totalOverdue}: {formatCents(overdueC, intl)}</div>}
+            {c.creditLimitCents != null && (
+              <div className="mt-3">
+                <div className="mb-1 flex justify-between text-xs text-ink-soft"><span>{t.pay.creditLimit}</span><span className="num">{formatCents(c.creditLimitCents, intl)}</span></div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${openC > c.creditLimitCents ? "bg-red-500" : openC > c.creditLimitCents * 0.8 ? "bg-amber-400" : "bg-brand-500"}`} style={{ width: `${Math.min(100, c.creditLimitCents ? Math.max(0, (openC / c.creditLimitCents) * 100) : 100)}%` }} /></div>
+              </div>
+            )}
+            <Link href={`/customers/${c.id}/statement`} className="btn-ghost group mt-4 w-full"><Icon name="receipt" className="h-4 w-4" />{t.pay.statement}</Link>
+          </div>
           <div className="card p-5 animate-rise">
             <div className="text-sm text-ink-soft">{t.customer.taxMode}</div>
             <div className="mb-3 text-lg font-bold">{t.taxMode[mode]}</div>

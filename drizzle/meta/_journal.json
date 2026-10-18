@@ -15,6 +15,13 @@
       "when": 1792336674674,
       "tag": "0001_sales",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792344601932,
+      "tag": "0002_payments",
+      "breakpoints": true
     }
   ]
 }

@@ -10,10 +10,20 @@ export function SettingsForm({ t, s }: { t: Dict; s: Record<string, string | num
   const v = (k: string) => String(s[k] ?? "");
   return (
     <form action={action} className="space-y-5">
-      <ErrorBox message={state?.error ? t.common.required : undefined} />
+      <ErrorBox message={state?.error === "logoType" ? t.settings.logoType : state?.error ? t.common.required : undefined} />
       {state?.ok && <p className="flex animate-rise items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700"><Icon name="check" className="h-4 w-4" />{t.common.saved}</p>}
       <section className="card grid gap-4 p-5 md:grid-cols-2 animate-rise">
         <h2 className="text-lg font-bold md:col-span-2">{t.settings.company}</h2>
+        <div className="flex flex-wrap items-center gap-4 rounded-xl bg-brand-50/50 p-4 ring-1 ring-brand-100 md:col-span-2">
+          <div className="grid h-20 w-40 place-items-center overflow-hidden rounded-lg bg-white ring-1 ring-black/5">
+            {s.logoFileId ? <img src={`/api/files/${s.logoFileId}`} alt="Logo" className="max-h-full max-w-full object-contain" /> : <Icon name="receipt" className="h-8 w-8 text-ink-soft/40" />}
+          </div>
+          <div className="min-w-0 flex-1 space-y-2">
+            <Field label={t.settings.logo}><input type="file" name="logo" accept="image/png,image/jpeg" className="input file:me-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-1 file:font-semibold file:text-brand-700" /></Field>
+            <p className="text-xs text-ink-soft">{t.settings.logoHint}</p>
+            {s.logoFileId && <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="removeLogo" className="h-4 w-4 accent-red-600" />{t.settings.removeLogo}</label>}
+          </div>
+        </div>
         <Field label={t.setup.companyName}><input name="name" defaultValue={v("name")} required className="input" /></Field>
         <Field label={t.settings.owner}><input name="owner" defaultValue={v("owner")} className="input" /></Field>
         <Field label={t.setup.street}><input name="street" defaultValue={v("street")} className="input" /></Field>

@@ -12,7 +12,7 @@ const ar: Dict = {
   },
   nav: {
     home: "الرئيسية", products: "المنتجات", receive: "إدخال بضاعة", stock: "المخزون", writeOffs: "التالف",
-    customers: "الزبائن", suppliers: "الموردين", settings: "الإعدادات", sales: "المبيعات", reports: "التقارير", expenses: "المصاريف",
+    receivables: "المستحقات", customers: "الزبائن", suppliers: "الموردين", settings: "الإعدادات", sales: "المبيعات", reports: "التقارير", expenses: "المصاريف",
   },
   home: {
     greeting: "أهلاً", subtitle: "شو بدك تعمل اليوم؟",
@@ -93,7 +93,24 @@ const ar: Dict = {
     exportProof: "إثبات التصدير", uploadProof: "رفع الإثبات", email: "بعت بالإيميل", notes: "ملاحظة على المستند",
     retention: "الاحتفاظ بالملكية", reservation: "الحجز",
   },
+  pay: {
+    amountInvalid: "اكتب مبلغ صحيح", planInvalid: "خطة الأقساط ناقصة، شيك التاريخ والمبلغ", planOrder: "رتب الأقساط حسب التاريخ", reason: "اكتب السبب", notOverdue: "ما في شي متأخر، ما بدها تذكير", notPayable: "ما فيك تسجل دفعة على هالفاتورة", alreadyCancelled: "ملغاة من قبل", dunningsDone: "رسائل التذكير يلي انعملت", schedule: "جدول الدفع", payments: "الدفعات الواصلة", noPayments: "لسا ما في ولا دفعة", fee: "رسوم", newDue: "المهلة الجديدة", editPlan: "تعديل خطة الأقساط", kpiOpen: "ديون عند الزبائن", openInvoices: "فواتير مفتوحة", days: "يوم",
+    title: "الدفعات", receivables: "المستحقات", paid: "مدفوع", open: "باقي", overdue: "متأخر", credit: "رصيد للزبون",
+    status: { PAID: "مدفوع", OPEN: "مو مدفوع", PARTIAL: "مدفوع جزئياً", OVERDUE: "متأخر", CREDIT: "رصيد للزبون، لازم يرجعله" },
+    add: "تسجيل دفعة", amount: "المبلغ", method: "طريقة الدفع", methods: { CASH: "كاش", BANK: "تحويل بنكي", CARD: "بطاقة", ONLINE: "أونلاين" },
+    receipt: "إيصال", cancel: "إلغاء", cancelReason: "السبب، مثلاً رجعت الحوالة", cancelled: "ملغاة",
+    atIssue: "الدفع وقت الإصدار", none: "ما في", full: "دفع كامل", partial: "دفعة أولى", plan: "التقسيط",
+    planOn: "الدفع على أقساط", firstAmount: "الدفعة الأولى", count: "عدد الأقساط", every: "كل كم يوم", generate: "اعمل الخطة",
+    rate: "القسط", due: "تاريخ الاستحقاق", difference: "الفرق عن المجموع", savePlan: "حفظ خطة الأقساط", removePlan: "إلغاء الخطة",
+    nextDue: "الاستحقاق الجاي", daysOverdue: "يوم تأخير", overpay: "المبلغ أكبر من الباقي", planSum: "مجموع الأقساط ما بيساوي مبلغ الفاتورة",
+    dunning: "التذكير بالدفع", remind: "اعمل رسالة تذكير", dunningLevels: { 1: "تذكير بالدفع", 2: "إنذار أول", 3: "إنذار تاني" },
+    statement: "كشف الحساب", balance: "الرصيد", totalOpen: "مجموع الباقي", totalOverdue: "منه متأخر", dueSoon: "مستحق خلال ٧ أيام",
+    creditLimit: "حد الدين", creditWarn: "انتبه: بهالفاتورة الزبون بيتجاوز حد الدين تبعه.", openNow: "عليه هلق",
+    customer: "الزبون", invoice: "الفاتورة", sinceMoved: "منقولة من الفاتورة القديمة", nothingOpen: "ما في مستحقات. كل شي مدفوع.",
+    byCustomer: "حسب الزبون", byInvoice: "حسب الفاتورة", charge: "مبلغ عليه", payment: "دفعة", print: "طباعة",
+  },
   settings: {
+    logo: "شعار الشركة (PNG أو JPG)", logoHint: "بيطلع فوق على الفواتير والعروض والرسائل. الفواتير يلي صدرت قبل بتضل متل ما هي.", removeLogo: "شيل الشعار", logoType: "اختار صورة PNG أو JPG لحد ٢ ميغا",
     title: "الإعدادات", company: "بيانات الشركة", bank: "البنك", invoice: "الفواتير", owner: "صاحب الشركة",
     taxNumber: "الرقم الضريبي المحلي", bankName: "اسم البنك", iban: "رقم الحساب الدولي", bic: "رمز البنك", paymentDays: "مهلة الدفع بالأيام",
     offerDays: "صلاحية العرض بالأيام", footer: "النص بأسفل الفاتورة", website: "الموقع",

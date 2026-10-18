@@ -13,6 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const items: NavItem[] = [
     { href: "/", label: t.nav.home, icon: "home" },
     { href: "/sales", label: t.nav.sales, icon: "cart" },
+    { href: "/receivables", label: t.nav.receivables, icon: "euro" },
     { href: "/customers", label: t.nav.customers, icon: "users" },
     { href: "/products", label: t.nav.products, icon: "box" },
     { href: "/receive", label: t.nav.receive, icon: "truck" },
@@ -23,7 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/suppliers", label: t.nav.suppliers, icon: "truck" },
     { href: "/settings", label: t.nav.settings, icon: "settings" },
   ];
-  const mobile = [items[0], items[1], items[2], items[5], items[4]];
+  const mobile = [items[0], items[1], items[2], items[3], items[6]];
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[250px_1fr]">
       <aside className="sticky top-0 hidden h-screen print:!hidden flex-col justify-between bg-gradient-to-b from-brand-700 to-brand-900 p-4 text-white lg:flex">

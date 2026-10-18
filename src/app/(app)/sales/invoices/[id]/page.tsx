@@ -13,6 +13,7 @@ import { DocEditor } from "../../DocEditor";
 import { EmailForm, InvoiceOp } from "../../DocActions";
 import { mailConfigured } from "@/lib/mail";
 import { StatusBadge } from "../../StatusBadge";
+import { PaymentPanel } from "./PaymentPanel";
 
 export default async function InvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ customer?: string }> }) {
   const { id } = await params;
@@ -30,7 +31,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
     );
   }
 
-  const inv = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, id), with: { lines: true, customer: true } });
+  const inv = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, id), with: { lines: true, customer: true, installments: true } });
   if (!inv) notFound();
   const lines = inv.lines.sort((a, b) => a.position - b.position);
   const [replaces, cancels, cancelledBy, replacedBy] = await Promise.all([
@@ -51,7 +52,9 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             <div className="w-40"><InvoiceOp t={t} id={inv.id} op="delete" label={t.common.delete} icon="trash" tone="btn-danger" confirmText={t.common.delete + "?"} /></div></>} />
         <DocEditor t={t} kind="invoice" customers={customers} options={options} intl={intl} initial={{
           id: inv.id, customerId: inv.customerId, date: todayIso(), channel: inv.channel, deliveryDate: inv.deliveryDate ?? "", discountBp: inv.discountBp,
-          skontoBp: inv.skontoBp, skontoDays: inv.skontoDays, notes: inv.notes, retentionOfTitle: inv.retentionOfTitle, offerId: inv.offerId, replacesInvoiceId: inv.replacesInvoiceId,
+          skontoBp: inv.skontoBp, skontoDays: inv.skontoDays, notes: inv.notes,
+          initialPaymentCents: inv.initialPaymentCents, initialPaymentMethod: inv.initialPaymentMethod,
+          installments: [...inv.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map((r) => ({ dueDate: r.dueDate, amountCents: r.amountCents })), retentionOfTitle: inv.retentionOfTitle, offerId: inv.offerId, replacesInvoiceId: inv.replacesInvoiceId,
           lines: lines.map((l) => ({ variantId: l.variantId, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, vatRateBp: l.vatRateBp })),
         }} />
       </div>
@@ -110,6 +113,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           </div>
         </aside>
       </div>
+      <PaymentPanel t={t} intl={intl} invoiceId={inv.id} />
     </div>
   );
 }

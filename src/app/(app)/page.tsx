@@ -3,13 +3,19 @@ import { requireSession } from "@/lib/auth";
 import { getI18n } from "@/i18n";
 import { Icon, type IconName } from "@/components/Icon";
 import { alerts, dashboardStats } from "@/lib/queries";
+import { openItems } from "@/lib/receivables";
 import { formatCents } from "@/lib/money";
 import { daysBetween, formatDate, todayIso } from "@/lib/dates";
 
 export default async function Home() {
   const session = await requireSession();
   const { t, intl } = await getI18n();
-  const [stats, al] = await Promise.all([dashboardStats(), alerts()]);
+  const [stats, al, open] = await Promise.all([dashboardStats(), alerts(), openItems()]);
+  const debts = open.filter((r) => r.state.openCents > 0);
+  const rOpen = debts.reduce((s, r) => s + r.state.openCents, 0);
+  const rOverdue = debts.reduce((s, r) => s + r.state.overdueCents, 0);
+  const rSoon = debts.filter((r) => r.light === "yellow").reduce((s, r) => s + r.state.nextDueCents, 0);
+  const lateList = debts.filter((r) => r.light === "red").slice(0, 5);
   const today = todayIso();
 
   const actions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean }[] = [
@@ -46,17 +52,31 @@ export default async function Home() {
       </div>
 
       <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Kpi icon="euro" label={t.home.stockValue} value={formatCents(stats.stockValueCents, intl)} sub={`${stats.products} ${t.home.articles}`} />
+        <Kpi icon="euro" label={t.pay.kpiOpen} value={formatCents(rOpen, intl)} sub={`${debts.length} ${t.pay.openInvoices}`} href="/receivables" />
+        <Kpi icon="alert" label={t.pay.totalOverdue} value={formatCents(rOverdue, intl)} tone={rOverdue ? "text-red-600" : undefined} href="/receivables?f=red" />
+        <Kpi icon="clock" label={t.pay.dueSoon} value={formatCents(rSoon, intl)} tone={rSoon ? "text-amber-600" : undefined} href="/receivables?f=yellow" />
+      </div>
+
+      <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Kpi icon="box" label={t.home.stockValue} value={formatCents(stats.stockValueCents, intl)} sub={`${stats.products} ${t.home.articles}`} />
         <Kpi icon="layers" label={t.home.lowStock} value={String(stats.low)} tone={stats.low ? "text-amber-600" : undefined} href="/stock?low=1" />
         <Kpi icon="clock" label={t.home.expiring} value={String(stats.expiring)} tone={stats.expiring ? "text-red-600" : undefined} href="/stock" />
       </div>
 
       <section className="card p-5 animate-rise">
         <h2 className="mb-3 flex items-center gap-2 text-lg font-bold"><Icon name="alert" className="h-5 w-5 text-amber-500" />{t.home.alerts}</h2>
-        {al.low.length === 0 && al.expiring.length === 0 ? (
+        {al.low.length === 0 && al.expiring.length === 0 && lateList.length === 0 ? (
           <p className="flex items-center gap-2 text-sm text-ink-soft"><Icon name="check" className="h-4 w-4 text-brand-600" />{t.home.noAlerts}</p>
         ) : (
           <ul className="divide-y divide-black/5">
+            {lateList.map((r) => (
+              <li key={"p" + r.invoiceId}>
+                <Link href={`/sales/invoices/${r.invoiceId}#payments`} className="group flex items-center justify-between gap-3 py-2.5 text-sm hover:text-brand-700">
+                  <span className="flex items-center gap-2"><span className="badge bg-red-100 text-red-800">{t.pay.overdue} · {r.state.daysOverdue} {t.pay.days}</span>{r.customerName} <span className="num text-ink-soft" dir="ltr">{r.number}</span></span>
+                  <span className="num font-semibold text-red-600">{formatCents(r.state.overdueCents, intl)}</span>
+                </Link>
+              </li>
+            ))}
             {al.low.map((x) => (
               <li key={"l" + x.id}>
                 <Link href={`/stock/${x.id}`} className="group flex items-center justify-between gap-3 py-2.5 text-sm hover:text-brand-700">

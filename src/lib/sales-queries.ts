@@ -2,10 +2,17 @@ import "server-only";
 import { asc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { CustomerOpt, SaleOption } from "@/app/(app)/sales/DocEditor";
+import { customerOpenBalances } from "./receivables";
 
 export async function customerOptions(): Promise<CustomerOpt[]> {
-  const rows = await db.select().from(schema.customers).where(eq(schema.customers.active, true)).orderBy(asc(schema.customers.name));
-  return rows.map((c) => ({ id: c.id, number: c.number, name: c.name, city: c.city, type: c.type, country: c.country, vatIdStatus: c.vatIdStatus, priceGroup: c.priceGroup }));
+  const [rows, open] = await Promise.all([
+    db.select().from(schema.customers).where(eq(schema.customers.active, true)).orderBy(asc(schema.customers.name)),
+    customerOpenBalances(),
+  ]);
+  return rows.map((c) => ({
+    id: c.id, number: c.number, name: c.name, city: c.city, type: c.type, country: c.country, vatIdStatus: c.vatIdStatus, priceGroup: c.priceGroup,
+    openCents: open.get(c.id) ?? 0, creditLimitCents: c.creditLimitCents,
+  }));
 }
 
 /** Verkaufbare Varianten mit Preisen und Verfügbarkeit (ohne die Reservierungen des eigenen Angebots). */

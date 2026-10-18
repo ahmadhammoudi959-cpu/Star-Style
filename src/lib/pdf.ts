@@ -31,7 +31,10 @@ type DocData = {
   vatBreakdown: { rateBp: number; netCents: number; vatCents: number }[];
   taxMode: "DOMESTIC" | "EU_REVERSE_CHARGE" | "EU_PENDING_VATID" | "EU_B2C" | "EXPORT"; ossCountry: string | null;
   skontoBp: number; skontoDays: number; retentionOfTitle: boolean; notes: string; refNumber: string | null;
+  /** nur Rechnung: bei Ausstellung bereits erhaltene Zahlungen und Ratenplan */
+  received?: { amountCents: number; method: string }[]; installments?: { dueDate: string; amountCents: number }[];
 };
+const METHOD_DE: Record<string, string> = { CASH: "bar", BANK: "per Überweisung", CARD: "per Karte", ONLINE: "online" };
 
 const COUNTRY: Record<string, string> = { DE: "", NL: "Niederlande", BE: "Belgien", AT: "Österreich", FR: "Frankreich", LU: "Luxemburg", PL: "Polen", CH: "Schweiz", IT: "Italien", ES: "Spanien", DK: "Dänemark", CZ: "Tschechien" };
 const countryName = (c: string) => (c === "DE" ? "" : COUNTRY[c] ?? c);
@@ -222,8 +225,19 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
   // Hinweise
   const notes: string[] = [];
   if (d.kind === "invoice") {
-    if (d.dueDate) notes.push(`Zahlbar ohne Abzug bis ${formatDate(d.dueDate)}.`);
-    if (d.skontoBp && d.skontoDays) notes.push(`Bei Zahlung bis ${formatDate(addDaysIso(d.date, d.skontoDays))} gewähren wir ${bpToPercent(d.skontoBp)} % Skonto: zu zahlen ${formatCents(skontoAmount(d.grossCents, d.skontoBp))}.`);
+    const got = (d.received ?? []).reduce((s, p) => s + p.amountCents, 0);
+    const rest = d.grossCents - got;
+    if (got > 0) {
+      const how = [...new Set((d.received ?? []).map((p) => METHOD_DE[p.method] ?? ""))].filter(Boolean).join(" / ");
+      notes.push(rest <= 0 ? `Betrag ${how} dankend erhalten. Die Rechnung ist bezahlt.` : `Bereits ${how} erhalten: ${formatCents(got)}. Noch offen: ${formatCents(rest)}.`);
+    }
+    const plan = d.installments ?? [];
+    if (rest > 0 && plan.length > 1) {
+      let pool = got;
+      const open = plan.map((r) => { const paid = Math.min(pool, r.amountCents); pool -= paid; return { ...r, open: r.amountCents - paid }; }).filter((r) => r.open > 0);
+      notes.push(`Ratenzahlung vereinbart: ${open.map((r, i) => `${i + 1}. Rate ${formatCents(r.open)} fällig am ${formatDate(r.dueDate)}`).join("; ")}.`);
+    } else if (rest > 0 && d.dueDate) notes.push(`Zahlbar ohne Abzug bis ${formatDate(d.dueDate)}.`);
+    if (rest > 0 && d.skontoBp && d.skontoDays) notes.push(`Bei Zahlung bis ${formatDate(addDaysIso(d.date, d.skontoDays))} gewähren wir ${bpToPercent(d.skontoBp)} % Skonto: zu zahlen ${formatCents(skontoAmount(d.grossCents, d.skontoBp))}.`);
     if (d.deliveryDate === d.date) notes.push("Das Lieferdatum entspricht dem Rechnungsdatum.");
   }
   if (d.kind === "offer" && d.validUntil) notes.push(`Dieses Angebot ist gültig bis ${formatDate(d.validUntil)}. Die Ware ist bis dahin für Sie reserviert.`);
@@ -298,7 +312,7 @@ async function linesWithProducts(lines: { position: number; variantId: string | 
 }
 
 export async function invoicePdf(invoiceId: string, variant: "invoice" | "delivery" = "invoice") {
-  const inv = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, invoiceId), with: { lines: true, customer: true } });
+  const inv = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, invoiceId), with: { lines: true, customer: true, installments: true, payments: true } });
   if (!inv) throw new Error("notFound");
   const isDraft = inv.status === "DRAFT";
   const ref = inv.cancelsInvoiceId
@@ -316,6 +330,11 @@ export async function invoicePdf(invoiceId: string, variant: "invoice" | "delive
     subtotalCents: inv.subtotalCents, discountCents: inv.discountCents, discountBp: inv.discountBp, netCents: inv.netCents, vatCents: inv.vatCents,
     grossCents: inv.grossCents, vatBreakdown: inv.vatBreakdown, taxMode: inv.taxMode, ossCountry: inv.ossCountry,
     skontoBp: inv.skontoBp, skontoDays: inv.skontoDays, retentionOfTitle: inv.retentionOfTitle, notes: inv.notes, refNumber: ref,
+    installments: [...inv.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+    // Entwurf: geplante Zahlung bei Ausstellung; ausgestellt: Zahlungen bis zum Rechnungsdatum (PDF wird beim ersten Abruf archiviert)
+    received: isDraft
+      ? (inv.initialPaymentCents > 0 ? [{ amountCents: inv.initialPaymentCents, method: inv.initialPaymentMethod ?? "CASH" }] : [])
+      : inv.payments.filter((p) => !p.cancelledAt && p.date <= date).map((p) => ({ amountCents: p.amountCents, method: p.method })),
   };
   if (kind === "delivery" || isDraft) return renderPdf(data);
   const company = await db.query.companySettings.findFirst();
@@ -367,5 +386,118 @@ export async function offerPdf(offerId: string) {
     subtotalCents: t.subtotalCents, discountCents: t.discountCents, discountBp: o.discountBp, netCents: t.netCents, vatCents: t.vatCents,
     grossCents: t.grossCents, vatBreakdown: t.vatByRate, taxMode: determineTaxMode(c), ossCountry: null,
     skontoBp: 0, skontoDays: 0, retentionOfTitle: false, notes: o.notes, refNumber: null,
+  });
+}
+
+// ───────────────────────── Briefe: Quittung, Mahnung ─────────────────────────
+
+type Letter = {
+  title: string; buyer: Party; info: [string, string][]; paragraphs: string[];
+  table?: { head: string[]; rows: string[][]; widths: number[] }; total?: [string, string]; afterTable?: string[]; signature?: boolean;
+};
+
+async function companyAndLogo(doc: PDFDocument) {
+  const company = (await db.query.companySettings.findFirst()) as typeof schema.companySettings.$inferSelect;
+  let logo = null;
+  if (company?.logoFileId) {
+    const file = await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, company.logoFileId) });
+    if (file?.mime === "image/png") logo = await doc.embedPng(file.data);
+    else if (file?.mime === "image/jpeg") logo = await doc.embedJpg(file.data);
+  }
+  return { company, logo };
+}
+
+export async function renderLetter(l: Letter): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  doc.setTitle(l.title); doc.setLanguage("de-DE"); doc.setCreator("Star Style");
+  const f = await fonts(doc);
+  const { company, logo } = await companyAndLogo(doc);
+  const w = new Writer(doc, f, company, logo);
+  w.newPage();
+  const sender = [company.name, company.street, [company.zip, company.city].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
+  w.text(sender, 20 * MM, H - 47 * MM, 7, f.r, SOFT);
+  w.page.drawLine({ start: { x: 20 * MM, y: H - 48 * MM }, end: { x: 105 * MM, y: H - 48 * MM }, thickness: 0.4, color: LINE });
+  [l.buyer.name, l.buyer.street, [l.buyer.zip, l.buyer.city].filter(Boolean).join(" "), countryName(l.buyer.country)].filter(Boolean)
+    .forEach((s, i) => w.text(s, 20 * MM, H - 54 * MM - i * 4.6 * MM, 10, i === 0 ? f.s : f.r));
+  l.info.forEach(([k, v], i) => { w.text(k, 125 * MM, H - 50 * MM - i * 4.8 * MM, 8.5, f.r, SOFT); w.right(v, W - 20 * MM, H - 50 * MM - i * 4.8 * MM, 8.5, f.s); });
+  w.y = H - 100 * MM;
+  w.text(l.title, 20 * MM, w.y, 17, f.b); w.y -= 9 * MM;
+  const para = (s: string, size = 9.5) => { for (const r of wrap(s, f.r, size, W - 40 * MM)) { w.ensure(6 * MM); w.text(r, 20 * MM, w.y, size); w.y -= 4.8 * MM; } w.y -= 2.5 * MM; };
+  l.paragraphs.forEach((p) => para(p));
+  if (l.table) {
+    const { head, rows, widths } = l.table;
+    const xs: number[] = []; let x = 20 * MM; for (const wd of widths) { x += wd * MM; xs.push(x); }
+    const drawHead = () => {
+      w.page.drawRectangle({ x: 20 * MM, y: w.y - 2.2 * MM, width: W - 40 * MM, height: 7 * MM, color: BRAND });
+      head.forEach((h, i) => (i === 0 ? w.text(h, 21.5 * MM, w.y, 8, f.s, rgb(1, 1, 1)) : w.right(h, xs[i] - 1.5 * MM, w.y, 8, f.s, rgb(1, 1, 1))));
+      w.y -= 7.5 * MM;
+    };
+    w.y -= 2 * MM; drawHead();
+    rows.forEach((r, ri) => {
+      w.ensure(6 * MM, drawHead);
+      if (ri % 2 === 1) w.page.drawRectangle({ x: 20 * MM, y: w.y - 2 * MM, width: W - 40 * MM, height: 6 * MM, color: ZEBRA });
+      r.forEach((cell, i) => (i === 0 ? w.text(cell, 21.5 * MM, w.y, 9) : w.right(cell, xs[i] - 1.5 * MM, w.y, 9)));
+      w.y -= 6 * MM;
+    });
+  }
+  if (l.total) {
+    w.ensure(14 * MM); w.y -= 3 * MM;
+    w.page.drawRectangle({ x: 112 * MM, y: w.y - 3 * MM, width: W - 20 * MM - 112 * MM, height: 9 * MM, color: BRAND });
+    w.text(l.total[0], 115 * MM, w.y, 10.5, f.b, rgb(1, 1, 1)); w.right(l.total[1], W - 21.5 * MM, w.y, 10.5, f.b, rgb(1, 1, 1));
+    w.y -= 13 * MM;
+  }
+  (l.afterTable ?? []).forEach((p) => para(p, 9));
+  w.ensure(28 * MM); w.y -= 2 * MM;
+  w.text("Mit freundlichen Grüßen", 20 * MM, w.y, 9.5); w.y -= 5 * MM;
+  w.text(company.name, 20 * MM, w.y, 9.5, f.s);
+  if (l.signature) {
+    w.y -= 16 * MM;
+    w.page.drawLine({ start: { x: 20 * MM, y: w.y }, end: { x: 90 * MM, y: w.y }, thickness: 0.6, color: INK });
+    w.text("Unterschrift Empfänger der Zahlung", 20 * MM, w.y - 4 * MM, 7.5, f.r, SOFT);
+  }
+  w.footer();
+  return doc.save();
+}
+
+const invBuyer = (inv: typeof schema.invoices.$inferSelect): Party => ({ name: inv.custName, street: inv.custStreet, zip: inv.custZip, city: inv.custCity, country: inv.custCountry, vatId: inv.custVatId });
+
+export async function receiptPdf(paymentId: string) {
+  const p = await db.query.payments.findFirst({ where: eq(schema.payments.id, paymentId), with: { invoice: { with: { customer: true, payments: true } } } });
+  if (!p) throw new Error("notFound");
+  const inv = p.invoice;
+  const before = inv.payments.filter((x) => !x.cancelledAt && x.id !== p.id && (x.date < p.date || (x.date === p.date && x.number < p.number))).reduce((s, x) => s + x.amountCents, 0);
+  const rest = inv.grossCents - before - p.amountCents;
+  return renderLetter({
+    title: p.cancelledAt ? `Quittung ${p.number} – STORNIERT` : `Quittung ${p.number}`,
+    buyer: invBuyer(inv),
+    info: [["Quittungsnr.", p.number], ["Datum", formatDate(p.date)], ["Zu Rechnung", inv.number ?? ""], ["Kundennr.", String(inv.customer.number)]],
+    paragraphs: [`Wir bestätigen den Eingang von ${formatCents(p.amountCents)} (${METHOD_DE[p.method] ?? p.method}) am ${formatDate(p.date)} für die Rechnung ${inv.number} vom ${formatDate(inv.issueDate)}.`,
+      ...(p.note ? [p.note] : []), ...(p.cancelledAt ? [`Diese Zahlung wurde am ${formatDate(p.cancelledAt.toISOString().slice(0, 10))} storniert. Grund: ${p.cancelReason}`] : [])],
+    table: { head: ["", "Betrag"], widths: [120, 50], rows: [["Rechnungsbetrag", formatCents(inv.grossCents)], ["Bereits vorher bezahlt", formatCents(before)], ["Diese Zahlung", formatCents(p.amountCents)]] },
+    total: [rest > 0 ? "Noch offen" : rest < 0 ? "Guthaben" : "Vollständig bezahlt", formatCents(Math.abs(rest))],
+    signature: p.method === "CASH",
+  });
+}
+
+export async function dunningPdf(dunningId: string) {
+  const d = await db.query.dunnings.findFirst({ where: eq(schema.dunnings.id, dunningId), with: { invoice: { with: { customer: true } } } });
+  if (!d) throw new Error("notFound");
+  const inv = d.invoice;
+  const { DUNNING_LEVELS } = await import("./payments");
+  const cfg = DUNNING_LEVELS[d.level - 1];
+  const intro = d.level === 1
+    ? "sicher haben Sie es im Tagesgeschäft übersehen: Für die folgende Rechnung konnten wir bis heute keinen vollständigen Zahlungseingang feststellen."
+    : d.level === 2 ? "leider ist der unten genannte Betrag trotz unserer Zahlungserinnerung noch offen."
+    : "trotz unserer bisherigen Schreiben ist der folgende Betrag weiterhin offen. Wir bitten Sie dringend um Ausgleich.";
+  const rows = [[`Rechnung ${inv.number} vom ${formatDate(inv.issueDate)} – fälliger, unbezahlter Betrag`, formatCents(d.openCents)]];
+  if (d.feeCents) rows.push(["Mahngebühr", formatCents(d.feeCents)]);
+  return renderLetter({
+    title: cfg.title, buyer: invBuyer(inv),
+    info: [["Datum", formatDate(d.date)], ["Rechnungsnr.", inv.number ?? ""], ["Kundennr.", String(inv.customer.number)], ["Zahlbar bis", formatDate(d.newDueDate)]],
+    paragraphs: ["Sehr geehrte Damen und Herren,", intro],
+    table: { head: ["Position", "Betrag"], widths: [120, 50], rows },
+    total: ["Zu zahlen", formatCents(d.openCents + d.feeCents)],
+    afterTable: [`Bitte überweisen Sie den Betrag bis zum ${formatDate(d.newDueDate)} unter Angabe der Rechnungsnummer ${inv.number}.`,
+      "Sollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben bitte als gegenstandslos."],
   });
 }
