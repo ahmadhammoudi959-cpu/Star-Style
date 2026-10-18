@@ -1,0 +1,62 @@
+@font-face { font-family: "Plex"; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2) format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F, U+0660-0669; }
+@font-face { font-family: "Plex"; font-weight: 600; font-display: swap; src: url(/fonts/ibm-plex-sans-arabic-arabic-600-normal.woff2) format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F, U+0660-0669; }
+@font-face { font-family: "Plex"; font-weight: 700; font-display: swap; src: url(/fonts/ibm-plex-sans-arabic-arabic-700-normal.woff2) format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F, U+0660-0669; }
+@font-face { font-family: "Plex"; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-sans-arabic-latin-400-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212; }
+@font-face { font-family: "Plex"; font-weight: 600; font-display: swap; src: url(/fonts/ibm-plex-sans-arabic-latin-600-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212; }
+@font-face { font-family: "Plex"; font-weight: 700; font-display: swap; src: url(/fonts/ibm-plex-sans-arabic-latin-700-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212; }
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --font-sans: "Plex"; color-scheme: light; }
+html, body { background: #f4f6f5; color: #1d2433; }
+body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-white shadow-card ring-1 ring-black/[0.04] transition duration-300 ease-out;
+  }
+  .card-hover {
+    @apply hover:-translate-y-0.5 hover:shadow-lift;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition
+           duration-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none
+           focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+  }
+  .btn-primary { @apply btn bg-brand-600 text-white shadow-card hover:bg-brand-700 hover:shadow-lift; }
+  .btn-ghost { @apply btn bg-white text-ink ring-1 ring-black/10 hover:bg-brand-50; }
+  .btn-danger { @apply btn bg-white text-red-700 ring-1 ring-red-200 hover:bg-red-50; }
+  .input {
+    @apply w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-[15px] text-ink shadow-sm outline-none
+           transition placeholder:text-ink-soft/60 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15;
+  }
+  .label { @apply mb-1 block text-sm font-semibold text-ink; }
+  .hint { @apply mt-1 text-xs text-ink-soft; }
+  .table-wrap { @apply overflow-x-auto; }
+  .tbl { @apply w-full text-sm; }
+  .tbl th { @apply whitespace-nowrap border-b border-black/5 bg-brand-50/60 px-3 py-2.5 text-start text-xs font-semibold uppercase tracking-wide text-ink-soft; }
+  .tbl th.text-end { @apply text-end; }
+  .tbl td { @apply border-b border-black/5 px-3 py-2.5 align-middle; }
+  .tbl tbody tr { @apply transition-colors hover:bg-brand-50/40; }
+  .badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+}
+
+/* Icons: kleine, lebendige Bewegung beim Hover */
+.icon-pop { transition: transform .25s cubic-bezier(.34,1.56,.64,1); }
+.group:hover .icon-pop, .icon-pop:hover { transform: scale(1.12) rotate(-6deg); }
+
+/* gestaffeltes Einblenden von Karten */
+.stagger > * { animation: rise .4s ease-out both; }
+.stagger > *:nth-child(2) { animation-delay: .05s; }
+.stagger > *:nth-child(3) { animation-delay: .1s; }
+.stagger > *:nth-child(4) { animation-delay: .15s; }
+.stagger > *:nth-child(5) { animation-delay: .2s; }
+.stagger > *:nth-child(6) { animation-delay: .25s; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

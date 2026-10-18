@@ -1,0 +1,25 @@
+# Render Blueprint – Region Frankfurt (Daten bleiben in der EU)
+databases:
+  - name: star-style-db
+    region: frankfurt
+    plan: basic-256mb        # kostenpflichtig: tägliche Backups, keine automatische Löschung
+    databaseName: starstyle
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: star-style
+    runtime: node
+    region: frankfurt
+    plan: starter
+    buildCommand: npm ci && npm run build && cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/
+    preDeployCommand: npm run db:migrate
+    startCommand: node .next/standalone/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase: { name: star-style-db, property: connectionString }
+      - key: SESSION_SECRET
+        generateValue: true
