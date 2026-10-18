@@ -12,13 +12,17 @@ services:
     runtime: node
     region: frankfurt
     plan: starter
-    buildCommand: npm ci && npm run build && cp -r public assets .next/standalone/ && cp -r .next/static .next/standalone/.next/
+    buildCommand: npm ci --include=dev && npm run build && cp -r public assets .next/standalone/ && cp -r .next/static .next/standalone/.next/
     preDeployCommand: npm run db:migrate
     startCommand: node .next/standalone/server.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: HOSTNAME          # Next.js soll auf allen Schnittstellen lauschen
+        value: 0.0.0.0
       - key: DATABASE_URL
         fromDatabase: { name: star-style-db, property: connectionString }
       - key: SESSION_SECRET
