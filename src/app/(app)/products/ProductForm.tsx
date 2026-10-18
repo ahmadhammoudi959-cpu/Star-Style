@@ -98,7 +98,7 @@ export function ProductForm({ t, initial, suppliers, categories }: {
         </div>
         <div className="space-y-3">
           {variants.map((v) => (
-            <div key={v.key} className="grid animate-rise grid-cols-2 gap-3 rounded-xl bg-brand-50/50 p-3 ring-1 ring-black/5 md:grid-cols-[1fr_1fr_1.4fr_0.8fr_auto]">
+            <div key={v.key} className="grid animate-rise grid-cols-2 gap-3 rounded-xl bg-brand-50/50 p-3 ring-1 ring-black/5 md:grid-cols-[minmax(0,1fr)_1fr_1.4fr_0.8fr_auto]">
               <Field label={t.product.size}><input className="input" value={v.size} onChange={(e) => upd(v.key, { size: e.target.value })} /></Field>
               <Field label={t.product.color}><input className="input" value={v.color} onChange={(e) => upd(v.key, { color: e.target.value })} /></Field>
               <Field label={t.product.barcode}><input className="input num" dir="ltr" inputMode="numeric" value={v.barcode} onChange={(e) => upd(v.key, { barcode: e.target.value.trim() })} /></Field>

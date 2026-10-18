@@ -17,7 +17,7 @@ export function SupplierForm({ t, initial }: { t: Dict; initial: S }) {
       <Field label={t.supplier.email}><input name="email" type="email" defaultValue={initial.email} className="input" dir="ltr" /></Field>
       <Field label={t.supplier.phone}><input name="phone" defaultValue={initial.phone} className="input" dir="ltr" /></Field>
       <Field label={t.setup.street}><input name="street" defaultValue={initial.street} className="input" /></Field>
-      <div className="grid grid-cols-[1fr_2fr_1fr] gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_2fr_1fr] gap-3">
         <Field label={t.setup.zip}><input name="zip" defaultValue={initial.zip} className="input" dir="ltr" /></Field>
         <Field label={t.setup.city}><input name="city" defaultValue={initial.city} className="input" /></Field>
         <Field label={t.supplier.country}><input name="country" defaultValue={initial.country} maxLength={2} className="input uppercase" dir="ltr" /></Field>

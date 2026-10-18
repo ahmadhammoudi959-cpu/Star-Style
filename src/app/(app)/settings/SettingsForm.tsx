@@ -1,5 +1,6 @@
 "use client";
 import { useActionState } from "react";
+import Link from "next/link";
 import { saveSettings } from "./actions";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
@@ -10,7 +11,7 @@ export function SettingsForm({ t, s }: { t: Dict; s: Record<string, string | num
   const v = (k: string) => String(s[k] ?? "");
   return (
     <form action={action} className="space-y-5">
-      <ErrorBox message={state?.error === "logoType" ? t.settings.logoType : state?.error ? t.common.required : undefined} />
+      <ErrorBox message={state?.error === "logoType" ? t.settings.logoType : state?.error === "datev" ? `${t.settings.consultant} / ${t.settings.client}` : state?.error ? t.common.required : undefined} />
       {state?.ok && <p className="flex animate-rise items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700"><Icon name="check" className="h-4 w-4" />{t.common.saved}</p>}
       <section className="card grid gap-4 p-5 md:grid-cols-2 animate-rise">
         <h2 className="text-lg font-bold md:col-span-2">{t.settings.company}</h2>
@@ -27,7 +28,7 @@ export function SettingsForm({ t, s }: { t: Dict; s: Record<string, string | num
         <Field label={t.setup.companyName}><input name="name" defaultValue={v("name")} required className="input" /></Field>
         <Field label={t.settings.owner}><input name="owner" defaultValue={v("owner")} className="input" /></Field>
         <Field label={t.setup.street}><input name="street" defaultValue={v("street")} className="input" /></Field>
-        <div className="grid grid-cols-[1fr_2fr_1fr] gap-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_2fr_1fr] gap-3">
           <Field label={t.setup.zip}><input name="zip" defaultValue={v("zip")} className="input" dir="ltr" /></Field>
           <Field label={t.setup.city}><input name="city" defaultValue={v("city")} className="input" /></Field>
           <Field label={t.supplier.country}><input name="country" defaultValue={v("country") || "DE"} maxLength={2} className="input uppercase" dir="ltr" /></Field>
@@ -49,6 +50,23 @@ export function SettingsForm({ t, s }: { t: Dict; s: Record<string, string | num
         <Field label={t.settings.paymentDays}><input name="defaultPaymentDays" type="number" min={0} defaultValue={v("defaultPaymentDays") || "14"} className="input num" /></Field>
         <Field label={t.settings.offerDays}><input name="offerValidityDays" type="number" min={1} defaultValue={v("offerValidityDays") || "14"} className="input num" /></Field>
         <Field label={t.settings.footer} className="md:col-span-2"><textarea name="invoiceFooter" rows={3} defaultValue={v("invoiceFooter")} className="input" /></Field>
+      </section>
+      <section id="datev" className="card grid scroll-mt-6 gap-4 p-5 md:grid-cols-3 animate-rise">
+        <div className="flex flex-wrap items-center justify-between gap-2 md:col-span-3">
+          <h2 className="text-lg font-bold">{t.settings.datev}</h2>
+          <Link href="/settings/accounts" className="text-sm font-semibold text-brand-700 hover:underline">{t.settings.accounts} →</Link>
+        </div>
+        <Field label={t.settings.consultant} hint={t.settings.datevHint}><input name="datevConsultant" inputMode="numeric" defaultValue={v("datevConsultant")} maxLength={7} className="input num" dir="ltr" /></Field>
+        <Field label={t.settings.client}><input name="datevClient" inputMode="numeric" defaultValue={v("datevClient")} maxLength={5} className="input num" dir="ltr" /></Field>
+        <Field label={t.settings.chart}>
+          <select name="chartOfAccounts" defaultValue={v("chartOfAccounts") || "SKR03"} className="input"><option value="SKR03">SKR 03</option><option value="SKR04">SKR 04</option></select>
+        </Field>
+        <Field label={t.settings.fyStart}>
+          <select name="fiscalYearStartMonth" defaultValue={v("fiscalYearStartMonth") || "1"} className="input">
+            {t.rep.months.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+          </select>
+        </Field>
+        <Field label={t.settings.advisorEmail} className="md:col-span-2"><input name="advisorEmail" type="email" defaultValue={v("advisorEmail")} className="input" dir="ltr" /></Field>
       </section>
       <div className="flex justify-end"><SubmitButton className="btn-primary px-8 py-3">{t.common.save}</SubmitButton></div>
     </form>

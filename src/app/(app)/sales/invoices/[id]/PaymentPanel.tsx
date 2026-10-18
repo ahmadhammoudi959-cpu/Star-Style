@@ -24,7 +24,7 @@ export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: stri
   const plan = [...inv.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map((r) => ({ dueDate: r.dueDate, amountCents: r.amountCents }));
 
   return (
-    <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_300px]" id="payments">
+    <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]" id="payments">
       <div className="card animate-rise overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/5 p-5">
           <h2 className="flex items-center gap-2 text-lg font-bold"><Icon name="euro" className="h-5 w-5 text-brand-600" />{t.pay.title}</h2>

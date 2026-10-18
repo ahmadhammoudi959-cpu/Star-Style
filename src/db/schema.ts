@@ -26,6 +26,15 @@ export const taxMode = pgEnum("tax_mode", ["DOMESTIC", "EU_REVERSE_CHARGE", "EU_
 export const paymentMethod = pgEnum("payment_method", ["CASH", "BANK", "CARD", "ONLINE"]);
 export const expenseCategory = pgEnum("expense_category", [
   "GOODS", "MARKETING", "ADVERTISING", "STORE_SUPPLIES", "SHIPPING", "RENT", "SHOP_FEES", "SOFTWARE", "OTHER",
+  "PACKAGING", "VEHICLE", "INSURANCE", "PHONE_INTERNET", "BANK_FEES", "CONSULTING",
+]);
+/** Steuerfall einer Eingangsrechnung */
+export const expenseTaxCase = pgEnum("expense_tax_case", [
+  "DOMESTIC",       // deutsche Rechnung mit Vorsteuer (19 / 7 / 0 %)
+  "EU_SERVICE",     // Dienstleistung aus EU ohne MwSt. (§ 13b, z. B. Meta/Google Irland)
+  "NON_EU_SERVICE", // Dienstleistung aus Drittland (§ 13b)
+  "EU_GOODS",       // Ware aus EU ohne MwSt. (innergemeinschaftlicher Erwerb)
+  "NO_VAT",         // ohne Umsatzsteuer (z. B. Versicherung, Gebühren)
 ]);
 
 // ───────────────────────── Benutzer & Einstellungen ─────────────────────────
@@ -61,8 +70,32 @@ export const companySettings = pgTable("company_settings", {
   defaultPaymentDays: integer("default_payment_days").notNull().default(14),
   offerValidityDays: integer("offer_validity_days").notNull().default(14),
   invoiceFooter: text("invoice_footer").notNull().default(""),
+  // Steuerberater / DATEV
+  datevConsultant: integer("datev_consultant"),
+  datevClient: integer("datev_client"),
+  chartOfAccounts: text("chart_of_accounts").notNull().default("SKR03"),
+  fiscalYearStartMonth: integer("fiscal_year_start_month").notNull().default(1),
+  accountOverrides: jsonb("account_overrides").$type<Record<string, number>>().notNull().default({}),
+  advisorEmail: text("advisor_email").notNull().default(""),
   updatedAt: updatedAt(),
 });
+
+/** Abgeschlossene Monate: Belege mit Datum in diesem Monat können nicht mehr geändert werden. */
+export const periodLocks = pgTable("period_locks", {
+  month: text("month").primaryKey(), // YYYY-MM
+  lockedAt: timestamp("locked_at", { withTimezone: true }).notNull().defaultNow(),
+  userId: text("user_id"),
+});
+
+/** Jede erzeugte Monatsmappe für den Steuerberater wird archiviert. */
+export const advisorExports = pgTable("advisor_exports", {
+  id: id(),
+  month: text("month").notNull(),
+  fileId: text("file_id").notNull(),
+  bookings: integer("bookings").notNull().default(0),
+  createdAt: createdAt(),
+  userId: text("user_id"),
+}, (t) => [index("advisor_export_month").on(t.month)]);
 
 /** Lückenlose Nummernkreise pro Belegart und Jahr */
 export const numberSequences = pgTable("number_sequences", {
@@ -96,6 +129,7 @@ export const auditLog = pgTable("audit_log", {
 // ───────────────────────── Stammdaten ─────────────────────────
 export const suppliers = pgTable("suppliers", {
   id: id(),
+  number: serial("number").notNull().unique(),
   name: text("name").notNull(),
   contact: text("contact").notNull().default(""),
   email: text("email").notNull().default(""),
@@ -397,9 +431,12 @@ export const expenses = pgTable("expenses", {
   vatCents: integer("vat_cents").notNull().default(0),
   grossCents: integer("gross_cents").notNull(),
   vatRateBp: integer("vat_rate_bp").notNull().default(1900),
-  reverseCharge: boolean("reverse_charge").notNull().default(false),
+  reverseCharge: boolean("reverse_charge").notNull().default(false), // veraltet, ersetzt durch taxCase
+  taxCase: expenseTaxCase("tax_case").notNull().default("DOMESTIC"),
+  channel: channel("channel"), // null = allgemein (nicht einem Kanal zugeordnet)
   paid: boolean("paid").notNull().default(true),
   paidAt: date("paid_at", { mode: "string" }),
+  paymentMethod: paymentMethod("payment_method"),
   fileId: text("file_id"),
   note: text("note").notNull().default(""),
   createdAt: createdAt(),
@@ -436,7 +473,7 @@ export const writeOffLinesRelations = relations(writeOffLines, ({ one }) => ({
   writeOff: one(writeOffs, { fields: [writeOffLines.writeOffId], references: [writeOffs.id] }),
   variant: one(variants, { fields: [writeOffLines.variantId], references: [variants.id] }),
 }));
-export const suppliersRelations = relations(suppliers, ({ many }) => ({ products: many(products) }));
+export const suppliersRelations = relations(suppliers, ({ many }) => ({ products: many(products), expenses: many(expenses) }));
 
 export const customersRelations = relations(customers, ({ many }) => ({ offers: many(offers), invoices: many(invoices), vatChecks: many(vatChecks) }));
 export const vatChecksRelations = relations(vatChecks, ({ one }) => ({ customer: one(customers, { fields: [vatChecks.customerId], references: [customers.id] }) }));
@@ -461,6 +498,7 @@ export const invoicesRelations = relations(invoices, ({ one, many }) => ({
   installments: many(installments),
   dunnings: many(dunnings),
 }));
+export const expensesRelations = relations(expenses, ({ one }) => ({ supplier: one(suppliers, { fields: [expenses.supplierId], references: [suppliers.id] }) }));
 export const dunningsRelations = relations(dunnings, ({ one }) => ({ invoice: one(invoices, { fields: [dunnings.invoiceId], references: [invoices.id] }) }));
 export const invoiceLinesRelations = relations(invoiceLines, ({ one }) => ({
   invoice: one(invoices, { fields: [invoiceLines.invoiceId], references: [invoices.id] }),

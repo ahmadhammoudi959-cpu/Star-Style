@@ -71,7 +71,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           <div className="w-72"><InvoiceOp t={t} id={inv.id} op="correct" label={t.sales.fixVat} icon="check" tone="btn-primary" /></div>
         </div>
       )}
-      <div className="grid gap-6 xl:grid-cols-[1fr_300px]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="card overflow-hidden animate-rise">
           <div className="grid gap-4 p-5 sm:grid-cols-4">
             <Info k={t.sales.issueDate} v={formatDate(inv.issueDate, intl)} />

@@ -19,12 +19,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/receive", label: t.nav.receive, icon: "truck" },
     { href: "/stock", label: t.nav.stock, icon: "layers" },
     { href: "/write-offs", label: t.nav.writeOffs, icon: "alert" },
-    { href: "/expenses", label: t.nav.expenses, icon: "receipt", soon: true },
-    { href: "/reports", label: t.nav.reports, icon: "chart", soon: true },
+    { href: "/expenses", label: t.nav.expenses, icon: "receipt" },
+    { href: "/reports", label: t.nav.reports, icon: "chart" },
     { href: "/suppliers", label: t.nav.suppliers, icon: "truck" },
     { href: "/settings", label: t.nav.settings, icon: "settings" },
   ];
-  const mobile = [items[0], items[1], items[2], items[3], items[6]];
+  const mobile = [items[0], items[1], items[2], items[8], items[6]];
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[250px_1fr]">
       <aside className="sticky top-0 hidden h-screen print:!hidden flex-col justify-between bg-gradient-to-b from-brand-700 to-brand-900 p-4 text-white lg:flex">

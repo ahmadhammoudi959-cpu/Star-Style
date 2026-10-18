@@ -37,7 +37,7 @@ export default async function VariantStock({ params }: { params: Promise<{ id: s
         <div className="card p-5"><div className="text-sm text-ink-soft">{t.stock.value}</div><div className="num text-3xl font-bold">{formatCents(Math.max(v.stockQty, 0) * v.avgCostCents, intl)}</div></div>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
           <section className="card overflow-hidden animate-rise">
             <h2 className="px-5 pt-5 text-lg font-bold">{t.stock.batches}</h2>

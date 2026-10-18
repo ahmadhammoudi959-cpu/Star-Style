@@ -501,3 +501,48 @@ export async function dunningPdf(dunningId: string) {
       "Sollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben bitte als gegenstandslos."],
   });
 }
+
+// ───────────────────────── Bericht (Monatsübersicht) ─────────────────────────
+
+type ReportSection = { heading: string; head: string[]; widths: number[]; rows: string[][]; total?: [string, string]; note?: string };
+
+export async function renderReport(r: { title: string; subtitle: string; sections: ReportSection[]; notes: string[] }): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  doc.setTitle(r.title); doc.setLanguage("de-DE"); doc.setCreator("Star Style");
+  const f = await fonts(doc);
+  const { company, logo } = await companyAndLogo(doc);
+  const w = new Writer(doc, f, company ?? ({ name: "" } as typeof schema.companySettings.$inferSelect), logo);
+  w.newPage();
+  w.y = H - 40 * MM;
+  w.text(r.title, 20 * MM, w.y, 17, f.b); w.y -= 6 * MM;
+  w.text(r.subtitle, 20 * MM, w.y, 9, f.r, SOFT); w.y -= 10 * MM;
+  for (const s of r.sections) {
+    w.ensure(30 * MM);
+    w.text(s.heading, 20 * MM, w.y, 11, f.b, BRAND); w.y -= 6 * MM;
+    const xs: number[] = []; let x = 20 * MM; for (const wd of s.widths) { x += wd * MM; xs.push(x); }
+    const head = () => {
+      w.page.drawRectangle({ x: 20 * MM, y: w.y - 2.2 * MM, width: W - 40 * MM, height: 6.5 * MM, color: BRAND });
+      s.head.forEach((h, i) => (i === 0 ? w.text(h, 21.5 * MM, w.y, 7.5, f.s, rgb(1, 1, 1)) : w.right(h, xs[i] - 1.5 * MM, w.y, 7.5, f.s, rgb(1, 1, 1))));
+      w.y -= 7 * MM;
+    };
+    head();
+    if (!s.rows.length) { w.text("–", 21.5 * MM, w.y, 8.5, f.r, SOFT); w.y -= 5.5 * MM; }
+    s.rows.forEach((row, ri) => {
+      w.ensure(6 * MM, head);
+      if (ri % 2 === 1) w.page.drawRectangle({ x: 20 * MM, y: w.y - 1.8 * MM, width: W - 40 * MM, height: 5.5 * MM, color: ZEBRA });
+      row.forEach((cell, i) => (i === 0 ? w.text(cell, 21.5 * MM, w.y, 8.5) : w.right(cell, xs[i] - 1.5 * MM, w.y, 8.5)));
+      w.y -= 5.5 * MM;
+    });
+    if (s.total) {
+      w.y -= 1.5 * MM;
+      w.page.drawRectangle({ x: 100 * MM, y: w.y - 2.5 * MM, width: W - 20 * MM - 100 * MM, height: 7.5 * MM, color: BRAND });
+      w.text(s.total[0], 102.5 * MM, w.y, 9, f.b, rgb(1, 1, 1)); w.right(s.total[1], W - 21.5 * MM, w.y, 9, f.b, rgb(1, 1, 1));
+      w.y -= 8 * MM;
+    }
+    if (s.note) { w.text(s.note, 20 * MM, w.y, 7.5, f.r, SOFT); w.y -= 5 * MM; }
+    w.y -= 5 * MM;
+  }
+  for (const n of r.notes) for (const line of wrap(n, f.r, 7.5, W - 40 * MM)) { w.ensure(5 * MM); w.text(line, 20 * MM, w.y, 7.5, f.r, SOFT); w.y -= 3.8 * MM; }
+  w.footer();
+  return doc.save();
+}

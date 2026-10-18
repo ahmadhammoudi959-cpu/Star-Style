@@ -195,7 +195,7 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
         </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="card grid h-fit gap-4 p-5 sm:grid-cols-2 animate-rise">
           <Field label={t.sales.docDiscount}><input inputMode="decimal" dir="ltr" value={docDisc} onChange={(e) => setDocDisc(e.target.value)} className="input num" placeholder="0" /></Field>
           {kind === "invoice" && (

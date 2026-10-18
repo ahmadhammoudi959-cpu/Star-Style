@@ -20,6 +20,12 @@ const PATHS = {
   euro: "M18 7a7 7 0 1 0 0 10M4 10h10M4 14h10",
   globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18",
   arrowLeft: "M19 12H5M12 19l-7-7 7-7",
+  arrowRight: "M5 12h14M12 5l7 7-7 7",
+  download: "M12 3v12M7 10l5 5 5-5M4 21h16",
+  lock: "M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4",
+  copy: "M9 9h11v11H9zM5 15H4V4h11v1",
+  mail: "M3 5h18v14H3zM3 6l9 7 9-7",
+  file: "M14 3H6v18h12V7zM14 3v4h4",
   edit: "M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z",
   history: "M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l4 2",
 } as const;

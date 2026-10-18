@@ -42,7 +42,7 @@ export default async function OfferPage({ params, searchParams }: { params: Prom
     <div>
       <PageHeader title={`${t.sales.offer} ${o.number}`} subtitle={o.customer.name} back="/sales?tab=offers"
         actions={<><StatusBadge t={t} status={o.status} /><a href={`/api/pdf/offer/${o.id}`} target="_blank" className="btn-ghost group"><Icon name="receipt" className="h-4 w-4" />{t.sales.pdf}</a></>} />
-      <div className="grid gap-6 xl:grid-cols-[1fr_280px]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div>
           {editable ? (
             <DocEditor t={t} kind="offer" customers={customers} options={options} intl={intl} initial={{

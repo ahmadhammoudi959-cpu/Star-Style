@@ -42,6 +42,9 @@ body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smooth
   .tbl tbody tr { @apply transition-colors hover:bg-brand-50/40; }
   .badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold; }
   .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* Beträge in Arabisch: Minus und € in deutscher Reihenfolge („-400,00 €“), Ausrichtung bleibt RTL */
+  [dir="rtl"] .num:not(input) { direction: ltr; unicode-bidi: isolate; text-align: right; }
+  [dir="rtl"] .num.text-end:not(input) { text-align: left; }
 }
 
 /* Icons: kleine, lebendige Bewegung beim Hover */

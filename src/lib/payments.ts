@@ -8,6 +8,7 @@ import { nextNumber } from "./numbering";
 import { audit } from "./stock";
 import { paymentState } from "./payment-status";
 import { addDaysIso, todayIso } from "./dates";
+import { assertOpen } from "./periods";
 
 export class PaymentError extends Error {
   constructor(public code: string, public detail?: string) { super(code); }
@@ -26,6 +27,7 @@ export async function recordPaymentTx(tx: Tx, p: { invoiceId: string; date: stri
   await tx.execute(sql`select id from invoices where id = ${p.invoiceId} for update`);
   const { inv, state } = await loadState(tx, p.invoiceId);
   if (inv.status !== "ISSUED" || inv.kind !== "INVOICE") throw new PaymentError("notPayable");
+  try { await assertOpen(tx, p.date); } catch { throw new PaymentError("periodLocked"); }
   if (!p.allowOverpay && p.amountCents > state.openCents) throw new PaymentError("overpay", String(state.openCents));
   const number = await nextNumber(tx, "PAYMENT", Number(p.date.slice(0, 4)));
   const [row] = await tx.insert(schema.payments).values({
@@ -98,7 +100,7 @@ export async function fitPlanToGross(tx: Tx, invoiceId: string, grossCents: numb
 export const DUNNING_LEVELS = [
   { level: 1, title: "Zahlungserinnerung", days: 7, feeCents: 0 },
   { level: 2, title: "1. Mahnung", days: 7, feeCents: 0 },
-  { level: 3, title: "2. Mahnung", days: 7, feeCents: 500 },
+  { level: 3, title: "2. Mahnung", days: 7, feeCents: 0 },
 ] as const;
 
 export async function createDunning(invoiceId: string, userId?: string) {

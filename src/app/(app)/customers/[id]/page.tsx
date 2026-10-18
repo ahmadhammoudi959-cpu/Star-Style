@@ -40,7 +40,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
       <PageHeader title={c.name} subtitle={`${t.customer.number} ${c.number}`} back="/customers"
         actions={<Link href={`/sales/offers/new?customer=${c.id}`} className="btn-primary group"><Icon name="cart" className="h-4 w-4" />{t.sales.newOffer}</Link>} />
       {saved && <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700"><Icon name="check" className="h-4 w-4" />{t.common.saved}</div>}
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
           <CustomerForm t={t} initial={{
             id: c.id, type: c.type, name: c.name, contact: c.contact, email: c.email, phone: c.phone, street: c.street, zip: c.zip, city: c.city,

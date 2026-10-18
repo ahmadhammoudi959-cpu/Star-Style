@@ -17,6 +17,7 @@
     "bcryptjs": "3.0.3",
     "drizzle-orm": "^0.45.4",
     "jose": "6.2.12",
+    "jszip": "^3.10.1",
     "next": "^15.5.28",
     "nodemailer": "^10.1.6",
     "pdf-lib": "^1.17.1",

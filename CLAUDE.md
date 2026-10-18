@@ -26,6 +26,7 @@ Next.js 15 (App Router, Server Actions) · TypeScript strict · Drizzle ORM + Po
 
 ## Bekannte Punkte
 - `npm audit`: verbleibend nur `postcss` innerhalb von Next (Build-Zeit, verarbeitet nur eigenes CSS) – beim nächsten Next-Update erneut prüfen.
+- Beträge in Arabisch: `.num` bekommt in RTL `direction: ltr` (globals.css), damit „-400,00 €“ richtig steht.
 - Formulare mit zwei Absende-Knöpfen: Absicht als **kontrolliertes** Hidden-Feld übergeben (`DocEditor`), nicht über name/value am Knopf – sonst geht der Wert verloren.
 
 ## Ausbaustufen
@@ -35,7 +36,9 @@ Next.js 15 (App Router, Server Actions) · TypeScript strict · Drizzle ORM + Po
 - [x] **3 Zahlungen**: Zahlung bei Ausstellung (voll/Anzahlung), Teilzahlungen (QU-, nie löschen – nur stornieren mit Grund), Ratenplan (Summe = Brutto, Fälligkeit = letzte Rate), Zahlungsstand in `src/lib/payment-status.ts` (rein, getestet; FIFO auf Raten), Offene Posten `/receivables` mit Ampel (rot überfällig, gelb ≤ 7 Tage), Mahnstufen 1–3 (`DUNNING_LEVELS`), Quittung-/Mahnungs-PDF, Kundenkonto `/customers/[id]/statement` (druckbar), Kreditlimit-Warnung im Editor, Dashboard-Kennzahlen, Firmenlogo in Einstellungen.
   - Korrektur einer Rechnung: Zahlungen wandern auf die neue Rechnung (`movePayments`), Ratenplan wird angepasst (`fitPlanToGross`).
   - Rechnungs-PDF zeigt bei Ausstellung erhaltene Zahlungen und den Ratenplan; es wird beim ersten Abruf archiviert und danach nie neu erzeugt.
-  - Mahngebühr 5 € ab 2. Mahnung – vom Steuerberater/Inhaber bestätigen lassen.
+  - Keine Mahngebühren (Entscheidung Inhaber). Feld `fee_cents` bleibt für später.
 - [ ] **4 Shop-Anbindung**: zwei Shops (Plattform noch offen), Echtzeit-Bestandsabgleich, Kanal je Verkauf, Abgleich alle 5 Min.
-- [ ] **5 Ausgaben & Berichte**: Eingangsrechnungen (Reverse-Charge z. B. Meta/Irland), Kategorien, GuV pro Monat und Kanal, DATEV-Export, Monatspaket für Steuerberater.
+- [x] **5 Ausgaben & Berichte**: Eingangsrechnungen `/expenses` (Lieferant wird automatisch angelegt, Steuerfall: Inland / EU-Leistung § 13b / Drittland § 13b / innergem. Erwerb / ohne USt, Vorschlag nach Land + Kategorie, Beleg-Upload, Duplikat-Schutz), GuV pro Monat und Kanal `/reports` (Rohertrag = Umsatz − Wareneinsatz aus FEFO-Chargen; Wareneinkauf zählt NICHT als Kosten), Jahresübersicht, USt-Überblick, Monatsmappe `/reports/export` (ZIP: DATEV-Buchungsstapel + Debitoren/Kreditoren, Rechnungs-PDFs, Belege, CSV-Listen, Übersicht-PDF; jede Mappe archiviert in `advisor_exports`), Monatsabschluss (`period_locks`: keine Ausgaben/Zahlungen mehr in abgeschlossenen Monaten), Einstellungen: Berater-/Mandantennummer, SKR03/04, Konten überschreibbar (`/settings/accounts`).
+  - DATEV-Format in `src/lib/datev.ts` (EXTF 700, Buchungsstapel v13, Debitoren/Kreditoren v5, Windows-1252, getestet). Konten/Steuerschlüssel in `src/lib/accounts.ts`: Automatikkonten (8400, 8125, 3400, 3425 …) ohne Schlüssel; sonst 9/8 (VSt), 94/91 (§ 13b), 19/18 (Erwerb). Debitor = 10000 + Kundennr., Kreditor = 70000 + Lieferantennr.
+  - Offen: einmal mit dem Steuerberater einen Testimport machen und die Kontenzuordnung bestätigen lassen (Kontenrahmen, § 13b-Schlüssel, OSS-Felder). Wareneinkauf aus Drittländern: Einfuhrumsatzsteuer separat erfassen (noch kein eigener Steuerfall).
 - [ ] **6 KI**: Belege auslesen, Nachbestell- und MHD-Hinweise, Monatsbericht in Klartext, Fragen in Alltagssprache.

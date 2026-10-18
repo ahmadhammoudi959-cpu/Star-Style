@@ -22,6 +22,13 @@
       "when": 1792344601932,
       "tag": "0002_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792350316978,
+      "tag": "0003_expenses",
+      "breakpoints": true
     }
   ]
 }
