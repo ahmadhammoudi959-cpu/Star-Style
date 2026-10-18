@@ -4,13 +4,16 @@ import { getI18n } from "@/i18n";
 import { Icon, type IconName } from "@/components/Icon";
 import { alerts, dashboardStats } from "@/lib/queries";
 import { openItems } from "@/lib/receivables";
+import { loadInsights } from "@/lib/insights-data";
+import { aiConfigured } from "@/lib/ai/client";
 import { formatCents } from "@/lib/money";
 import { daysBetween, formatDate, todayIso } from "@/lib/dates";
 
 export default async function Home() {
   const session = await requireSession();
   const { t, intl } = await getI18n();
-  const [stats, al, open] = await Promise.all([dashboardStats(), alerts(), openItems()]);
+  const [stats, al, open, ins] = await Promise.all([dashboardStats(), alerts(), openItems(), loadInsights()]);
+  const ai = aiConfigured();
   const debts = open.filter((r) => r.state.openCents > 0);
   const rOpen = debts.reduce((s, r) => s + r.state.openCents, 0);
   const rOverdue = debts.reduce((s, r) => s + r.state.overdueCents, 0);
@@ -62,6 +65,24 @@ export default async function Home() {
         <Kpi icon="box" label={t.home.stockValue} value={formatCents(stats.stockValueCents, intl)} sub={`${stats.products} ${t.home.articles}`} />
         <Kpi icon="layers" label={t.home.lowStock} value={String(stats.low)} tone={stats.low ? "text-amber-600" : undefined} href="/stock?low=1" />
         <Kpi icon="clock" label={t.home.expiring} value={String(stats.expiring)} tone={stats.expiring ? "text-red-600" : undefined} href="/stock" />
+      </div>
+
+      <div className={`grid gap-4 ${ai ? "lg:grid-cols-2" : ""}`}>
+        <Link href="/insights" className="card card-hover group flex animate-rise items-center gap-4 p-5">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600"><Icon name="bulb" className="h-6 w-6" /></div>
+          <div className="min-w-0 flex-1">
+            <div className="font-bold">{t.ins.title}</div>
+            <div className="text-sm text-ink-soft">{t.ins.summary.replace("{r}", String(ins.reorder.length)).replace("{e}", String(ins.expiry.length)).replace("{s}", String(ins.slow.length))}</div>
+          </div>
+          <Icon name="arrowRight" className="h-5 w-5 text-ink-soft rtl:rotate-180" />
+        </Link>
+        {ai && (
+          <Link href="/ask" className="card card-hover group flex animate-rise items-center gap-4 bg-gradient-to-br from-violet-600 to-indigo-700 p-5 text-white">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/15"><Icon name="spark" className="h-6 w-6" /></div>
+            <div className="min-w-0 flex-1"><div className="font-bold">{t.ai.askTitle}</div><div className="truncate text-sm text-white/80">{t.ai.examples[0]}</div></div>
+            <Icon name="arrowRight" className="h-5 w-5 rtl:rotate-180" />
+          </Link>
+        )}
       </div>
 
       <section className="card p-5 animate-rise">

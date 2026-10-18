@@ -26,6 +26,7 @@ Next.js 15 (App Router, Server Actions) · TypeScript strict · Drizzle ORM + Po
 
 ## Bekannte Punkte
 - `npm audit`: verbleibend nur `postcss` innerhalb von Next (Build-Zeit, verarbeitet nur eigenes CSS) – beim nächsten Next-Update erneut prüfen.
+- Shell: nie `pkill -f` benutzen (beendet die eigene Shell) – Ports mit `fuser -k PORT/tcp` freigeben.
 - Beträge in Arabisch: `.num` bekommt in RTL `direction: ltr` (globals.css), damit „-400,00 €“ richtig steht.
 - Formulare mit zwei Absende-Knöpfen: Absicht als **kontrolliertes** Hidden-Feld übergeben (`DocEditor`), nicht über name/value am Knopf – sonst geht der Wert verloren.
 
@@ -41,4 +42,7 @@ Next.js 15 (App Router, Server Actions) · TypeScript strict · Drizzle ORM + Po
 - [x] **5 Ausgaben & Berichte**: Eingangsrechnungen `/expenses` (Lieferant wird automatisch angelegt, Steuerfall: Inland / EU-Leistung § 13b / Drittland § 13b / innergem. Erwerb / ohne USt, Vorschlag nach Land + Kategorie, Beleg-Upload, Duplikat-Schutz), GuV pro Monat und Kanal `/reports` (Rohertrag = Umsatz − Wareneinsatz aus FEFO-Chargen; Wareneinkauf zählt NICHT als Kosten), Jahresübersicht, USt-Überblick, Monatsmappe `/reports/export` (ZIP: DATEV-Buchungsstapel + Debitoren/Kreditoren, Rechnungs-PDFs, Belege, CSV-Listen, Übersicht-PDF; jede Mappe archiviert in `advisor_exports`), Monatsabschluss (`period_locks`: keine Ausgaben/Zahlungen mehr in abgeschlossenen Monaten), Einstellungen: Berater-/Mandantennummer, SKR03/04, Konten überschreibbar (`/settings/accounts`).
   - DATEV-Format in `src/lib/datev.ts` (EXTF 700, Buchungsstapel v13, Debitoren/Kreditoren v5, Windows-1252, getestet). Konten/Steuerschlüssel in `src/lib/accounts.ts`: Automatikkonten (8400, 8125, 3400, 3425 …) ohne Schlüssel; sonst 9/8 (VSt), 94/91 (§ 13b), 19/18 (Erwerb). Debitor = 10000 + Kundennr., Kreditor = 70000 + Lieferantennr.
   - Offen: einmal mit dem Steuerberater einen Testimport machen und die Kontenzuordnung bestätigen lassen (Kontenrahmen, § 13b-Schlüssel, OSS-Felder). Wareneinkauf aus Drittländern: Einfuhrumsatzsteuer separat erfassen (noch kein eigener Steuerfall).
-- [ ] **6 KI**: Belege auslesen, Nachbestell- und MHD-Hinweise, Monatsbericht in Klartext, Fragen in Alltagssprache.
+- [x] **6 KI & Hinweise**:
+  - Ohne KI-Dienst (immer aktiv, getestet): `/insights` – Nachbestellen (Verkaufstempo 90 Tage, Reichweite, Bestellmenge, Bestellliste je Lieferant zum Drucken), Ablauf-Risiko nach FEFO (`src/lib/insights.ts`), Ladenhüter; Monatsbericht in Klartext (`src/lib/narrative.ts`) oben in `/reports`.
+  - Mit KI (nur wenn `ANTHROPIC_API_KEY` gesetzt, Modell `ANTHROPIC_MODEL`, Standard `claude-sonnet-5-5`): Beleg auslesen im Ausgaben-Formular (Steuerentscheidung trifft `src/lib/ai/receipt-map.ts`, NICHT die KI), `/ask` „Frag dein Geschäft“ mit nur lesenden Werkzeugen (`src/lib/ai/ask.ts`, kein freies SQL, Gespräche nicht gespeichert), ausführlicher Monatsbericht mit Empfehlungen.
+  - Zugang über `fetch` (`src/lib/ai/client.ts`), Wiederholung bei 429/529, `ANTHROPIC_BASE_URL` für Tests mit Mock-Server.

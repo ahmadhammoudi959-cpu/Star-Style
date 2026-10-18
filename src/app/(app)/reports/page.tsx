@@ -8,6 +8,12 @@ import { lockedMonths } from "@/lib/periods";
 import { monthReport, yearReport } from "@/lib/reports";
 import { MonthNav } from "../expenses/MonthNav";
 import { YearChart } from "./YearChart";
+import { AiSummary } from "./AiSummary";
+import { narrative } from "@/lib/narrative";
+import { openItems } from "@/lib/receivables";
+import { loadInsights } from "@/lib/insights-data";
+import { shiftMonth } from "@/lib/periods";
+import { aiConfigured } from "@/lib/ai/client";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +21,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : todayIso().slice(0, 7);
   const { t, intl } = await getI18n();
-  const [r, year, locks] = await Promise.all([monthReport(month), yearReport(Number(month.slice(0, 4))), lockedMonths()]);
+  const isCurrent = month === todayIso().slice(0, 7);
+  const [r, prev, year, locks, recv, ins] = await Promise.all([monthReport(month), monthReport(shiftMonth(month, -1)), yearReport(Number(month.slice(0, 4))), lockedMonths(), openItems(), isCurrent ? loadInsights() : null]);
+  const story = narrative(r, prev, {
+    t: t.ai.narr, channelName: (ch) => t.sales.channels[ch as "STORE"], categoryName: (k) => t.exp.categories[k as "OTHER"], money: (v) => formatCents(v, intl),
+    overdueCents: isCurrent ? recv.reduce((s, x) => s + x.state.overdueCents, 0) : 0,
+    reorderUrgent: ins ? ins.reorder.filter((x) => x.urgency !== "soon").length : 0,
+    expiryRiskCents: ins ? ins.expiry.reduce((s, x) => s + x.riskCents, 0) : 0,
+  });
   const T = r.totals;
   const pct = (bp: number) => `${(bp / 100).toFixed(1).replace(".", ",")} %`;
   const maxCat = Math.max(1, ...r.expensesByCategory.map((e) => e.net));
@@ -26,6 +39,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <PageHeader title={t.rep.title} actions={
         <Link href={`/reports/export?month=${month}`} className="btn-primary group"><Icon name="download" className="h-4 w-4" />{t.rep.export}</Link>} />
       <div className="animate-rise"><MonthNav month={month} base="/reports" months={t.rep.months} locked={locks.has(month)} /></div>
+
+      <section className="card animate-rise border-s-4 border-brand-500 p-5">
+        <h2 className="mb-2 text-lg font-bold">{t.ai.summaryTitle}</h2>
+        <ul className="space-y-1.5 text-sm leading-relaxed">{story.map((s) => <li key={s} className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />{s}</li>)}</ul>
+        {aiConfigured() && !empty && <AiSummary t={t} month={month} />}
+      </section>
 
       <div className="stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Kpi icon="cart" label={t.rep.revenue} value={formatCents(T.revenueNet, intl)} sub={`${r.channels.reduce((s, c) => s + c.invoices, 0)} ${t.rep.invoices}`} />

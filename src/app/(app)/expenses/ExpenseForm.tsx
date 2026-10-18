@@ -1,5 +1,7 @@
 "use client";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useRef, useState, useTransition } from "react";
+import { readReceiptAction } from "../ai-actions";
+import type { ReceiptSuggestion } from "@/lib/ai/receipt-map";
 import { deleteExpenseAction, saveExpenseAction } from "./actions";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
@@ -17,9 +19,31 @@ type Supplier = { name: string; country: string; vatId: string };
 const OTHER_COUNTRIES = ["CH", "GB", "US", "TR", "CN", "AE", "NO"];
 const TAX_CASES: ExpenseTaxCase[] = ["DOMESTIC", "EU_SERVICE", "EU_GOODS", "NON_EU_SERVICE", "NO_VAT"];
 
-export function ExpenseForm({ t, intl, locale, initial, suppliers, locked }: {
-  t: Dict; intl: string; locale: string; initial: ExpenseFormData; suppliers: Supplier[]; locked: boolean;
+/** Großes Handyfoto verkleinern (nur für das Auslesen; gespeichert wird das Original). */
+async function shrink(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    const s = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    if (s === 1 && file.size < 3_500_000 && ["image/jpeg", "image/png", "image/webp"].includes(file.type)) return file;
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(bmp.width * s); cv.height = Math.round(bmp.height * s);
+    cv.getContext("2d")!.drawImage(bmp, 0, 0, cv.width, cv.height);
+    const blob = await new Promise<Blob | null>((r) => cv.toBlob(r, "image/jpeg", 0.85));
+    return blob ? new File([blob], "beleg.jpg", { type: "image/jpeg" }) : file;
+  } catch { return file; }
+}
+
+export function ExpenseForm({ t, intl, locale, initial, suppliers, locked, ai }: {
+  t: Dict; intl: string; locale: string; initial: ExpenseFormData; suppliers: Supplier[]; locked: boolean; ai: boolean;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [reading, startRead] = useTransition();
+  const [aiMsg, setAiMsg] = useState<{ ok: boolean; text: string; warnings: string[] } | null>(null);
+  const [invoiceNo, setInvoiceNo] = useState(initial.invoiceNo);
+  const [note, setNote] = useState(initial.note);
+  const [method, setMethod] = useState<string>(initial.paymentMethod || "BANK");
+  const [hasFile, setHasFile] = useState(false);
   const [state, action] = useActionState(saveExpenseAction, undefined);
   const [delState, delAction] = useActionState(deleteExpenseAction, undefined);
   const [vendor, setVendor] = useState(initial.vendorName);
@@ -53,6 +77,29 @@ export function ExpenseForm({ t, intl, locale, initial, suppliers, locked }: {
     if (s) { setCountry(s.country || "DE"); setVatId(s.vatId); apply({ country: s.country || "DE" }); }
   };
 
+  const applyAi = (s: ReceiptSuggestion) => {
+    if (s.vendorName) setVendor(s.vendorName);
+    setCountry(s.vendorCountry); setVatId(s.vendorVatId); if (s.invoiceNo) setInvoiceNo(s.invoiceNo);
+    setDate(s.date); if (!paidAtTouched) setPaidAt(s.date);
+    setCategory(s.category); setTaxCase(s.taxCase); setTaxTouched(true); setRate(s.vatRateBp);
+    if (s.amount) setAmount(s.amount);
+    setPaid(s.paid || paid); if (s.paymentMethod) setMethod(s.paymentMethod);
+    if (s.note && !note) setNote(s.note);
+    const W = t.ai.warnings as Record<string, string>;
+    setAiMsg({ ok: true, text: t.ai.filled, warnings: s.warnings.map((w) => (W[w.code] ?? "").replace("{d}", w.detail ?? "")) });
+  };
+  const readAi = () => {
+    const f = fileRef.current?.files?.[0];
+    if (!f) { setAiMsg({ ok: false, text: t.ai.pickFirst, warnings: [] }); return; }
+    startRead(async () => {
+      const fd = new FormData();
+      fd.set("file", await shrink(f));
+      const r = await readReceiptAction(fd);
+      if ("ok" in r) applyAi(r.ok);
+      else setAiMsg({ ok: false, text: r.error === "fileType" ? t.exp.errors.fileType : (t.ai.errors as Record<string, string>)[r.error] ?? t.ai.failed, warnings: [] });
+    });
+  };
+
   const cents = parseMoney(amount);
   const calc = cents && cents > 0 ? expenseAmounts(taxCase, cents, taxCase === "NO_VAT" ? 0 : rate) : null;
   const err = (code?: string) => (code ? (t.exp.errors as Record<string, string>)[code] ?? t.common.error : undefined);
@@ -65,6 +112,26 @@ export function ExpenseForm({ t, intl, locale, initial, suppliers, locked }: {
         <ErrorBox message={err(state?.error)} />
         {initial.id && <input type="hidden" name="id" value={initial.id} />}
         <fieldset disabled={locked} className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <section className="card animate-rise space-y-3 p-5 lg:col-start-1">
+              <Field label={t.exp.receipt}>
+                <input ref={fileRef} type="file" name="file" accept="image/*,application/pdf" onChange={(e) => { setHasFile(Boolean(e.target.files?.length)); setAiMsg(null); }}
+                  className="input file:me-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-1 file:font-semibold file:text-brand-700" />
+              </Field>
+              <div className="flex flex-wrap items-center gap-3">
+                {ai && !locked && (
+                  <button type="button" onClick={readAi} disabled={reading || !hasFile} className="btn group bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-card hover:shadow-lift disabled:opacity-50">
+                    {reading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name="search" className="h-4 w-4" />}{reading ? t.ai.reading : t.ai.read}
+                  </button>
+                )}
+                {initial.fileId && <a href={`/api/files/${initial.fileId}`} target="_blank" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline"><Icon name="file" className="h-4 w-4" />{t.exp.receiptShow}</a>}
+              </div>
+              {aiMsg && (
+                <div className={`animate-rise rounded-xl px-4 py-3 text-sm ring-1 ${aiMsg.ok ? "bg-violet-50 text-violet-900 ring-violet-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
+                  <div className="font-semibold">{aiMsg.text}</div>
+                  {aiMsg.warnings.filter(Boolean).map((w) => <div key={w} className="mt-1 flex gap-1.5 text-amber-800"><Icon name="alert" className="mt-0.5 h-3.5 w-3.5 shrink-0" />{w}</div>)}
+                </div>
+              )}
+            </section>
             <section className="card animate-rise grid gap-4 p-5 sm:grid-cols-2 lg:col-start-1">
               <Field label={t.exp.vendor} hint={t.exp.vendorHint} className="sm:col-span-2">
                 <input name="vendorName" value={vendor} onChange={(e) => pickVendor(e.target.value)} list="vendors" required autoComplete="off" className="input" />
@@ -79,9 +146,9 @@ export function ExpenseForm({ t, intl, locale, initial, suppliers, locked }: {
                 <input name="vendorVatId" value={vatId} onChange={(e) => setVatId(e.target.value)} dir="ltr" className="input uppercase" placeholder={country !== "DE" && EU_COUNTRIES.includes(country) ? `${country}…` : ""} />
               </Field>
               <Field label={t.exp.date}><input name="date" type="date" value={date} onChange={(e) => { setDate(e.target.value); if (!paidAtTouched) setPaidAt(e.target.value); }} required className="input" /></Field>
-              <Field label={`${t.exp.invoiceNo} (${t.common.optional})`}><input name="invoiceNo" defaultValue={initial.invoiceNo} dir="ltr" className="input" /></Field>
+              <Field label={`${t.exp.invoiceNo} (${t.common.optional})`}><input name="invoiceNo" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} dir="ltr" className="input" /></Field>
             </section>
-            <aside className="space-y-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-4 lg:row-start-1">
+            <aside className="space-y-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-5 lg:row-start-1">
               <section className="card animate-rise space-y-4 p-5">
                 <Field label={taxCase === "DOMESTIC" ? t.exp.amountGross : t.exp.amountNet}>
                   <input name="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" dir="ltr" required placeholder="0,00" className="input num text-xl font-bold" />
@@ -112,7 +179,7 @@ export function ExpenseForm({ t, intl, locale, initial, suppliers, locked }: {
                   <div className="grid animate-rise grid-cols-2 gap-2">
                     <Field label={t.exp.paidAt}><input name="paidAt" type="date" value={paidAt} onChange={(e) => { setPaidAt(e.target.value); setPaidAtTouched(true); }} className="input" /></Field>
                     <Field label={t.exp.method}>
-                      <select name="paymentMethod" defaultValue={initial.paymentMethod || "BANK"} className="input">
+                      <select name="paymentMethod" value={method} onChange={(e) => setMethod(e.target.value)} className="input">
                         {(["BANK", "CARD", "ONLINE", "CASH"] as const).map((m) => <option key={m} value={m}>{t.pay.methods[m]}</option>)}
                       </select>
                     </Field>
@@ -158,11 +225,7 @@ export function ExpenseForm({ t, intl, locale, initial, suppliers, locked }: {
             </section>
 
             <section className="lg:col-start-1 card animate-rise grid gap-4 p-5 sm:grid-cols-2">
-              <Field label={t.exp.receipt} className="sm:col-span-2">
-                <input type="file" name="file" accept="image/*,application/pdf" capture="environment" className="input file:me-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-1 file:font-semibold file:text-brand-700" />
-                {initial.fileId && <a href={`/api/files/${initial.fileId}`} target="_blank" className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline"><Icon name="file" className="h-4 w-4" />{t.exp.receiptShow}</a>}
-              </Field>
-              <Field label={t.exp.note} className="sm:col-span-2"><textarea name="note" rows={2} defaultValue={initial.note} className="input" /></Field>
+              <Field label={t.exp.note} className="sm:col-span-2"><textarea name="note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} className="input" /></Field>
             </section>
             {!locked && <div className="lg:hidden"><SubmitButton className="btn-primary w-full py-3"><Icon name="check" className="h-4 w-4" />{t.common.save}</SubmitButton></div>}
         </fieldset>
