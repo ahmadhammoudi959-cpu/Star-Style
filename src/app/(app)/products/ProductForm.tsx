@@ -6,7 +6,7 @@ import { Icon } from "@/components/Icon";
 import { parseMoney } from "@/lib/money";
 import type { Dict } from "@/i18n/de";
 
-type V = { key: string; id?: string; size: string; color: string; barcode: string; minStock: number; stockQty?: number };
+type V = { key: string; id?: string; size: string; color: string; barcode: string; minStock: number; stockQty?: number; initialQty?: number; initialExpiry?: string };
 export type ProductFormData = {
   id?: string; sku: string; nameDe: string; nameNl: string; descriptionDe: string; descriptionNl: string; category: string;
   supplierId: string; vatRateBp: number; purchasePrice: string; wholesalePrice: string; retailPrice: string;
@@ -24,6 +24,7 @@ export function ProductForm({ t, initial, suppliers, categories }: {
   const [variants, setVariants] = useState<V[]>(
     (initial.variants.length ? initial.variants : [{ size: "", color: "", barcode: "", minStock: 0 }]).map((v, i) => ({ ...v, key: String(i) })),
   );
+  const [tracksExpiry, setTracksExpiry] = useState(initial.tracksExpiry);
   const [prices, setPrices] = useState({ p: initial.purchasePrice, w: initial.wholesalePrice, r: initial.retailPrice });
   const margin = useMemo(() => {
     const p = parseMoney(prices.p) ?? 0;
@@ -78,7 +79,10 @@ export function ProductForm({ t, initial, suppliers, categories }: {
           <MoneyInput name="retailPrice" value={prices.r} onChange={(r) => setPrices((x) => ({ ...x, r }))} />
         </Field>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 md:col-span-3">
-          <Check name="tracksExpiry" label={t.product.tracksExpiry} defaultChecked={initial.tracksExpiry} />
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+            <input type="checkbox" name="tracksExpiry" checked={tracksExpiry} onChange={(e) => setTracksExpiry(e.target.checked)} className="h-5 w-5 rounded accent-brand-600" />
+            {t.product.tracksExpiry}
+          </label>
           <span className="text-sm font-semibold text-ink-soft">{t.product.shops}:</span>
           <Check name="inBrandShop" label={t.product.brandShop} defaultChecked={initial.inBrandShop} />
           <Check name="inGeneralShop" label={t.product.generalShop} defaultChecked={initial.inGeneralShop} />
@@ -90,6 +94,7 @@ export function ProductForm({ t, initial, suppliers, categories }: {
           <div>
             <h2 className="text-lg font-bold">{t.product.variants}</h2>
             <p className="text-xs text-ink-soft">{t.product.noVariantsHint}</p>
+            {variants.some((v) => !v.id) && <p className="mt-1 text-xs font-semibold text-brand-700">{t.product.initialHint}</p>}
           </div>
           <button type="button" className="btn-ghost group"
             onClick={() => setVariants((vs) => [...vs, { key: crypto.randomUUID(), size: "", color: "", barcode: "", minStock: 0 }])}>
@@ -111,6 +116,19 @@ export function ProductForm({ t, initial, suppliers, categories }: {
                   <Icon name="trash" className="h-4 w-4" />
                 </button>
               </div>
+              {!v.id && (
+                <div className="col-span-2 grid grid-cols-2 gap-3 md:col-span-5 md:grid-cols-4">
+                  <Field label={t.product.initialQty}>
+                    <input className="input num border-brand-300 bg-white" type="number" min={0} inputMode="numeric" placeholder="0"
+                      value={v.initialQty || ""} onChange={(e) => upd(v.key, { initialQty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
+                  </Field>
+                  {tracksExpiry && (v.initialQty ?? 0) > 0 && (
+                    <Field label={t.product.initialExpiry}>
+                      <input className="input" type="date" value={v.initialExpiry ?? ""} onChange={(e) => upd(v.key, { initialExpiry: e.target.value })} />
+                    </Field>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

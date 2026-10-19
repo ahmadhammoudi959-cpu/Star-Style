@@ -6,7 +6,8 @@ import { z } from "zod";
 import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { parseMoney } from "@/lib/money";
-import { audit } from "@/lib/stock";
+import { audit, receiveGoodsTx } from "@/lib/stock";
+import { todayIso } from "@/lib/dates";
 
 export type ProductFormState = { error?: string; field?: string } | undefined;
 
@@ -22,6 +23,9 @@ const VariantSchema = z.object({
   color: z.string().trim().max(60).default(""),
   barcode: z.string().trim().max(32).default(""),
   minStock: z.coerce.number().int().min(0).default(0),
+  // Anfangsbestand nur für neue Varianten: wird als Wareneingang gebucht (Bestand nie direkt setzen)
+  initialQty: z.coerce.number().int().min(0).max(1_000_000).default(0),
+  initialExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal("")).default(""),
 });
 
 const ProductSchema = z.object({
@@ -93,6 +97,7 @@ export async function saveProduct(_: ProductFormState, fd: FormData): Promise<Pr
       // Varianten: bestehende aktualisieren, neue anlegen, entfernte deaktivieren (Historie bleibt erhalten)
       // Barcodes dieses Artikels zuerst leeren, damit Tausch zwischen Varianten möglich ist
       await tx.update(schema.variants).set({ barcode: null }).where(eq(schema.variants.productId, productId!));
+      const opening: { variantId: string; qty: number; expiryDate: string | null }[] = [];
       for (const v of d.variants) {
         const vals = { size: v.size, color: v.color, barcode: v.barcode || null, minStock: v.minStock, active: true };
         if (v.id) await tx.update(schema.variants).set(vals).where(and(eq(schema.variants.id, v.id), eq(schema.variants.productId, productId!)));
@@ -101,8 +106,10 @@ export async function saveProduct(_: ProductFormState, fd: FormData): Promise<Pr
           const existing = await tx.query.variants.findFirst({
             where: and(eq(schema.variants.productId, productId!), eq(schema.variants.size, v.size), eq(schema.variants.color, v.color)),
           });
+          let variantId = existing?.id;
           if (existing) await tx.update(schema.variants).set(vals).where(eq(schema.variants.id, existing.id));
-          else await tx.insert(schema.variants).values({ productId: productId!, ...vals });
+          else [{ id: variantId }] = await tx.insert(schema.variants).values({ productId: productId!, ...vals }).returning({ id: schema.variants.id });
+          if (v.initialQty > 0) opening.push({ variantId: variantId!, qty: v.initialQty, expiryDate: d.tracksExpiry && v.initialExpiry ? v.initialExpiry : null });
         }
       }
       const activeIds = (await tx.select({ id: schema.variants.id }).from(schema.variants)
@@ -120,6 +127,14 @@ export async function saveProduct(_: ProductFormState, fd: FormData): Promise<Pr
           .where(and(inArray(schema.variants.id, drop), ne(schema.variants.stockQty, 0)));
         if (withStock.length) throw new Error("variantHasStock");
         await tx.update(schema.variants).set({ active: false, barcode: null }).where(inArray(schema.variants.id, drop));
+      }
+
+      // Vorhandene Ware gleich mitbuchen – als normaler Wareneingang (Charge, EK, Nummer, Protokoll)
+      if (opening.length) {
+        await receiveGoodsTx(tx, {
+          supplierId: d.supplierId || null, date: todayIso(), supplierInvoiceNo: "", note: "Anfangsbestand beim Anlegen",
+          lines: opening.map((o) => ({ variantId: o.variantId, qty: o.qty, unitCostCents: d.purchasePrice, batchNo: "", expiryDate: o.expiryDate })),
+        }, session.uid);
       }
     });
   } catch (e) {

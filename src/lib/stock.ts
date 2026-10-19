@@ -121,7 +121,13 @@ export type ReceiptInput = {
 
 export async function receiveGoods(input: ReceiptInput, userId?: string) {
   if (!input.lines.length) throw new StockError("INVALID", "lines");
-  return db.transaction(async (tx) => {
+  return db.transaction((tx) => receiveGoodsTx(tx, input, userId));
+}
+
+/** Wareneingang innerhalb einer bestehenden Transaktion (z. B. Anfangsbestand beim Anlegen eines Artikels) */
+export async function receiveGoodsTx(tx: Tx, input: ReceiptInput, userId?: string) {
+  if (!input.lines.length) throw new StockError("INVALID", "lines");
+  {
     const number = await nextNumber(tx, "RECEIPT", Number(input.date.slice(0, 4)));
     const [rec] = await tx.insert(schema.goodsReceipts).values({
       number, supplierId: input.supplierId || null, date: input.date,
@@ -136,7 +142,7 @@ export async function receiveGoods(input: ReceiptInput, userId?: string) {
     }
     await audit(tx, { entity: "goods_receipt", entityId: rec.id, action: "create", after: input, userId });
     return rec;
-  });
+  }
 }
 
 type WriteOffReason = (typeof schema.writeOffReason.enumValues)[number];

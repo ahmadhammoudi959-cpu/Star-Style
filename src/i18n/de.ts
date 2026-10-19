@@ -36,6 +36,7 @@ const de = {
     category: "Kategorie", supplier: "Lieferant", vat: "MwSt.", purchase: "Einkaufspreis netto", wholesale: "Großhandelspreis netto",
     retail: "Einzelhandelspreis netto", tracksExpiry: "Hat Haltbarkeitsdatum", shops: "Sichtbar in", brandShop: "Marken-Shop",
     generalShop: "Allgemeiner Shop", variants: "Varianten", size: "Größe", color: "Farbe", barcode: "Barcode (EAN)",
+    initialQty: "Bestand jetzt", initialExpiry: "MHD", initialHint: "Ware schon da? Menge eintragen – sie wird automatisch als Wareneingang zum Einkaufspreis gebucht.", initialNote: "Anfangsbestand beim Anlegen",
     minStock: "Mindestbestand", stock: "Bestand", addVariant: "Variante hinzufügen", noVariantsHint: "Ohne Größe/Farbe einfach eine Zeile leer lassen.",
     skuTaken: "Diese Artikelnummer gibt es schon.", barcodeTaken: "Dieser Barcode ist schon vergeben.", duplicateVariant: "Gleiche Größe/Farbe doppelt.",
     variantHasStock: "Eine Variante mit Bestand kann nicht entfernt werden.", empty: "Noch keine Artikel. Lege den ersten an.", margin: "Marge", reserved: "reserviert", available: "verfügbar",
