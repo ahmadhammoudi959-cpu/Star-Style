@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Thumb } from "@/components/Thumb";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
@@ -42,8 +43,8 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                   const label = [r.nameDe, [r.size, r.color].filter(Boolean).join(" · ")].filter(Boolean);
                   return (
                     <tr key={r.id}>
-                      <td><Link href={`/stock/${r.id}`} className="font-semibold hover:text-brand-700">{label[0]}</Link>
-                        {label[1] && <span className="ms-2 text-ink-soft">{label[1]}</span>}</td>
+                      <td><div className="flex items-center gap-3"><Thumb id={r.imageId} size={40} /><div><Link href={`/stock/${r.id}`} className="font-semibold hover:text-brand-700">{label[0]}</Link>
+                        {label[1] && <span className="ms-2 text-ink-soft">{label[1]}</span>}</div></div></td>
                       <td className="num hidden text-ink-soft md:table-cell" dir="ltr">{r.sku}</td>
                       <td className="num text-end font-semibold">
                         <span className={lowStock ? "badge bg-amber-100 text-amber-800" : ""}>{r.stockQty}</span>

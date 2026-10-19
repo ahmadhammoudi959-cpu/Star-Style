@@ -7,6 +7,7 @@ import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { parseMoney } from "@/lib/money";
 import { audit, receiveGoodsTx } from "@/lib/stock";
+import { storeImage } from "@/lib/files";
 import { todayIso } from "@/lib/dates";
 
 export type ProductFormState = { error?: string; field?: string } | undefined;
@@ -19,6 +20,7 @@ const money = z.string().transform((s, ctx) => {
 
 const VariantSchema = z.object({
   id: z.string().optional(),
+  ref: z.string().max(64).default(""),
   size: z.string().trim().max(60).default(""),
   color: z.string().trim().max(60).default(""),
   barcode: z.string().trim().max(32).default(""),
@@ -49,7 +51,8 @@ const ProductSchema = z.object({
 
 export async function saveProduct(_: ProductFormState, fd: FormData): Promise<ProductFormState> {
   const session = await requireSession();
-  const parsed = ProductSchema.safeParse(Object.fromEntries(fd));
+  const { image: _img, ...fields } = Object.fromEntries(fd);
+  const parsed = ProductSchema.safeParse(fields);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     return { error: "required", field: String(issue.path[0] ?? "") };
@@ -64,11 +67,28 @@ export async function saveProduct(_: ProductFormState, fd: FormData): Promise<Pr
   const barcodes = d.variants.map((v) => v.barcode).filter(Boolean);
   if (new Set(barcodes).size !== barcodes.length) return { error: "barcodeTaken" };
 
+  // Fotos (vorher, außerhalb der Transaktion; Dateien sind unveränderlich)
+  let imageFileId: string | null | undefined;
+  const variantImages = new Map<string, string | null>();
+  try {
+    const img = await storeImage(fd.get("image") as File | null);
+    if (img) imageFileId = img; else if (fd.get("imageRemove") === "1") imageFileId = null;
+    for (const v of d.variants) {
+      if (!v.ref) continue;
+      const vi = await storeImage(fd.get(`vimg_${v.ref}`) as File | null);
+      if (vi) variantImages.set(v.ref, vi); else if (fd.get(`vimg_${v.ref}Remove`) === "1") variantImages.set(v.ref, null);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    return { error: msg === "fileTooLarge" ? "fileTooLarge" : "imageType" };
+  }
+
   const values = {
     sku: d.sku, nameDe: d.nameDe, nameNl: d.nameNl, descriptionDe: d.descriptionDe, descriptionNl: d.descriptionNl,
     category: d.category, supplierId: d.supplierId || null, vatRateBp: d.vatRateBp,
     purchasePriceCents: d.purchasePrice, wholesalePriceCents: d.wholesalePrice, retailPriceCents: d.retailPrice,
     tracksExpiry: d.tracksExpiry, inBrandShop: d.inBrandShop, inGeneralShop: d.inGeneralShop,
+    ...(imageFileId !== undefined ? { imageFileId } : {}),
   };
 
   let productId = d.id;
@@ -99,7 +119,10 @@ export async function saveProduct(_: ProductFormState, fd: FormData): Promise<Pr
       await tx.update(schema.variants).set({ barcode: null }).where(eq(schema.variants.productId, productId!));
       const opening: { variantId: string; qty: number; expiryDate: string | null }[] = [];
       for (const v of d.variants) {
-        const vals = { size: v.size, color: v.color, barcode: v.barcode || null, minStock: v.minStock, active: true };
+        const vals = {
+          size: v.size, color: v.color, barcode: v.barcode || null, minStock: v.minStock, active: true,
+          ...(variantImages.has(v.ref) ? { imageFileId: variantImages.get(v.ref) ?? null } : {}),
+        };
         if (v.id) await tx.update(schema.variants).set(vals).where(and(eq(schema.variants.id, v.id), eq(schema.variants.productId, productId!)));
         else {
           // evtl. früher deaktivierte Variante mit gleicher Größe/Farbe reaktivieren

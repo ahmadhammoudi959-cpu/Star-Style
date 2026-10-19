@@ -38,6 +38,7 @@ const ar: Dict = {
     category: "التصنيف", supplier: "المورّد", vat: "الضريبة", purchase: "سعر الشراء بدون ضريبة", wholesale: "سعر الجملة بدون ضريبة",
     retail: "سعر المفرق بدون ضريبة", tracksExpiry: "إله تاريخ صلاحية", shops: "بينعرض بـ", brandShop: "متجر البراند",
     generalShop: "المتجر العام", variants: "المقاسات والألوان", size: "المقاس", color: "اللون", barcode: "الباركود",
+    photo: "صورة المنتج", addPhoto: "ضيف صورة", changePhoto: "غيّر الصورة", removePhoto: "شيل الصورة", photoHint: "صوّرها بالموبايل أو اختار صورة من الجهاز. بتطلع بكل مكان: المنتجات، المخزون، إدخال البضاعة والبيع.", variantPhoto: "صورة هاللون أو المقاس", imageType: "الصورة لازم تكون JPG أو PNG أو WebP", fileTooLarge: "الصورة كبيرة كتير، الحد ٨ ميغا", photoProcessing: "عم جهّز الصورة…",
     initialQty: "الكمية الموجودة هلق", initialExpiry: "تاريخ الصلاحية", initialHint: "إذا عندك بضاعة من هالمنتج هلق، اكتب كميتها وبتنسجل لحالها كإدخال بضاعة بسعر الشراء.", initialNote: "الكمية الموجودة عند الإنشاء",
     minStock: "نبّهني إذا قلّت عن", stock: "الكمية", addVariant: "إضافة مقاس أو لون", noVariantsHint: "إذا ما في مقاس أو لون، اترك سطر واحد فاضي.",
     skuTaken: "رقم المنتج هاد موجود من قبل.", barcodeTaken: "الباركود هاد مستخدم من قبل.", duplicateVariant: "نفس المقاس واللون مكرر.",

@@ -43,6 +43,13 @@
       "when": 1792353624403,
       "tag": "0005_shop_lines",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792425800047,
+      "tag": "0006_variant_image",
+      "breakpoints": true
     }
   ]
 }

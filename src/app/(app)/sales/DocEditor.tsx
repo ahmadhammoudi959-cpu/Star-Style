@@ -3,6 +3,7 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import { saveInvoiceAction, saveOfferAction } from "./actions";
 import { ErrorBox, Field } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
+import { Thumb } from "@/components/Thumb";
 import { VariantPicker, optionLabel, type PickerOption } from "@/components/VariantPicker";
 import { bpToPercent, formatCents, parseMoney, parsePercentToBp } from "@/lib/money";
 import { computeTotals, determineTaxMode, effectiveRateBp } from "@/lib/tax";
@@ -170,9 +171,12 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
                   <button type="button" disabled={i === 0} onClick={() => move(i, -1)} className="text-ink-soft hover:text-brand-700 disabled:opacity-20" aria-label="up">▲</button>
                   <button type="button" disabled={i === lines.length - 1} onClick={() => move(i, 1)} className="text-ink-soft hover:text-brand-700 disabled:opacity-20" aria-label="down">▼</button>
                 </div>
-                <div className="col-span-6 md:col-span-1">
+                <div className="col-span-6 flex items-start gap-2 md:col-span-1">
+                  {l.variantId && <Thumb id={optById.get(l.variantId)?.imageId} size={44} />}
+                  <div className="min-w-0 flex-1">
                   <input value={l.description} onChange={(e) => upd(l.key, { description: e.target.value })} className="input" placeholder={t.sales.freeText} aria-label={t.product.nameDe} />
                   {l.available != null && <span className={`mt-1 inline-block text-xs ${short ? "font-semibold text-red-600" : "text-ink-soft"}`}>{short ? t.sales.notEnough + " · " : ""}{t.sales.available}: {l.available}</span>}
+                  </div>
                 </div>
                 <Field label={t.common.qty} className="col-span-2 md:col-span-1"><input type="number" min={1} value={l.qty} onChange={(e) => upd(l.key, { qty: e.target.value })} className={`input num ${short ? "border-red-400" : ""}`} /></Field>
                 <Field label={t.sales.price} className="col-span-2 md:col-span-1"><input inputMode="decimal" dir="ltr" value={l.price} onChange={(e) => upd(l.key, { price: e.target.value })} className={`input num ${parseMoney(l.price) == null ? "border-red-400" : ""}`} /></Field>

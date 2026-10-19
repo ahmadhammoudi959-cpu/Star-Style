@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
+import { Thumb } from "@/components/Thumb";
 import { formatCents } from "@/lib/money";
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
@@ -11,7 +12,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const { t, intl } = await getI18n();
   const like = q.trim() ? `%${q.trim().toLowerCase()}%` : null;
   const rows = (await db.execute<Record<string, unknown>>(sql`
-    select p.id, p.sku, p.name_de, p.name_nl, p.category, p.wholesale_price_cents, p.retail_price_cents, p.active,
+    select p.id, p.image_file_id, p.sku, p.name_de, p.name_nl, p.category, p.wholesale_price_cents, p.retail_price_cents, p.active,
            count(v.id) filter (where v.active)::int as variants,
            coalesce(sum(v.stock_qty) filter (where v.active),0)::int as stock,
            bool_or(v.active and v.min_stock > 0 and v.stock_qty <= v.min_stock) as low
@@ -44,9 +45,11 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 {rows.map((r) => (
                   <tr key={String(r.id)} className={r.active ? "" : "opacity-50"}>
                     <td className="num text-ink-soft" dir="ltr">{String(r.sku)}</td>
-                    <td><Link href={`/products/${r.id}`} className="font-semibold hover:text-brand-700">{String(r.name_de)}</Link>
+                    <td><div className="flex items-center gap-3">
+                      <Thumb id={r.image_file_id as string | null} size={44} />
+                      <div><Link href={`/products/${r.id}`} className="font-semibold hover:text-brand-700">{String(r.name_de)}</Link>
                       {Number(r.variants) > 1 && <span className="badge ms-2 bg-brand-50 text-brand-700">{Number(r.variants)} {t.product.variants}</span>}
-                    </td>
+                    </div></div></td>
                     <td className="hidden text-ink-soft md:table-cell">{String(r.name_nl)}</td>
                     <td className="hidden text-ink-soft md:table-cell">{String(r.category)}</td>
                     <td className="num text-end">{formatCents(Number(r.wholesale_price_cents), intl)}</td>

@@ -38,6 +38,7 @@ const en: Dict = {
     category: "Category", supplier: "Supplier", vat: "VAT", purchase: "Purchase price (net)", wholesale: "Wholesale price (net)",
     retail: "Retail price (net)", tracksExpiry: "Has expiry date", shops: "Visible in", brandShop: "Brand shop",
     generalShop: "General shop", variants: "Variants", size: "Size", color: "Colour", barcode: "Barcode (EAN)",
+    photo: "Product photo", addPhoto: "Add photo", changePhoto: "Change photo", removePhoto: "Remove photo", photoHint: "Take a photo with your phone or pick an image. Shown everywhere: products, stock, goods receipt, sales.", variantPhoto: "Photo for this variant", imageType: "Please choose a JPG, PNG or WebP image", fileTooLarge: "Image too large (max 8 MB)", photoProcessing: "Preparing photo…",
     initialQty: "Stock on hand now", initialExpiry: "Best before", initialHint: "Already have stock? Enter the quantity – it is booked automatically as goods receipt at the purchase price.", initialNote: "Opening stock when created",
     minStock: "Warn below", stock: "Stock", addVariant: "Add variant", noVariantsHint: "No size/colour? Leave one row empty.",
     skuTaken: "This product number already exists.", barcodeTaken: "This barcode is already used.", duplicateVariant: "Same size/colour twice.",

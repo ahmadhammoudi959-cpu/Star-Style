@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./Icon";
+import { Thumb } from "./Thumb";
 
 export type PickerOption = {
-  id: string; sku: string; nameDe: string; nameNl: string; size: string; color: string; barcode: string | null; stockQty: number;
+  id: string; sku: string; nameDe: string; nameNl: string; size: string; color: string; barcode: string | null; stockQty: number; imageId?: string | null;
 };
 
 export function optionLabel(o: Pick<PickerOption, "nameDe" | "size" | "color">) {
@@ -55,7 +56,8 @@ export function VariantPicker({ options, placeholder, onPick, stockLabel }: {
             <li key={o.id}>
               <button type="button" onMouseEnter={() => setHi(i)} onClick={() => pick(o)}
                 className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-start text-sm ${i === hi ? "bg-brand-50" : ""}`}>
-                <span>
+                <Thumb id={o.imageId} size={40} />
+                <span className="me-auto">
                   <span className="font-semibold">{optionLabel(o)}</span>
                   <span className="block text-xs text-ink-soft" dir="ltr">{o.sku}{o.barcode ? ` · ${o.barcode}` : ""}</span>
                 </span>

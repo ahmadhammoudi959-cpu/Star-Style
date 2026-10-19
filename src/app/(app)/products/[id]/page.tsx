@@ -28,8 +28,8 @@ export default async function EditProduct({ params, searchParams }: { params: Pr
         id: p.id, sku: p.sku, nameDe: p.nameDe, nameNl: p.nameNl, descriptionDe: p.descriptionDe, descriptionNl: p.descriptionNl,
         category: p.category, supplierId: p.supplierId ?? "", vatRateBp: p.vatRateBp,
         purchasePrice: toInput(p.purchasePriceCents), wholesalePrice: toInput(p.wholesalePriceCents), retailPrice: toInput(p.retailPriceCents),
-        tracksExpiry: p.tracksExpiry, inBrandShop: p.inBrandShop, inGeneralShop: p.inGeneralShop,
-        variants: vs.map((v) => ({ id: v.id, size: v.size, color: v.color, barcode: v.barcode ?? "", minStock: v.minStock, stockQty: v.stockQty })),
+        tracksExpiry: p.tracksExpiry, inBrandShop: p.inBrandShop, inGeneralShop: p.inGeneralShop, imageFileId: p.imageFileId,
+        variants: vs.map((v) => ({ id: v.id, size: v.size, color: v.color, barcode: v.barcode ?? "", minStock: v.minStock, stockQty: v.stockQty, imageFileId: v.imageFileId })),
       }} />
     </div>
   );

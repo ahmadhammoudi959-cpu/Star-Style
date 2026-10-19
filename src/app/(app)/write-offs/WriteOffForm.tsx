@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { submitWriteOff } from "./actions";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
+import { Thumb } from "@/components/Thumb";
 import { VariantPicker, optionLabel, type PickerOption } from "@/components/VariantPicker";
 import type { Dict } from "@/i18n/de";
 
@@ -57,6 +58,7 @@ export function WriteOffForm({ t, options, today }: { t: Dict; options: PickerOp
             const bad = (parseInt(l.qty) || 0) > l.opt.stockQty;
             return (
               <div key={l.key} className="flex animate-rise flex-wrap items-center gap-3 rounded-xl bg-amber-50/60 p-3 ring-1 ring-black/5">
+                <Thumb id={l.opt.imageId} size={44} />
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold">{optionLabel(l.opt)}</div>
                   <div className="text-xs text-ink-soft">{t.product.stock}: {l.opt.stockQty}</div>

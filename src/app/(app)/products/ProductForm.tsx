@@ -4,13 +4,14 @@ import { saveProduct } from "./actions";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
 import { parseMoney } from "@/lib/money";
+import { PhotoPicker } from "@/components/PhotoPicker";
 import type { Dict } from "@/i18n/de";
 
-type V = { key: string; id?: string; size: string; color: string; barcode: string; minStock: number; stockQty?: number; initialQty?: number; initialExpiry?: string };
+type V = { key: string; id?: string; size: string; color: string; barcode: string; minStock: number; stockQty?: number; initialQty?: number; initialExpiry?: string; imageFileId?: string | null };
 export type ProductFormData = {
   id?: string; sku: string; nameDe: string; nameNl: string; descriptionDe: string; descriptionNl: string; category: string;
   supplierId: string; vatRateBp: number; purchasePrice: string; wholesalePrice: string; retailPrice: string;
-  tracksExpiry: boolean; inBrandShop: boolean; inGeneralShop: boolean;
+  tracksExpiry: boolean; inBrandShop: boolean; inGeneralShop: boolean; imageFileId?: string | null;
   variants: Omit<V, "key">[];
 };
 
@@ -36,13 +37,22 @@ export function ProductForm({ t, initial, suppliers, categories }: {
     ? (t.product as Record<string, string>)[state.error] ?? (state.error === "required" ? `${t.common.required}: ${state.field ?? ""}` : t.common.error)
     : undefined;
 
+  const photoLabels = { add: t.product.addPhoto, change: t.product.changePhoto, remove: t.product.removePhoto, processing: t.product.photoProcessing, error: t.product.imageType };
   const upd = (key: string, patch: Partial<V>) => setVariants((vs) => vs.map((v) => (v.key === key ? { ...v, ...patch } : v)));
 
   return (
     <form action={action} className="space-y-6">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
-      <input type="hidden" name="variants" value={JSON.stringify(variants.map(({ key: _k, stockQty: _s, ...v }) => v))} />
+      <input type="hidden" name="variants" value={JSON.stringify(variants.map(({ key, stockQty: _s, imageFileId: _i, ...v }) => ({ ...v, ref: key })))} />
       <ErrorBox message={errorText} />
+
+      <section className="card flex flex-col gap-4 p-5 animate-rise sm:flex-row sm:items-center">
+        <PhotoPicker name="image" initialId={initial.imageFileId} labels={photoLabels} size={132} />
+        <div>
+          <h2 className="text-lg font-bold">{t.product.photo}</h2>
+          <p className="max-w-md text-sm text-ink-soft">{t.product.photoHint}</p>
+        </div>
+      </section>
 
       <section className="card grid gap-4 p-5 md:grid-cols-2 animate-rise">
         <Field label={t.product.sku}><input name="sku" defaultValue={initial.sku} required className="input" dir="ltr" /></Field>
@@ -103,7 +113,10 @@ export function ProductForm({ t, initial, suppliers, categories }: {
         </div>
         <div className="space-y-3">
           {variants.map((v) => (
-            <div key={v.key} className="grid animate-rise grid-cols-2 gap-3 rounded-xl bg-brand-50/50 p-3 ring-1 ring-black/5 md:grid-cols-[minmax(0,1fr)_1fr_1.4fr_0.8fr_auto]">
+            <div key={v.key} className="grid animate-rise grid-cols-2 gap-3 rounded-xl bg-brand-50/50 p-3 ring-1 ring-black/5 md:grid-cols-[auto_minmax(0,1fr)_1fr_1.4fr_0.8fr_auto]">
+              <div className="col-span-2 flex items-end md:col-span-1" title={t.product.variantPhoto}>
+                <PhotoPicker name={`vimg_${v.key}`} initialId={v.imageFileId} labels={photoLabels} size={44} compact />
+              </div>
               <Field label={t.product.size}><input className="input" value={v.size} onChange={(e) => upd(v.key, { size: e.target.value })} /></Field>
               <Field label={t.product.color}><input className="input" value={v.color} onChange={(e) => upd(v.key, { color: e.target.value })} /></Field>
               <Field label={t.product.barcode}><input className="input num" dir="ltr" inputMode="numeric" value={v.barcode} onChange={(e) => upd(v.key, { barcode: e.target.value.trim() })} /></Field>
@@ -117,7 +130,7 @@ export function ProductForm({ t, initial, suppliers, categories }: {
                 </button>
               </div>
               {!v.id && (
-                <div className="col-span-2 grid grid-cols-2 gap-3 md:col-span-5 md:grid-cols-4">
+                <div className="col-span-2 grid grid-cols-2 gap-3 md:col-span-6 md:grid-cols-4">
                   <Field label={t.product.initialQty}>
                     <input className="input num border-brand-300 bg-white" type="number" min={0} inputMode="numeric" placeholder="0"
                       value={v.initialQty || ""} onChange={(e) => upd(v.key, { initialQty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
