@@ -126,7 +126,7 @@ export function ProductForm({ t, initial, suppliers, categories }: {
 function MoneyInput({ name, value, onChange }: { name: string; value: string; onChange: (v: string) => void }) {
   const bad = value.trim() !== "" && parseMoney(value) == null;
   return (
-    <div className="relative">
+    <div className="relative" dir="ltr">
       <input name={name} value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" dir="ltr"
         className={`input num pe-9 ${bad ? "border-red-400 ring-4 ring-red-100" : ""}`} placeholder="0,00" />
       <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-ink-soft">€</span>
