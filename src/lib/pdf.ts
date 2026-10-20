@@ -13,11 +13,14 @@ import { buildCiiXml } from "./einvoice";
 
 const MM = 2.8346;
 const W = 595.28, H = 841.89;
-const BRAND = rgb(0.059, 0.416, 0.345);
+// Farben aus dem Logo: Nachtblau (Tabellenkopf), Blau (Summen), Rot (Akzent)
+const BRAND = rgb(0.067, 0.102, 0.2);
+const BLUE = rgb(0.09, 0.322, 0.839);
+const RED = rgb(0.89, 0.098, 0.11);
 const INK = rgb(0.114, 0.141, 0.2);
 const SOFT = rgb(0.36, 0.39, 0.46);
 const LINE = rgb(0.85, 0.87, 0.9);
-const ZEBRA = rgb(0.955, 0.972, 0.965);
+const ZEBRA = rgb(0.957, 0.965, 0.98);
 
 type Fonts = { r: TFont; s: TFont; b: TFont };
 type DocKind = "invoice" | "cancellation" | "offer" | "delivery";
@@ -145,12 +148,14 @@ class Writer {
     this.y = H - 20 * MM;
     // Kopf: Marke links, farbige Linie
     if (this.logo) {
-      const s = Math.min((45 * MM) / this.logo.width, (16 * MM) / this.logo.height);
+      const s = Math.min((55 * MM) / this.logo.width, (20 * MM) / this.logo.height);
       this.page.drawImage(this.logo, { x: 20 * MM, y: H - 12 * MM - this.logo.height * s, width: this.logo.width * s, height: this.logo.height * s });
     } else {
       this.text(this.company.name || "Firma", 20 * MM, H - 20 * MM, 16, this.f.b, BRAND);
     }
-    this.page.drawRectangle({ x: 0, y: H - 6, width: W, height: 6, color: BRAND });
+    // Kopflinie in Logo-Farben: Blau – Rot
+    this.page.drawRectangle({ x: 0, y: H - 6, width: W * 0.72, height: 6, color: BLUE });
+    this.page.drawRectangle({ x: W * 0.72, y: H - 6, width: W * 0.28, height: 6, color: RED });
   }
   text(t: string, x: number, y: number, size = 9, font = this.f.r, color: RGB = INK) {
     font.draw(this.page, t, { x, y, size, color });
@@ -179,6 +184,17 @@ class Writer {
   }
 }
 
+/** Logo aus den Einstellungen, sonst das Firmenlogo aus assets/logo.jpg */
+async function embedLogo(doc: PDFDocument, fileId: string | null) {
+  if (fileId) {
+    const file = await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, fileId) });
+    if (file?.mime === "image/png") return doc.embedPng(file.data);
+    if (file?.mime === "image/jpeg") return doc.embedJpg(file.data);
+  }
+  const fallback = path.join(process.cwd(), "assets", "logo.jpg");
+  return fs.existsSync(fallback) ? doc.embedJpg(fs.readFileSync(fallback)) : null;
+}
+
 const TITLES: Record<DocKind, string> = { invoice: "Rechnung", cancellation: "Stornorechnung", offer: "Angebot", delivery: "Ladeliste / Lieferschein" };
 
 export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promise<Uint8Array> {
@@ -186,12 +202,7 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
   doc.setTitle(`${TITLES[d.kind]} ${d.number}`);
   doc.setLanguage("de-DE");
   const company = (await db.query.companySettings.findFirst()) ?? ({ name: "", street: "", zip: "", city: "", country: "DE", owner: "", email: "", phone: "", website: "", vatId: "", taxNumber: "", bankName: "", iban: "", bic: "", logoFileId: null, invoiceFooter: "", defaultPaymentDays: 14, offerValidityDays: 14, id: "company", updatedAt: new Date() } as typeof schema.companySettings.$inferSelect);
-  let logo = null;
-  if (company.logoFileId) {
-    const file = await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, company.logoFileId) });
-    if (file?.mime === "image/png") logo = await doc.embedPng(file.data);
-    else if (file?.mime === "image/jpeg") logo = await doc.embedJpg(file.data);
-  }
+  const logo = await embedLogo(doc, company?.logoFileId ?? null);
   doc.setAuthor(company.name);
   doc.setCreator("Star Style");
   const f = await fonts(doc, hasArabic(JSON.stringify(d) + JSON.stringify(company)));
@@ -287,7 +298,7 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
     w.y -= 3 * MM;
     rows.forEach(([k, v]) => { w.text(k, 115 * MM, w.y, 9, f.r, SOFT); w.right(v, W - 21.5 * MM, w.y, 9); w.y -= 5.2 * MM; });
     w.y -= 3 * MM;
-    w.page.drawRectangle({ x: 112 * MM, y: w.y - 3 * MM, width: W - 20 * MM - 112 * MM, height: 9 * MM, color: BRAND });
+    w.page.drawRectangle({ x: 112 * MM, y: w.y - 3 * MM, width: W - 20 * MM - 112 * MM, height: 9 * MM, color: BLUE });
     w.text(d.kind === "offer" ? "Angebotssumme" : "Gesamtbetrag", 115 * MM, w.y, 10.5, f.b, rgb(1, 1, 1));
     w.right(formatCents(d.grossCents), W - 21.5 * MM, w.y, 10.5, f.b, rgb(1, 1, 1));
     w.y -= 13 * MM;
@@ -471,12 +482,7 @@ type Letter = {
 
 async function companyAndLogo(doc: PDFDocument) {
   const company = (await db.query.companySettings.findFirst()) as typeof schema.companySettings.$inferSelect;
-  let logo = null;
-  if (company?.logoFileId) {
-    const file = await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, company.logoFileId) });
-    if (file?.mime === "image/png") logo = await doc.embedPng(file.data);
-    else if (file?.mime === "image/jpeg") logo = await doc.embedJpg(file.data);
-  }
+  const logo = await embedLogo(doc, company?.logoFileId ?? null);
   return { company, logo };
 }
 
@@ -515,7 +521,7 @@ export async function renderLetter(l: Letter): Promise<Uint8Array> {
   }
   if (l.total) {
     w.ensure(14 * MM); w.y -= 3 * MM;
-    w.page.drawRectangle({ x: 112 * MM, y: w.y - 3 * MM, width: W - 20 * MM - 112 * MM, height: 9 * MM, color: BRAND });
+    w.page.drawRectangle({ x: 112 * MM, y: w.y - 3 * MM, width: W - 20 * MM - 112 * MM, height: 9 * MM, color: BLUE });
     w.text(l.total[0], 115 * MM, w.y, 10.5, f.b, rgb(1, 1, 1)); w.right(l.total[1], W - 21.5 * MM, w.y, 10.5, f.b, rgb(1, 1, 1));
     w.y -= 13 * MM;
   }
@@ -591,7 +597,7 @@ export async function renderReport(r: { title: string; subtitle: string; section
   w.text(r.subtitle, 20 * MM, w.y, 9, f.r, SOFT); w.y -= 10 * MM;
   for (const s of r.sections) {
     w.ensure(30 * MM);
-    w.text(s.heading, 20 * MM, w.y, 11, f.b, BRAND); w.y -= 6 * MM;
+    w.text(s.heading, 20 * MM, w.y, 11, f.b, BLUE); w.y -= 6 * MM;
     const xs: number[] = []; let x = 20 * MM; for (const wd of s.widths) { x += wd * MM; xs.push(x); }
     const head = () => {
       w.page.drawRectangle({ x: 20 * MM, y: w.y - 2.2 * MM, width: W - 40 * MM, height: 6.5 * MM, color: BRAND });
@@ -608,7 +614,7 @@ export async function renderReport(r: { title: string; subtitle: string; section
     });
     if (s.total) {
       w.y -= 1.5 * MM;
-      w.page.drawRectangle({ x: 100 * MM, y: w.y - 2.5 * MM, width: W - 20 * MM - 100 * MM, height: 7.5 * MM, color: BRAND });
+      w.page.drawRectangle({ x: 100 * MM, y: w.y - 2.5 * MM, width: W - 20 * MM - 100 * MM, height: 7.5 * MM, color: BLUE });
       w.text(s.total[0], 102.5 * MM, w.y, 9, f.b, rgb(1, 1, 1)); w.right(s.total[1], W - 21.5 * MM, w.y, 9, f.b, rgb(1, 1, 1));
       w.y -= 8 * MM;
     }

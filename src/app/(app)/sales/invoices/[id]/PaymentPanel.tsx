@@ -7,7 +7,7 @@ import { paymentState, trafficLight } from "@/lib/payment-status";
 import type { Dict } from "@/i18n/de";
 import { AddPayment, CancelPayment, DunningButton, PlanForm } from "./PaymentForms";
 
-const STATUS_TONE = { PAID: "bg-brand-100 text-brand-800", OPEN: "bg-slate-100 text-slate-700", PARTIAL: "bg-sky-100 text-sky-800", OVERDUE: "bg-red-100 text-red-800", CREDIT: "bg-violet-100 text-violet-800" } as const;
+const STATUS_TONE = { PAID: "bg-emerald-100 text-emerald-800", OPEN: "bg-slate-100 text-slate-700", PARTIAL: "bg-sky-100 text-sky-800", OVERDUE: "bg-red-100 text-red-800", CREDIT: "bg-violet-100 text-violet-800" } as const;
 const LIGHT = { green: "bg-brand-500", yellow: "bg-amber-400", red: "bg-red-500", none: "bg-slate-300" } as const;
 
 export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: string; invoiceId: string }) {

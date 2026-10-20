@@ -19,7 +19,7 @@ export function SideNav({ items, soonLabel }: { items: NavItem[]; soonLabel: str
           );
         return (
           <Link key={it.href} href={it.href}
-            className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? "bg-white text-brand-700 shadow-card" : "text-white/85 hover:bg-white/10 hover:text-white"}`}>
+            className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? "border-s-4 border-accent-500 bg-white text-brand-700 shadow-card" : "text-white/80 hover:bg-white/10 hover:text-white"}`}>
             <Icon name={it.icon} />{it.label}
           </Link>
         );

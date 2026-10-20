@@ -32,7 +32,7 @@ export default async function ShopsPage() {
                   <span className={`grid h-12 w-12 place-items-center rounded-xl ${status === "on" ? "bg-brand-600 text-white" : "bg-slate-100 text-ink-soft"}`}><Icon name="globe" className="h-6 w-6" /></span>
                   <div><h2 className="text-lg font-bold">{t.shop.names[ch]}</h2><div className="text-sm text-ink-soft" dir="ltr">{s?.domain || "—"}</div></div>
                 </div>
-                <span className={`badge ${status === "on" ? "bg-brand-100 text-brand-800" : status === "off" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}>
+                <span className={`badge ${status === "on" ? "bg-emerald-100 text-emerald-800" : status === "off" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}>
                   {status === "on" ? t.shop.active : status === "off" ? t.shop.paused : t.shop.notConnected}
                 </span>
               </div>

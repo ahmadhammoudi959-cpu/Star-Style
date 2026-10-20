@@ -4,7 +4,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: { 50: "#eef7f4", 100: "#d5ece4", 500: "#14806a", 600: "#0f6a58", 700: "#0c5547", 900: "#08332b" },
+        // Farben aus dem Logo: Blau (Hauptfarbe), Rot (Akzent), Nachtblau (Seitenleiste)
+        brand: { 50: "#eef4ff", 100: "#dbe7ff", 200: "#bed3ff", 300: "#90b4fd", 400: "#5b8ef7", 500: "#2f6cf0", 600: "#1752d6", 700: "#1241ae", 800: "#14378b", 900: "#152f6c" },
+        accent: { 50: "#fff1f1", 100: "#ffdede", 500: "#e3191c", 600: "#c81316", 700: "#a51215" },
+        navy: { 700: "#1a2440", 800: "#111a33", 900: "#0b1222" },
         ink: { DEFAULT: "#1d2433", soft: "#5b6475" },
       },
       fontFamily: { sans: ["var(--font-sans)", "system-ui", "sans-serif"] },

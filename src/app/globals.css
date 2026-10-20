@@ -10,7 +10,7 @@
 @tailwind utilities;
 
 :root { --font-sans: "Plex"; color-scheme: light; }
-html, body { background: #f4f6f5; color: #1d2433; }
+html, body { background: #f4f6fa; color: #1d2433; }
 /* Ab Tablet/PC alles auf 80 % (Wunsch Inhaber): Tailwind rechnet in rem, daher skaliert die ganze Oberfläche mit. Handy bleibt 100 % (Fingerbedienung). */
 @media (min-width: 768px) { html { font-size: 80%; } }
 body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smoothing: antialiased; }

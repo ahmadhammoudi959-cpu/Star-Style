@@ -30,7 +30,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         order by i.created_at desc limit 200`)).rows;
 
   const pay = tab === "invoices" ? new Map((await openItems()).map((r) => [r.invoiceId, r])) : new Map();
-  const PAY_TONE = { PAID: "bg-brand-100 text-brand-800", OPEN: "bg-slate-100 text-slate-700", PARTIAL: "bg-sky-100 text-sky-800", OVERDUE: "bg-red-100 text-red-800", CREDIT: "bg-violet-100 text-violet-800" } as const;
+  const PAY_TONE = { PAID: "bg-emerald-100 text-emerald-800", OPEN: "bg-slate-100 text-slate-700", PARTIAL: "bg-sky-100 text-sky-800", OVERDUE: "bg-red-100 text-red-800", CREDIT: "bg-violet-100 text-violet-800" } as const;
   const payBadge = (r: Record<string, unknown>) => {
     if (r.status !== "ISSUED" || r.kind !== "INVOICE") return null;
     const s = (pay.get(String(r.id))?.state.status ?? "PAID") as keyof typeof PAY_TONE;

@@ -30,14 +30,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const mobile = [items[0], items[1], items[2], items[8], items[6]];
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[15.625rem_1fr]">
-      <aside className="sticky top-0 hidden h-screen print:!hidden flex-col justify-between bg-gradient-to-b from-brand-700 to-brand-900 p-4 text-white lg:flex">
+      <aside className="sticky top-0 hidden h-screen print:!hidden flex-col justify-between bg-gradient-to-b from-navy-800 to-navy-900 p-4 text-white lg:flex">
         <div>
-          <div className="mb-6 flex items-center gap-3 px-2">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-white/15 text-lg font-bold shadow-card">S</div>
-            <div>
-              <div className="font-bold leading-tight">{t.app.name}</div>
-              <div className="text-xs text-white/70">{t.app.tagline}</div>
-            </div>
+          <div className="mb-6 px-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/logo-light.png" alt={t.app.name} className="h-auto w-44 transition duration-300 hover:scale-[1.03]" />
+            <div className="mt-2 h-0.5 w-full rounded-full bg-gradient-to-r from-brand-500 via-white/20 to-accent-500" />
+            <div className="mt-2 text-xs text-white/60">{t.app.tagline}</div>
           </div>
           <SideNav items={items} soonLabel={t.home.comingSoon} />
         </div>
@@ -49,9 +48,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
       <div className="min-w-0">
-        <header className="print:hidden sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-black/5 bg-[#f4f6f5]/90 px-4 py-3 backdrop-blur lg:px-8">
+        <header className="print:hidden sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-black/5 bg-[#f4f6fa]/90 px-4 py-3 backdrop-blur lg:px-8">
           <div className="flex items-center gap-2 font-bold lg:hidden">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-sm text-white">S</div>{t.app.name}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/logo.png" alt={t.app.name} className="h-8 w-auto" />
           </div>
           <div className="hidden lg:block" />
           <div className="flex items-center gap-2">
