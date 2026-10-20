@@ -4,6 +4,8 @@ import { Icon } from "@/components/Icon";
 import { formatCents } from "@/lib/money";
 import { formatDate, todayIso } from "@/lib/dates";
 import { paymentState, trafficLight } from "@/lib/payment-status";
+import { skontoDeadline } from "@/lib/payments";
+import { skontoMax } from "@/lib/tax";
 import type { Dict } from "@/i18n/de";
 import { AddPayment, CancelPayment, DunningButton, PlanForm } from "./PaymentForms";
 
@@ -21,6 +23,10 @@ export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: stri
   const payments = [...inv.payments].sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
   const dunnings = [...inv.dunnings].sort((a, b) => a.level - b.level);
   const nextLevel = Math.min(dunnings.length + 1, 3) as 1 | 2 | 3;
+  const deadline = skontoDeadline(inv);
+  const skontoLeft = skontoMax(inv.grossCents, inv.skontoBp) - inv.payments.filter((p) => !p.cancelledAt).reduce((s, p) => s + p.skontoCents, 0);
+  const skonto = deadline && today <= deadline && st.openCents > skontoLeft && skontoLeft > 0
+    ? { deadline: formatDate(deadline, intl), payCents: st.openCents - skontoLeft } : null;
   const plan = [...inv.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map((r) => ({ dueDate: r.dueDate, amountCents: r.amountCents }));
 
   return (
@@ -72,6 +78,7 @@ export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: stri
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={`num font-bold ${p.cancelledAt ? "line-through" : ""}`}>{formatCents(p.amountCents, intl)}</span>
+                      {p.skontoCents > 0 && <span className={`badge bg-amber-100 text-amber-800 ${p.cancelledAt ? "line-through" : ""}`}>+ {t.pay.skontoGranted} <span className="num">{formatCents(p.skontoCents, intl)}</span></span>}
                       <a href={`/api/pdf/receipt/${p.id}`} target="_blank" className="text-xs font-semibold text-brand-700 hover:underline">{t.pay.receipt}</a>
                       {!p.cancelledAt && <CancelPayment t={t} invoiceId={inv.id} paymentId={p.id} />}
                     </div>
@@ -105,7 +112,7 @@ export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: stri
           {st.openCents > 0 && (
             <div className="card animate-rise space-y-2 p-5">
               <h3 className="font-bold">{t.pay.add}</h3>
-              <AddPayment t={t} invoiceId={inv.id} suggestCents={st.overdueCents || st.nextDueCents || st.openCents} today={today} />
+              <AddPayment t={t} invoiceId={inv.id} suggestCents={st.overdueCents || st.nextDueCents || st.openCents} today={today} skonto={skonto} />
             </div>
           )}
           {st.overdueCents > 0 && (

@@ -8,7 +8,7 @@ import JSZip from "jszip";
 import { and, between, eq, gte, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { db, schema } from "@/db";
-import { accountMap, expenseAccount, moneyAccount, revenueAccount, type Chart, ACCOUNT_DEFS, type AccountKey } from "./accounts";
+import { accountMap, expenseAccount, moneyAccount, revenueAccount, skontoAccount, type Chart, ACCOUNT_DEFS, type AccountKey } from "./accounts";
 import { bookingCsv, contactCsv, type DatevBooking, type DatevContact, type DatevHeader } from "./datev";
 import { monthRange } from "./periods";
 import { archivedInvoicePdf, renderReport } from "./pdf";
@@ -79,11 +79,23 @@ export async function collectMonth(month: string) {
       street: inv.custStreet, zip: inv.custZip, city: inv.custCity, country: inv.custCountry, email: inv.customer.email, phone: inv.customer.phone,
     });
     const acc = moneyAccount(m, p.method);
-    if (p.date >= from && p.date <= to)
+    // Skonto: Skontokonto (Soll) an Debitor, je Steuersatz
+    const skontoRows = (side: "S" | "H", date: string, prefix: string) => {
+      for (const g of p.skontoBreakdown) {
+        const gross = g.netCents + g.vatCents;
+        if (gross > 0) bookings.push({ amountCents: gross, side, account: skontoAccount(m, inv.taxMode, g.rateBp, inv.ossCountry), contra: deb, date, ref1: inv.number ?? "", ref2: p.number, text: `${prefix}Skonto ${inv.custName}` });
+      }
+      if (p.skontoCents && inv.taxMode === "EU_B2C" && inv.ossCountry) warnings.push(`skontoOss:${p.number}`);
+    };
+    if (p.date >= from && p.date <= to) {
       bookings.push({ amountCents: p.amountCents, side: "S", account: acc, contra: deb, date: p.date, ref1: inv.number ?? "", ref2: p.number, text: `Zahlung ${inv.custName}` });
+      skontoRows("S", p.date, "");
+    }
     const cd = p.cancelledAt ? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(p.cancelledAt) : null;
-    if (cd && cd >= from && cd <= to)
+    if (cd && cd >= from && cd <= to) {
       bookings.push({ amountCents: p.amountCents, side: "H", account: acc, contra: deb, date: cd, ref1: inv.number ?? "", ref2: p.number, text: `Storno Zahlung ${inv.custName}` });
+      skontoRows("H", cd, "Storno ");
+    }
   }
 
   // 3) Ausgaben (Rechnung an Kreditor, Zahlung Kreditor an Geldkonto)
@@ -152,8 +164,8 @@ export async function buildMonthPackage(month: string, exportedBy: string) {
   }
 
   root.file(`Zahlungseingaenge_${month}.csv`, csv([
-    ["Datum", "Quittung", "Rechnung", "Kunde", "Zahlungsart", "Betrag EUR", "Storniert am", "Grund"],
-    ...d.payments.map((p) => [formatDate(p.date), p.number, p.invoice.number ?? "", p.invoice.custName, METHOD_DE[p.method], eur(p.amountCents),
+    ["Datum", "Quittung", "Rechnung", "Kunde", "Zahlungsart", "Betrag EUR", "Skonto EUR", "Storniert am", "Grund"],
+    ...d.payments.map((p) => [formatDate(p.date), p.number, p.invoice.number ?? "", p.invoice.custName, METHOD_DE[p.method], eur(p.amountCents), p.skontoCents ? eur(p.skontoCents) : "",
       p.cancelledAt ? formatDate(p.cancelledAt.toISOString()) : "", p.cancelReason]),
   ]));
   const monthExpenses = d.expenses.filter((e) => e.date >= d.from && e.date <= d.to);

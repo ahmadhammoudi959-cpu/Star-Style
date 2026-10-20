@@ -50,6 +50,13 @@
       "when": 1792425800047,
       "tag": "0006_variant_image",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792486576712,
+      "tag": "0007_payment_skonto",
+      "breakpoints": true
     }
   ]
 }

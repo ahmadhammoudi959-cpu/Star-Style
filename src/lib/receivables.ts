@@ -39,12 +39,12 @@ export async function customerOpenBalances(): Promise<Map<string, number>> {
   const r = await db.execute<{ customer_id: string; open: string }>(sql`
     select c.id as customer_id,
       coalesce((select sum(gross_cents) from invoices i where i.customer_id = c.id and i.kind = 'INVOICE' and i.status = 'ISSUED'), 0)
-      - coalesce((select sum(p.amount_cents) from payments p join invoices i on i.id = p.invoice_id where i.customer_id = c.id and p.cancelled_at is null), 0) as open
+      - coalesce((select sum(p.amount_cents + p.skonto_cents) from payments p join invoices i on i.id = p.invoice_id where i.customer_id = c.id and p.cancelled_at is null), 0) as open
     from customers c`);
   return new Map(r.rows.map((x) => [String(x.customer_id), Number(x.open)]));
 }
 
-export type StatementRow = { date: string; kind: "invoice" | "cancellation" | "payment" | "payment_cancelled"; ref: string; refId: string; text: string; amountCents: number; balanceCents: number };
+export type StatementRow = { date: string; kind: "invoice" | "cancellation" | "payment" | "skonto" | "payment_cancelled"; ref: string; refId: string; text: string; amountCents: number; balanceCents: number };
 
 /** Kontoauszug: Rechnungen (+), Stornos (−), Zahlungen (−), stornierte Zahlungen (+), mit laufendem Saldo. */
 export async function customerStatement(customerId: string): Promise<StatementRow[]> {
@@ -57,10 +57,11 @@ export async function customerStatement(customerId: string): Promise<StatementRo
     events.push({ date: i.issueDate!, kind: i.kind === "CANCELLATION" ? "cancellation" : "invoice", ref: i.number!, refId: i.id, text: "", amountCents: i.grossCents });
     for (const p of i.payments) {
       events.push({ date: p.date, kind: "payment", ref: p.number, refId: i.id, text: i.number!, amountCents: -p.amountCents });
-      if (p.cancelledAt) events.push({ date: p.cancelledAt.toISOString().slice(0, 10), kind: "payment_cancelled", ref: p.number, refId: i.id, text: p.cancelReason, amountCents: p.amountCents });
+      if (p.skontoCents) events.push({ date: p.date, kind: "skonto", ref: p.number, refId: i.id, text: i.number!, amountCents: -p.skontoCents });
+      if (p.cancelledAt) events.push({ date: p.cancelledAt.toISOString().slice(0, 10), kind: "payment_cancelled", ref: p.number, refId: i.id, text: p.cancelReason, amountCents: p.amountCents + p.skontoCents });
     }
   }
-  const order = { invoice: 0, cancellation: 1, payment: 2, payment_cancelled: 3 };
+  const order = { invoice: 0, cancellation: 1, payment: 2, skonto: 3, payment_cancelled: 4 };
   events.sort((a, b) => a.date.localeCompare(b.date) || order[a.kind] - order[b.kind] || a.ref.localeCompare(b.ref));
   let bal = 0;
   return events.map((e) => ({ ...e, balanceCents: (bal += e.amountCents) }));

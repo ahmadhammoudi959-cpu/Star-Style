@@ -403,6 +403,10 @@ export const payments = pgTable("payments", {
   invoiceId: text("invoice_id").notNull().references(() => invoices.id),
   date: date("date", { mode: "string" }).notNull(),
   amountCents: integer("amount_cents").notNull(),
+  // Skonto: zusätzlich zum gezahlten Betrag als erledigt gewertet (Erlösschmälerung, brutto + Aufteilung je Steuersatz)
+  skontoCents: integer("skonto_cents").notNull().default(0),
+  skontoNetCents: integer("skonto_net_cents").notNull().default(0),
+  skontoBreakdown: jsonb("skonto_breakdown").$type<{ rateBp: number; netCents: number; vatCents: number }[]>().notNull().default([]),
   method: paymentMethod("method").notNull(),
   note: text("note").notNull().default(""),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),

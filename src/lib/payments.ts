@@ -9,6 +9,7 @@ import { audit } from "./stock";
 import { paymentState } from "./payment-status";
 import { addDaysIso, todayIso } from "./dates";
 import { assertOpen } from "./periods";
+import { skontoMax, skontoSplit } from "./tax";
 
 export class PaymentError extends Error {
   constructor(public code: string, public detail?: string) { super(code); }
@@ -22,16 +23,35 @@ async function loadState(tx: Tx | typeof db, invoiceId: string) {
   return { inv, state: paymentState(inv, todayIso()) };
 }
 
-export async function recordPaymentTx(tx: Tx, p: { invoiceId: string; date: string; amountCents: number; method: Method; note?: string; userId?: string; allowOverpay?: boolean }) {
+/** Bis wann Skonto gilt (Rechnungsdatum + Skontotage), sonst null */
+export function skontoDeadline(inv: { skontoBp: number; skontoDays: number; issueDate: string | null }) {
+  return inv.skontoBp > 0 && inv.skontoDays > 0 && inv.issueDate ? addDaysIso(inv.issueDate, inv.skontoDays) : null;
+}
+
+export async function recordPaymentTx(tx: Tx, p: { invoiceId: string; date: string; amountCents: number; method: Method; note?: string; userId?: string; allowOverpay?: boolean; withSkonto?: boolean }) {
   if (!Number.isInteger(p.amountCents) || p.amountCents <= 0) throw new PaymentError("amountInvalid");
   await tx.execute(sql`select id from invoices where id = ${p.invoiceId} for update`);
   const { inv, state } = await loadState(tx, p.invoiceId);
   if (inv.status !== "ISSUED" || inv.kind !== "INVOICE") throw new PaymentError("notPayable");
   try { await assertOpen(tx, p.date); } catch { throw new PaymentError("periodLocked"); }
-  if (!p.allowOverpay && p.amountCents > state.openCents) throw new PaymentError("overpay", String(state.openCents));
+
+  // Skonto: Kunde zahlt fristgerecht den Rest abzüglich Skonto → Differenz wird als Skonto ausgebucht
+  let skonto = { skontoCents: 0, skontoNetCents: 0, skontoBreakdown: [] as { rateBp: number; netCents: number; vatCents: number }[] };
+  if (p.withSkonto) {
+    const deadline = skontoDeadline(inv);
+    if (!deadline) throw new PaymentError("noSkonto");
+    if (p.date > deadline) throw new PaymentError("skontoExpired", deadline);
+    const already = inv.payments.filter((x) => !x.cancelledAt).reduce((s, x) => s + x.skontoCents, 0);
+    const diff = state.openCents - p.amountCents;
+    const max = skontoMax(inv.grossCents, inv.skontoBp) - already;
+    if (diff <= 0 || diff > max) throw new PaymentError("skontoAmount", String(state.openCents - max));
+    const parts = skontoSplit(diff, inv.vatBreakdown);
+    skonto = { skontoCents: diff, skontoNetCents: parts.reduce((s, g) => s + g.netCents, 0), skontoBreakdown: parts };
+  } else if (!p.allowOverpay && p.amountCents > state.openCents) throw new PaymentError("overpay", String(state.openCents));
+
   const number = await nextNumber(tx, "PAYMENT", Number(p.date.slice(0, 4)));
   const [row] = await tx.insert(schema.payments).values({
-    number, invoiceId: p.invoiceId, date: p.date, amountCents: p.amountCents, method: p.method, note: p.note ?? "",
+    number, invoiceId: p.invoiceId, date: p.date, amountCents: p.amountCents, method: p.method, note: p.note ?? "", ...skonto,
   }).returning();
   await audit(tx, { entity: "payment", entityId: row.id, action: "create", after: row, userId: p.userId });
   return row;

@@ -20,9 +20,10 @@ export type PaymentState = {
 export function paymentState(inv: {
   grossCents: number; dueDate: string | null; issueDate: string | null;
   installments: { dueDate: string; amountCents: number }[];
-  payments: { amountCents: number; cancelledAt?: Date | string | null }[];
+  payments: { amountCents: number; skontoCents?: number; cancelledAt?: Date | string | null }[];
 }, today: string): PaymentState {
-  const paidCents = inv.payments.filter((p) => !p.cancelledAt).reduce((s, p) => s + p.amountCents, 0);
+  // Gewährtes Skonto zählt wie bezahlt (Rechnung ist damit erledigt)
+  const paidCents = inv.payments.filter((p) => !p.cancelledAt).reduce((s, p) => s + p.amountCents + (p.skontoCents ?? 0), 0);
   const openCents = inv.grossCents - paidCents;
   const plan = inv.installments.length
     ? [...inv.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate))

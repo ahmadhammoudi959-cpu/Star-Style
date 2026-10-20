@@ -470,15 +470,16 @@ export async function receiptPdf(paymentId: string) {
   const p = await db.query.payments.findFirst({ where: eq(schema.payments.id, paymentId), with: { invoice: { with: { customer: true, payments: true } } } });
   if (!p) throw new Error("notFound");
   const inv = p.invoice;
-  const before = inv.payments.filter((x) => !x.cancelledAt && x.id !== p.id && (x.date < p.date || (x.date === p.date && x.number < p.number))).reduce((s, x) => s + x.amountCents, 0);
-  const rest = inv.grossCents - before - p.amountCents;
+  const before = inv.payments.filter((x) => !x.cancelledAt && x.id !== p.id && (x.date < p.date || (x.date === p.date && x.number < p.number))).reduce((s, x) => s + x.amountCents + x.skontoCents, 0);
+  const rest = inv.grossCents - before - p.amountCents - p.skontoCents;
   return renderLetter({
     title: p.cancelledAt ? `Quittung ${p.number} – STORNIERT` : `Quittung ${p.number}`,
     buyer: invBuyer(inv),
     info: [["Quittungsnr.", p.number], ["Datum", formatDate(p.date)], ["Zu Rechnung", inv.number ?? ""], ["Kundennr.", String(inv.customer.number)]],
     paragraphs: [`Wir bestätigen den Eingang von ${formatCents(p.amountCents)} (${METHOD_DE[p.method] ?? p.method}) am ${formatDate(p.date)} für die Rechnung ${inv.number} vom ${formatDate(inv.issueDate)}.`,
       ...(p.note ? [p.note] : []), ...(p.cancelledAt ? [`Diese Zahlung wurde am ${formatDate(p.cancelledAt.toISOString().slice(0, 10))} storniert. Grund: ${p.cancelReason}`] : [])],
-    table: { head: ["", "Betrag"], widths: [120, 50], rows: [["Rechnungsbetrag", formatCents(inv.grossCents)], ["Bereits vorher bezahlt", formatCents(before)], ["Diese Zahlung", formatCents(p.amountCents)]] },
+    table: { head: ["", "Betrag"], widths: [120, 50], rows: [["Rechnungsbetrag", formatCents(inv.grossCents)], ["Bereits vorher bezahlt", formatCents(before)], ["Diese Zahlung", formatCents(p.amountCents)],
+      ...(p.skontoCents ? [["Abzüglich Skonto", formatCents(p.skontoCents)]] : [])] },
     total: [rest > 0 ? "Noch offen" : rest < 0 ? "Guthaben" : "Vollständig bezahlt", formatCents(Math.abs(rest))],
     signature: p.method === "CASH",
   });

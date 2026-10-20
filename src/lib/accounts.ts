@@ -30,6 +30,10 @@ export const ACCOUNT_DEFS = {
   revIgl: { label: "Steuerfreie innergemeinschaftliche Lieferungen § 4 Nr. 1b UStG", SKR03: 8125, SKR04: 4125, auto: true },
   revExport: { label: "Steuerfreie Ausfuhrlieferungen § 4 Nr. 1a UStG", SKR03: 8120, SKR04: 4120, auto: true },
   revOss: { label: "Erlöse aus im anderen EU-Land steuerpflichtigen Lieferungen (OSS)", SKR03: 8320, SKR04: 4320, auto: true },
+  // Gewährte Skonti (Erlösschmälerung; 19/7 % = Automatikkonten mit USt-Korrektur)
+  skonto19: { label: "Gewährte Skonti 19 % USt", SKR03: 8736, SKR04: 4736, auto: true },
+  skonto7: { label: "Gewährte Skonti 7 % USt", SKR03: 8731, SKR04: 4731, auto: true },
+  skonto0: { label: "Gewährte Skonti (ohne USt / steuerfrei)", SKR03: 8730, SKR04: 4730 },
   // Wareneinkauf (Automatikkonten)
   goods19: { label: "Wareneingang 19 % Vorsteuer", SKR03: 3400, SKR04: 5400, auto: true },
   goods7: { label: "Wareneingang 7 % Vorsteuer", SKR03: 3300, SKR04: 5300, auto: true },
@@ -99,6 +103,12 @@ export function revenueAccount(m: AccountMap, taxMode: InvoiceTaxMode, rateBp: n
   if (taxMode === "EXPORT") return m.revExport;
   if (taxMode === "EU_B2C" && ossCountry) return m.revOss;
   return rateBp === 1900 ? m.rev19 : rateBp === 700 ? m.rev7 : m.rev0;
+}
+
+/** Skontokonto: nur bei deutscher USt die Automatikkonten, sonst ohne Steuer */
+export function skontoAccount(m: AccountMap, taxMode: InvoiceTaxMode, rateBp: number, ossCountry: string | null): number {
+  if (taxMode === "EU_REVERSE_CHARGE" || taxMode === "EXPORT" || (taxMode === "EU_B2C" && ossCountry)) return m.skonto0;
+  return rateBp === 1900 ? m.skonto19 : rateBp === 700 ? m.skonto7 : m.skonto0;
 }
 
 /** Ist der Steuerfall ein Reverse-Charge-/Erwerbsfall (Steuer schuldet der Empfänger, Vorsteuer gleich hoch)? */
