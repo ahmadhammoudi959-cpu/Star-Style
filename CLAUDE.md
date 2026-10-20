@@ -25,7 +25,7 @@ Next.js 15 (App Router, Server Actions) · TypeScript strict · Drizzle ORM + Po
 9. Sehr einfache Bedienung: ein Nutzer, wenig Vorkenntnisse. Max. 3 Schritte pro Vorgang, klare Fehlermeldungen in seiner Sprache.
 
 ## Bekannte Punkte
-- `npm audit`: verbleibend nur `postcss` innerhalb von Next (Build-Zeit, verarbeitet nur eigenes CSS) – beim nächsten Next-Update erneut prüfen.
+- `npm audit`: verbleibend nur `braces` (Dateibeobachter von Tailwind, nur beim Bauen, es gibt keine korrigierte Version). postcss, postcss-selector-parser und esbuild per `overrides` in package.json angehoben; vitest auf v5.
 - Shell: nie `pkill -f` benutzen (beendet die eigene Shell) – Ports mit `fuser -k PORT/tcp` freigeben.
 - Beträge in Arabisch: `.num` bekommt in RTL `direction: ltr` (globals.css), damit „-400,00 €“ richtig steht.
 - Oberfläche ab 768 px Breite auf 80 % (`html { font-size: 80% }`, Wunsch Inhaber) – darum Größen nur in rem, keine festen px-Werte. Handy bleibt 100 %.
