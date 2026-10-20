@@ -19,7 +19,7 @@ const SOFT = rgb(0.36, 0.39, 0.46);
 const LINE = rgb(0.85, 0.87, 0.9);
 const ZEBRA = rgb(0.955, 0.972, 0.965);
 
-type Fonts = { r: PDFFont; s: PDFFont; b: PDFFont };
+type Fonts = { r: TFont; s: TFont; b: TFont };
 type DocKind = "invoice" | "cancellation" | "offer" | "delivery";
 
 type Party = { name: string; street: string; zip: string; city: string; country: string; vatId: string };
@@ -41,14 +41,83 @@ const METHOD_DE: Record<string, string> = { CASH: "bar", BANK: "per Überweisung
 const COUNTRY: Record<string, string> = { DE: "", NL: "Niederlande", BE: "Belgien", AT: "Österreich", FR: "Frankreich", LU: "Luxemburg", PL: "Polen", CH: "Schweiz", IT: "Italien", ES: "Spanien", DK: "Dänemark", CZ: "Tschechien" };
 const countryName = (c: string) => (c === "DE" ? "" : COUNTRY[c] ?? c);
 
-async function fonts(doc: PDFDocument): Promise<Fonts> {
-  doc.registerFontkit(fontkit);
-  const dir = path.join(process.cwd(), "assets", "fonts");
-  const load = (f: string) => doc.embedFont(fs.readFileSync(path.join(dir, f)), { subset: true });
-  return { r: await load("IBMPlexSans-Regular.woff"), s: await load("IBMPlexSans-SemiBold.woff"), b: await load("IBMPlexSans-Bold.woff") };
+// ───────────── Schrift mit Arabisch-Unterstützung ─────────────
+// Lateinische Texte: IBM Plex Sans (Teilmenge). Arabische Textstücke: IBM Plex Sans Arabic (vollständig eingebettet,
+// damit fontkit die Buchstaben verbindet und von rechts nach links setzt). Gemischte Zeilen werden in Stücke zerlegt
+// und in der richtigen Reihenfolge gezeichnet (vereinfachter Bidi: Grundrichtung = erstes starkes Zeichen).
+const AR = "\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF";
+const AR_RUN = new RegExp(`[${AR}](?:[${AR}\\s]*[${AR}])?`, "g");
+const HAS_AR = new RegExp(`[${AR}]`);
+const FIRST_STRONG = new RegExp(`[${AR}A-Za-zÀ-ɏ]`);
+export const hasArabic = (t: string) => HAS_AR.test(t);
+const MIRROR: Record<string, string> = { "(": ")", ")": "(", "[": "]", "]": "[", "{": "}", "}": "{", "<": ">", ">": "<", "«": "»", "»": "«" };
+const mirror = (c: string) => MIRROR[c] ?? c;
+
+/** Text in sichtbarer Reihenfolge (links → rechts) als Stücke mit Schriftart-Kennzeichen */
+export function visualRuns(text: string): { t: string; ar: boolean }[] {
+  if (!HAS_AR.test(text)) return [{ t: text, ar: false }];
+  const runs: { t: string; ar: boolean }[] = [];
+  let last = 0;
+  for (const m of text.matchAll(AR_RUN)) {
+    if (m.index! > last) runs.push({ t: text.slice(last, m.index), ar: false });
+    runs.push({ t: m[0], ar: true });
+    last = m.index! + m[0].length;
+  }
+  if (last < text.length) runs.push({ t: text.slice(last), ar: false });
+  const rtl = HAS_AR.test(text.match(FIRST_STRONG)?.[0] ?? "");
+  if (!rtl) return runs;
+  // Rechts-nach-links: Reihenfolge umdrehen, Leerzeichen der lateinischen Stücke auf die andere Seite
+  return runs.reverse().map((r) => {
+    if (r.ar) return r;
+    // Neutrale Zeichen (Leerzeichen, Striche, Klammern …) am Rand folgen der Grundrichtung (rechts nach links)
+    const lead = r.t.match(/^[^\p{L}\p{N}]*/u)![0], trail = r.t.match(/[^\p{L}\p{N}]*$/u)![0];
+    if (lead.length === r.t.length) return { t: [...r.t].reverse().map(mirror).join(""), ar: false };
+    const core = r.t.slice(lead.length, r.t.length - trail.length);
+    const rev = (x: string) => [...x].reverse().map(mirror).join("");
+    return { t: rev(trail) + core + rev(lead), ar: false };
+  });
 }
 
-function wrap(text: string, font: PDFFont, size: number, width: number): string[] {
+export class TFont {
+  constructor(public lat: PDFFont, public ar: PDFFont | null) {}
+  private fontFor(ar: boolean) { return ar && this.ar ? this.ar : this.lat; }
+  widthOfTextAtSize(t: string, size: number) {
+    return visualRuns(t).reduce((w, r) => w + this.fontFor(r.ar).widthOfTextAtSize(r.t, size), 0);
+  }
+  draw(page: PDFPage, t: string, o: { x: number; y: number; size: number; color: RGB }) {
+    let x = o.x;
+    for (const r of visualRuns(t)) {
+      const f = this.fontFor(r.ar);
+      if (r.t) page.drawText(r.t, { x, y: o.y, size: o.size, font: f, color: o.color });
+      x += f.widthOfTextAtSize(r.t, o.size);
+    }
+  }
+}
+
+async function fonts(doc: PDFDocument, needArabic: boolean): Promise<Fonts> {
+  doc.registerFontkit(fontkit);
+  const dir = path.join(process.cwd(), "assets", "fonts");
+  const load = (f: string, subset = true) => doc.embedFont(fs.readFileSync(path.join(dir, f)), { subset });
+  const ar = async (f: string) => {
+    if (!needArabic) return null;
+    const data = fs.readFileSync(path.join(dir, f));
+    const font = await doc.embedFont(data, { subset: false });
+    // pdf-lib schreibt Breiten nur für Zeichen mit eigenem Unicode-Wert; arabische Anfangs-/Mittel-/Endformen
+    // haben keinen → falsche Abstände. Darum Breitentabelle für ALLE Glyphen (aus einer eigenen, unberührten
+    // fontkit-Instanz, damit die Formung der Buchstaben nicht gestört wird).
+    const twin = fontkit.create(data) as unknown as { numGlyphs: number; unitsPerEm: number; getGlyph(i: number): { advanceWidth: number } };
+    const widths = Array.from({ length: twin.numGlyphs }, (_, i) => Math.round((twin.getGlyph(i).advanceWidth * 1000) / twin.unitsPerEm));
+    (font as unknown as { embedder: { computeWidths: () => unknown[] } }).embedder.computeWidths = () => [0, widths];
+    return font;
+  };
+  return {
+    r: new TFont(await load("IBMPlexSans-Regular.woff"), await ar("IBMPlexSansArabic_400Regular.ttf")),
+    s: new TFont(await load("IBMPlexSans-SemiBold.woff"), await ar("IBMPlexSansArabic_600SemiBold.ttf")),
+    b: new TFont(await load("IBMPlexSans-Bold.woff"), await ar("IBMPlexSansArabic_700Bold.ttf")),
+  };
+}
+
+function wrap(text: string, font: TFont, size: number, width: number): string[] {
   const out: string[] = [];
   for (const para of text.split("\n")) {
     let line = "";
@@ -84,10 +153,10 @@ class Writer {
     this.page.drawRectangle({ x: 0, y: H - 6, width: W, height: 6, color: BRAND });
   }
   text(t: string, x: number, y: number, size = 9, font = this.f.r, color: RGB = INK) {
-    this.page.drawText(t, { x, y, size, font, color });
+    font.draw(this.page, t, { x, y, size, color });
   }
   right(t: string, xRight: number, y: number, size = 9, font = this.f.r, color: RGB = INK) {
-    this.page.drawText(t, { x: xRight - font.widthOfTextAtSize(t, size), y, size, font, color });
+    font.draw(this.page, t, { x: xRight - font.widthOfTextAtSize(t, size), y, size, color });
   }
   ensure(space: number, onBreak?: () => void) {
     if (this.y - space < 32 * MM) { this.newPage(); this.y = H - 32 * MM; onBreak?.(); }
@@ -102,10 +171,10 @@ class Writer {
     this.pages.forEach((p, i) => {
       p.drawLine({ start: { x: 20 * MM, y: 24 * MM }, end: { x: W - 20 * MM, y: 24 * MM }, thickness: 0.5, color: LINE });
       cols.forEach((col, ci) => {
-        col.filter(Boolean).forEach((l, li) => p.drawText(l, { x: 20 * MM + ci * 60 * MM, y: 20 * MM - li * 3.6 * MM, size: 7, font: this.f.r, color: SOFT }));
+        col.filter(Boolean).forEach((l, li) => this.f.r.draw(p, l, { x: 20 * MM + ci * 60 * MM, y: 20 * MM - li * 3.6 * MM, size: 7, color: SOFT }));
       });
       const pn = `Seite ${i + 1} von ${this.pages.length}`;
-      p.drawText(pn, { x: W - 20 * MM - this.f.r.widthOfTextAtSize(pn, 7), y: 8 * MM, size: 7, font: this.f.r, color: SOFT });
+      this.f.r.draw(p, pn, { x: W - 20 * MM - this.f.r.widthOfTextAtSize(pn, 7), y: 8 * MM, size: 7, color: SOFT });
     });
   }
 }
@@ -116,7 +185,6 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
   const doc = await PDFDocument.create();
   doc.setTitle(`${TITLES[d.kind]} ${d.number}`);
   doc.setLanguage("de-DE");
-  const f = await fonts(doc);
   const company = (await db.query.companySettings.findFirst()) ?? ({ name: "", street: "", zip: "", city: "", country: "DE", owner: "", email: "", phone: "", website: "", vatId: "", taxNumber: "", bankName: "", iban: "", bic: "", logoFileId: null, invoiceFooter: "", defaultPaymentDays: 14, offerValidityDays: 14, id: "company", updatedAt: new Date() } as typeof schema.companySettings.$inferSelect);
   let logo = null;
   if (company.logoFileId) {
@@ -126,6 +194,7 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
   }
   doc.setAuthor(company.name);
   doc.setCreator("Star Style");
+  const f = await fonts(doc, hasArabic(JSON.stringify(d) + JSON.stringify(company)));
   const w = new Writer(doc, f, company, logo);
   w.newPage();
 
@@ -414,8 +483,8 @@ async function companyAndLogo(doc: PDFDocument) {
 export async function renderLetter(l: Letter): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.setTitle(l.title); doc.setLanguage("de-DE"); doc.setCreator("Star Style");
-  const f = await fonts(doc);
   const { company, logo } = await companyAndLogo(doc);
+  const f = await fonts(doc, hasArabic(JSON.stringify(l) + JSON.stringify(company)));
   const w = new Writer(doc, f, company, logo);
   w.newPage();
   const sender = [company.name, company.street, [company.zip, company.city].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
@@ -513,8 +582,8 @@ type ReportSection = { heading: string; head: string[]; widths: number[]; rows: 
 export async function renderReport(r: { title: string; subtitle: string; sections: ReportSection[]; notes: string[] }): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.setTitle(r.title); doc.setLanguage("de-DE"); doc.setCreator("Star Style");
-  const f = await fonts(doc);
   const { company, logo } = await companyAndLogo(doc);
+  const f = await fonts(doc, hasArabic(JSON.stringify(r) + JSON.stringify(company)));
   const w = new Writer(doc, f, company ?? ({ name: "" } as typeof schema.companySettings.$inferSelect), logo);
   w.newPage();
   w.y = H - 40 * MM;
