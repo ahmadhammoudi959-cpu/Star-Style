@@ -11,6 +11,8 @@
 
 :root { --font-sans: "Plex"; color-scheme: light; }
 html, body { background: #f4f6f5; color: #1d2433; }
+/* Ab Tablet/PC alles auf 80 % (Wunsch Inhaber): Tailwind rechnet in rem, daher skaliert die ganze Oberfläche mit. Handy bleibt 100 % (Fingerbedienung). */
+@media (min-width: 768px) { html { font-size: 80%; } }
 body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 
 @layer components {
@@ -29,7 +31,7 @@ body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smooth
   .btn-ghost { @apply btn bg-white text-ink ring-1 ring-black/10 hover:bg-brand-50; }
   .btn-danger { @apply btn bg-white text-red-700 ring-1 ring-red-200 hover:bg-red-50; }
   .input {
-    @apply w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-[15px] text-ink shadow-sm outline-none
+    @apply w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-[0.9375rem] text-ink shadow-sm outline-none
            transition placeholder:text-ink-soft/60 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15;
   }
   .label { @apply mb-1 block text-sm font-semibold text-ink; }

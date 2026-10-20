@@ -36,7 +36,7 @@ export function BottomNav({ items }: { items: NavItem[] }) {
         const active = it.href === "/" ? path === "/" : path.startsWith(it.href);
         return (
           <Link key={it.href} href={it.soon ? "#" : it.href} aria-disabled={it.soon}
-            className={`group flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold ${active ? "text-brand-600" : it.soon ? "text-ink-soft/40" : "text-ink-soft"}`}>
+            className={`group flex flex-col items-center gap-0.5 py-2 text-[0.6875rem] font-semibold ${active ? "text-brand-600" : it.soon ? "text-ink-soft/40" : "text-ink-soft"}`}>
             <Icon name={it.icon} className="h-5 w-5" />{it.label}
           </Link>
         );

@@ -53,7 +53,7 @@ export function Chat({ t }: { t: Dict }) {
       <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex items-end gap-2 border-t border-black/5 bg-slate-50/80 p-3">
         <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={1} placeholder={t.ai.placeholder} dir="auto"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
-          className="input max-h-40 min-h-[44px] flex-1 resize-y" />
+          className="input max-h-40 min-h-[2.75rem] flex-1 resize-y" />
         <button disabled={pending || !input.trim()} className="btn-primary group h-11 shrink-0"><Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" />{t.ai.send}</button>
       </form>
       <div className="flex items-center justify-between px-4 pb-2 text-xs text-ink-soft">

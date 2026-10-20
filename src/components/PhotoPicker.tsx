@@ -34,7 +34,7 @@ export function PhotoPicker({ name, initialId, size = 128, labels, compact = fal
     setPreview(null); setRemoved(true);
   }
 
-  const box = { width: size, height: size };
+  const box = { width: `${size / 16}rem`, height: `${size / 16}rem` };
   return (
     <div className={compact ? "flex items-center gap-2" : "flex flex-wrap items-center gap-4"}>
       <button type="button" onClick={() => input.current?.click()} style={box} title={preview ? labels.change : labels.add}

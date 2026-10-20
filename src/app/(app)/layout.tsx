@@ -29,7 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ];
   const mobile = [items[0], items[1], items[2], items[8], items[6]];
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[250px_1fr]">
+    <div className="min-h-screen lg:grid lg:grid-cols-[15.625rem_1fr]">
       <aside className="sticky top-0 hidden h-screen print:!hidden flex-col justify-between bg-gradient-to-b from-brand-700 to-brand-900 p-4 text-white lg:flex">
         <div>
           <div className="mb-6 flex items-center gap-3 px-2">
