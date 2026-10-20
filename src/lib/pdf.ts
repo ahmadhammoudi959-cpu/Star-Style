@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { formatCents, bpToPercent } from "./money";
 import { addDaysIso, formatDate } from "./dates";
-import { legalNotes, skontoAmount } from "./tax";
+import { legalNotes } from "./tax";
 import { buildCiiXml } from "./einvoice";
 
 const MM = 2.8346;
@@ -30,7 +30,7 @@ type DocData = {
   subtotalCents: number; discountCents: number; discountBp: number; netCents: number; vatCents: number; grossCents: number;
   vatBreakdown: { rateBp: number; netCents: number; vatCents: number }[];
   taxMode: "DOMESTIC" | "EU_REVERSE_CHARGE" | "EU_PENDING_VATID" | "EU_B2C" | "EXPORT"; ossCountry: string | null;
-  skontoBp: number; skontoDays: number; retentionOfTitle: boolean; notes: string; refNumber: string | null;
+  retentionOfTitle: boolean; notes: string; refNumber: string | null;
   /** nur Rechnung: bei Ausstellung bereits erhaltene Zahlungen und Ratenplan */
   received?: { amountCents: number; method: string }[]; installments?: { dueDate: string; amountCents: number }[];
   /** Positionen mit Bruttopreisen (Shop-Bestellungen) */
@@ -239,7 +239,6 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
       const open = plan.map((r) => { const paid = Math.min(pool, r.amountCents); pool -= paid; return { ...r, open: r.amountCents - paid }; }).filter((r) => r.open > 0);
       notes.push(`Ratenzahlung vereinbart: ${open.map((r, i) => `${i + 1}. Rate ${formatCents(r.open)} fällig am ${formatDate(r.dueDate)}`).join("; ")}.`);
     } else if (rest > 0 && d.dueDate) notes.push(`Zahlbar ohne Abzug bis ${formatDate(d.dueDate)}.`);
-    if (rest > 0 && d.skontoBp && d.skontoDays) notes.push(`Bei Zahlung bis ${formatDate(addDaysIso(d.date, d.skontoDays))} gewähren wir ${bpToPercent(d.skontoBp)} % Skonto: zu zahlen ${formatCents(skontoAmount(d.grossCents, d.skontoBp))}.`);
     if (d.deliveryDate === d.date) notes.push("Das Lieferdatum entspricht dem Rechnungsdatum.");
     if (d.pricesGross) notes.push("Alle Preise inklusive der ausgewiesenen Umsatzsteuer.");
   }
@@ -332,7 +331,7 @@ export async function invoicePdf(invoiceId: string, variant: "invoice" | "delive
     customerNo: c.number, customerId: c.id, buyer, lines: await linesWithProducts(inv.lines),
     subtotalCents: inv.subtotalCents, discountCents: inv.discountCents, discountBp: inv.discountBp, netCents: inv.netCents, vatCents: inv.vatCents,
     grossCents: inv.grossCents, vatBreakdown: inv.vatBreakdown, taxMode: inv.taxMode, ossCountry: inv.ossCountry,
-    skontoBp: inv.skontoBp, skontoDays: inv.skontoDays, retentionOfTitle: inv.retentionOfTitle, notes: inv.notes, refNumber: ref,
+    retentionOfTitle: inv.retentionOfTitle, notes: inv.notes, refNumber: ref,
     installments: [...inv.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
     pricesGross: inv.pricesGross,
     // Entwurf: geplante Zahlung bei Ausstellung; ausgestellt: Zahlungen bis zum Rechnungsdatum (PDF wird beim ersten Abruf archiviert)
@@ -390,7 +389,7 @@ export async function offerPdf(offerId: string) {
     lines: (await linesWithProducts(o.lines)).map((l, i) => ({ ...l, netCents: t.lines[i].netCents })),
     subtotalCents: t.subtotalCents, discountCents: t.discountCents, discountBp: o.discountBp, netCents: t.netCents, vatCents: t.vatCents,
     grossCents: t.grossCents, vatBreakdown: t.vatByRate, taxMode: determineTaxMode(c), ossCountry: null,
-    skontoBp: 0, skontoDays: 0, retentionOfTitle: false, notes: o.notes, refNumber: null,
+    retentionOfTitle: false, notes: o.notes, refNumber: null,
   });
 }
 
@@ -470,16 +469,15 @@ export async function receiptPdf(paymentId: string) {
   const p = await db.query.payments.findFirst({ where: eq(schema.payments.id, paymentId), with: { invoice: { with: { customer: true, payments: true } } } });
   if (!p) throw new Error("notFound");
   const inv = p.invoice;
-  const before = inv.payments.filter((x) => !x.cancelledAt && x.id !== p.id && (x.date < p.date || (x.date === p.date && x.number < p.number))).reduce((s, x) => s + x.amountCents + x.skontoCents, 0);
-  const rest = inv.grossCents - before - p.amountCents - p.skontoCents;
+  const before = inv.payments.filter((x) => !x.cancelledAt && x.id !== p.id && (x.date < p.date || (x.date === p.date && x.number < p.number))).reduce((s, x) => s + x.amountCents, 0);
+  const rest = inv.grossCents - before - p.amountCents;
   return renderLetter({
     title: p.cancelledAt ? `Quittung ${p.number} – STORNIERT` : `Quittung ${p.number}`,
     buyer: invBuyer(inv),
     info: [["Quittungsnr.", p.number], ["Datum", formatDate(p.date)], ["Zu Rechnung", inv.number ?? ""], ["Kundennr.", String(inv.customer.number)]],
     paragraphs: [`Wir bestätigen den Eingang von ${formatCents(p.amountCents)} (${METHOD_DE[p.method] ?? p.method}) am ${formatDate(p.date)} für die Rechnung ${inv.number} vom ${formatDate(inv.issueDate)}.`,
       ...(p.note ? [p.note] : []), ...(p.cancelledAt ? [`Diese Zahlung wurde am ${formatDate(p.cancelledAt.toISOString().slice(0, 10))} storniert. Grund: ${p.cancelReason}`] : [])],
-    table: { head: ["", "Betrag"], widths: [120, 50], rows: [["Rechnungsbetrag", formatCents(inv.grossCents)], ["Bereits vorher bezahlt", formatCents(before)], ["Diese Zahlung", formatCents(p.amountCents)],
-      ...(p.skontoCents ? [["Abzüglich Skonto", formatCents(p.skontoCents)]] : [])] },
+    table: { head: ["", "Betrag"], widths: [120, 50], rows: [["Rechnungsbetrag", formatCents(inv.grossCents)], ["Bereits vorher bezahlt", formatCents(before)], ["Diese Zahlung", formatCents(p.amountCents)]] },
     total: [rest > 0 ? "Noch offen" : rest < 0 ? "Guthaben" : "Vollständig bezahlt", formatCents(Math.abs(rest))],
     signature: p.method === "CASH",
   });

@@ -19,7 +19,7 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
   const company = await db.query.companySettings.findFirst();
   const rows = await customerStatement(id);
   const bal = rows.at(-1)?.balanceCents ?? 0;
-  const kindLabel = { invoice: t.pay.invoice, cancellation: "Storno", payment: t.pay.payment, skonto: t.pay.skontoGranted, payment_cancelled: `${t.pay.payment} ${t.pay.cancelled}` };
+  const kindLabel = { invoice: t.pay.invoice, cancellation: "Storno", payment: t.pay.payment, payment_cancelled: `${t.pay.payment} ${t.pay.cancelled}` };
 
   return (
     <div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeTotals, determineTaxMode, effectiveRateBp, legalNotes, skontoAmount } from "../src/lib/tax";
+import { computeTotals, determineTaxMode, effectiveRateBp, legalNotes } from "../src/lib/tax";
 
 describe("Steuerbehandlung", () => {
   it("Deutschland → Inland", () => expect(determineTaxMode({ type: "COMPANY", country: "DE", vatIdStatus: "VALID" })).toBe("DOMESTIC"));
@@ -40,7 +40,6 @@ describe("Summen", () => {
     const t = computeTotals(Array.from({ length: 7 }, () => ({ qty: 1, unitPriceCents: 333, discountBp: 0, vatRateBp: 1900 })));
     expect(t.lines.reduce((s, l) => s + l.vatCents, 0)).toBe(t.vatCents);
   });
-  it("Skonto 2 %", () => expect(skontoAmount(10000, 200)).toBe(9800));
 });
 
 describe("Pflichthinweise", () => {

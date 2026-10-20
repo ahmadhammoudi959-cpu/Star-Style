@@ -20,7 +20,7 @@ function done(invoiceId: string): PayState {
 
 export async function addPaymentAction(_: PayState, fd: FormData): Promise<PayState> {
   const s = await requireSession();
-  const p = z.object({ invoiceId: z.string().min(1), date, amount: z.string(), method: z.enum(["CASH", "BANK", "CARD", "ONLINE"]), note: z.string().max(500).default(""), withSkonto: z.string().optional().transform((v) => v === "on") })
+  const p = z.object({ invoiceId: z.string().min(1), date, amount: z.string(), method: z.enum(["CASH", "BANK", "CARD", "ONLINE"]), note: z.string().max(500).default("") })
     .safeParse(Object.fromEntries(fd));
   if (!p.success) return { error: "required" };
   const amountCents = parseMoney(p.data.amount);

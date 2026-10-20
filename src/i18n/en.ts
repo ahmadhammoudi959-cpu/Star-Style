@@ -79,8 +79,7 @@ const en: Dict = {
   sales: {
     invoice: "Invoice", offer: "Quote", title: "Sales", newOffer: "New quote", newInvoice: "Direct invoice", offers: "Quotes", invoices: "Invoices",
     customer: "Customer", pickCustomer: "Choose customer", lines: "Lines", price: "Unit price (net)", lineDiscount: "Disc. %",
-    skontoPreview: "If paid by {date}", skontoSave: "saves",
-    docDiscount: "Overall discount %", skonto: "Early-payment discount %", skontoDays: "Within days", subtotal: "Subtotal", discount: "Discount",
+    docDiscount: "Overall discount %", subtotal: "Subtotal", discount: "Discount",
     net: "Net", vat: "VAT", gross: "Total", validUntil: "Valid until", channel: "Sales channel",
     channels: { STORE: "Store / direct", BRAND_SHOP: "Brand shop", GENERAL_SHOP: "General shop" },
     status: { DRAFT: "Draft", SENT: "Sent", ACCEPTED: "Accepted", REJECTED: "Rejected", EXPIRED: "Expired", CONVERTED: "Invoiced", ISSUED: "Issued", CANCELLED: "Cancelled" },
@@ -97,7 +96,6 @@ const en: Dict = {
     retention: "Retention of title", reservation: "Reservation",
   },
   pay: {
-    skontoGranted: "Early payment discount", withSkonto: "Paid with early payment discount", withSkontoHint: "The difference is booked as discount and the invoice is settled", skontoUntil: "Early payment discount until", noSkonto: "This invoice has no early payment discount", skontoExpired: "The early payment period has expired", skontoAmount: "The amount must be at least",
     amountInvalid: "Please enter a valid amount", planInvalid: "Plan incomplete (check dates and amounts)", planOrder: "Please sort instalments by date", reason: "Please enter a reason", notOverdue: "Nothing overdue – no reminder needed", notPayable: "No payment can be recorded for this invoice", alreadyCancelled: "Already cancelled", dunningsDone: "Reminders issued", schedule: "Payment schedule", payments: "Payments received", noPayments: "No payment yet", fee: "Fee", newDue: "New deadline", editPlan: "Change instalment plan", kpiOpen: "Receivables", openInvoices: "open invoices", days: "days",
     title: "Payments", receivables: "Receivables", paid: "Paid", open: "Open", overdue: "Overdue", credit: "Credit",
     status: { PAID: "Paid", OPEN: "Open", PARTIAL: "Partly paid", OVERDUE: "Overdue", CREDIT: "Credit – refund" },

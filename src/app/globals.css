@@ -35,6 +35,8 @@ body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smooth
   .label { @apply mb-1 block text-sm font-semibold text-ink; }
   .hint { @apply mt-1 text-xs text-ink-soft; }
   .table-wrap { @apply overflow-x-auto; }
+  /* Grid-Spalten dürfen schrumpfen (sonst schieben breite Tabellen die Seite auf dem Handy seitlich) */
+  .grid > * { min-width: 0; }
   .tbl { @apply w-full text-sm; }
   .tbl th { @apply whitespace-nowrap border-b border-black/5 bg-brand-50/60 px-3 py-2.5 text-start text-xs font-semibold uppercase tracking-wide text-ink-soft; }
   .tbl th.text-end { text-align: end; }

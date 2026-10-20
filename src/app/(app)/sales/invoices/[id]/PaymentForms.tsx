@@ -9,20 +9,17 @@ import type { Dict } from "@/i18n/de";
 function Msg({ t, state }: { t: Dict; state: { error?: string; detail?: string; ok?: boolean } | undefined }) {
   if (!state?.error) return null;
   const m = (t.pay as Record<string, unknown>)[state.error] as string | undefined;
-  return <p className="text-xs font-semibold text-red-600">{m ?? t.common.error}{(state.error === "overpay" || state.error === "skontoAmount") && state.detail ? ` (${formatCents(Number(state.detail))})` : ""}</p>;
+  return <p className="text-xs font-semibold text-red-600">{m ?? t.common.error}{state.error === "overpay" && state.detail ? ` (${formatCents(Number(state.detail))})` : ""}</p>;
 }
 
 const toInput = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
-export function AddPayment({ t, invoiceId, suggestCents, today, skonto }: {
-  t: Dict; invoiceId: string; suggestCents: number; today: string; skonto?: { deadline: string; payCents: number } | null;
-}) {
+export function AddPayment({ t, invoiceId, suggestCents, today }: { t: Dict; invoiceId: string; suggestCents: number; today: string }) {
   const [state, action, pending] = useActionState(addPaymentAction, undefined);
   const ref = useRef<HTMLFormElement>(null);
-  const [withSkonto, setWithSkonto] = useState(false);
   const [amount, setAmount] = useState(toInput(suggestCents));
-  useEffect(() => { if (state?.ok) { ref.current?.reset(); setWithSkonto(false); } }, [state]);
-  useEffect(() => { setAmount(toInput(withSkonto && skonto ? skonto.payCents : suggestCents)); }, [withSkonto, skonto, suggestCents]);
+  useEffect(() => { if (state?.ok) ref.current?.reset(); }, [state]);
+  useEffect(() => { setAmount(toInput(suggestCents)); }, [suggestCents]);
   return (
     <form ref={ref} action={action} className="space-y-2 rounded-xl bg-brand-50/60 p-3 ring-1 ring-brand-100">
       <input type="hidden" name="invoiceId" value={invoiceId} />
@@ -30,13 +27,6 @@ export function AddPayment({ t, invoiceId, suggestCents, today, skonto }: {
         <input name="amount" inputMode="decimal" dir="ltr" value={amount} onChange={(e) => setAmount(e.target.value)} className="input num" aria-label={t.pay.amount} required />
         <input name="date" type="date" defaultValue={today} max={today} className="input" aria-label={t.common.date} required />
       </div>
-      {skonto && (
-        <label className="flex cursor-pointer items-start gap-2 rounded-lg bg-amber-50 p-2 text-sm ring-1 ring-amber-200">
-          <input type="checkbox" name="withSkonto" checked={withSkonto} onChange={(e) => setWithSkonto(e.target.checked)} className="mt-0.5 h-5 w-5 accent-brand-600" />
-          <span><span className="font-semibold">{t.pay.withSkonto}</span>
-            <span className="block text-xs text-amber-800">{t.pay.skontoUntil} {skonto.deadline} · {t.pay.withSkontoHint}</span></span>
-        </label>
-      )}
       <select name="method" defaultValue="BANK" className="input" aria-label={t.pay.method}>
         {(["CASH", "BANK", "CARD", "ONLINE"] as const).map((m) => <option key={m} value={m}>{t.pay.methods[m]}</option>)}
       </select>

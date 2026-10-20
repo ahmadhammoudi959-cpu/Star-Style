@@ -52,7 +52,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             <div className="w-40"><InvoiceOp t={t} id={inv.id} op="delete" label={t.common.delete} icon="trash" tone="btn-danger" confirmText={t.common.delete + "?"} /></div></>} />
         <DocEditor t={t} kind="invoice" customers={customers} options={options} intl={intl} initial={{
           id: inv.id, customerId: inv.customerId, date: todayIso(), channel: inv.channel, deliveryDate: inv.deliveryDate ?? "", discountBp: inv.discountBp,
-          skontoBp: inv.skontoBp, skontoDays: inv.skontoDays, notes: inv.notes,
+          notes: inv.notes,
           initialPaymentCents: inv.initialPaymentCents, initialPaymentMethod: inv.initialPaymentMethod,
           installments: [...inv.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map((r) => ({ dueDate: r.dueDate, amountCents: r.amountCents })), retentionOfTitle: inv.retentionOfTitle, offerId: inv.offerId, replacesInvoiceId: inv.replacesInvoiceId,
           lines: lines.map((l) => ({ variantId: l.variantId, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, vatRateBp: l.vatRateBp })),

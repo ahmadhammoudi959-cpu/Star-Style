@@ -6,8 +6,7 @@ import { Icon } from "@/components/Icon";
 import { Thumb } from "@/components/Thumb";
 import { VariantPicker, optionLabel, type PickerOption } from "@/components/VariantPicker";
 import { bpToPercent, formatCents, parseMoney, parsePercentToBp } from "@/lib/money";
-import { computeTotals, determineTaxMode, effectiveRateBp, skontoAmount } from "@/lib/tax";
-import { addDaysIso, formatDate } from "@/lib/dates";
+import { computeTotals, determineTaxMode, effectiveRateBp } from "@/lib/tax";
 import type { Dict } from "@/i18n/de";
 import { PlanEditor, fromPlanRows, toPlanRows, type PlanRow } from "./PlanEditor";
 
@@ -16,7 +15,7 @@ export type SaleOption = PickerOption & { wholesalePriceCents: number; retailPri
 export type EditorLine = { variantId: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; vatRateBp: number };
 export type EditorInitial = {
   id?: string; customerId: string; date: string; validUntil?: string; channel?: string; deliveryDate?: string;
-  discountBp: number; skontoBp?: number; skontoDays?: number; notes: string; retentionOfTitle?: boolean;
+  discountBp: number; notes: string; retentionOfTitle?: boolean;
   offerId?: string | null; replacesInvoiceId?: string | null; lines: EditorLine[];
   initialPaymentCents?: number; initialPaymentMethod?: "CASH" | "BANK" | "CARD" | "ONLINE" | null;
   installments?: { dueDate: string; amountCents: number }[];
@@ -66,10 +65,6 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
   const planOk = !planOn || (plan.length > 0 && plan.every((r) => r.amountCents > 0 && r.dueDate) && plan.reduce((s, r) => s + r.amountCents, 0) === gross);
   const overLimit = kind === "invoice" && customer?.creditLimitCents != null && (customer.openCents ?? 0) + gross - initialPaid > customer.creditLimitCents;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
-  const [skontoPct, setSkontoPct] = useState(initial.skontoBp ? bpToPercent(initial.skontoBp) : "");
-  const [skontoDays, setSkontoDays] = useState(initial.skontoDays ? String(initial.skontoDays) : "");
-  const skontoBp = parsePercentToBp(skontoPct) ?? 0;
-  const skontoD = Math.max(0, parseInt(skontoDays) || 0);
 
   const pick = (o: PickerOption) => {
     const s = o as SaleOption;
@@ -209,14 +204,7 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
           <Field label={t.sales.docDiscount}><input inputMode="decimal" dir="ltr" value={docDisc} onChange={(e) => setDocDisc(e.target.value)} className="input num" placeholder="0" /></Field>
           {kind === "invoice" && (
             <>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label={t.sales.skonto}>
-                  <input inputMode="decimal" dir="ltr" value={skontoPct} onChange={(e) => setSkontoPct(e.target.value)} className="input num" placeholder="2" />
-                  <input type="hidden" name="skontoBp" value={skontoBp} />
-                </Field>
-                <Field label={t.sales.skontoDays}><input name="skontoDays" type="number" min={0} value={skontoDays} onChange={(e) => setSkontoDays(e.target.value)} className="input num" placeholder="7" /></Field>
-              </div>
-              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold sm:col-span-2">
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
                 <input type="checkbox" name="retentionOfTitle" defaultChecked={initial.retentionOfTitle ?? true} className="h-5 w-5 accent-brand-600" />{t.sales.retention}
               </label>
             </>
@@ -264,15 +252,6 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
               <div className="mt-2 flex items-center justify-between rounded-xl bg-brand-600 px-4 py-3 text-white shadow-card">
                 <span className="font-bold">{t.sales.gross}</span><span className="num text-xl font-bold">{formatCents(totals.grossCents, intl)}</span>
               </div>
-              {kind === "invoice" && skontoBp > 0 && skontoD > 0 && totals.grossCents > 0 && (
-                <div className="mt-2 animate-rise rounded-xl bg-amber-50 px-4 py-3 ring-1 ring-amber-200">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-amber-900">{t.sales.skontoPreview.replace("{date}", formatDate(addDaysIso(today, skontoD), "de-DE"))}</span>
-                    <span className="num text-lg font-bold text-amber-900">{formatCents(skontoAmount(totals.grossCents, skontoBp), intl)}</span>
-                  </div>
-                  <div className="text-xs text-amber-800">{t.sales.skontoSave} {formatCents(totals.grossCents - skontoAmount(totals.grossCents, skontoBp), intl)} ({skontoPct} %)</div>
-                </div>
-              )}
               {mode === "EU_B2C" && <p className="pt-2 text-xs text-ink-soft">{t.sales.oss}</p>}
               {initialPaid > 0 && <Row k={`${t.pay.paid} (${t.pay.methods[payMethod]})`} v={formatCents(initialPaid, intl)} />}
               {initialPaid > 0 && <Row k={t.pay.open} v={formatCents(gross - initialPaid, intl)} />}

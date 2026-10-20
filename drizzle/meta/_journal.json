@@ -57,6 +57,13 @@
       "when": 1792486576712,
       "tag": "0007_payment_skonto",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792487651429,
+      "tag": "0008_remove_skonto",
+      "breakpoints": true
     }
   ]
 }

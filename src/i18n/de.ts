@@ -77,8 +77,7 @@ const de = {
   sales: {
     invoice: "Rechnung", offer: "Angebot", title: "Verkauf", newOffer: "Neues Angebot", newInvoice: "Direkt-Rechnung", offers: "Angebote", invoices: "Rechnungen",
     customer: "Kunde", pickCustomer: "Kunde wählen", lines: "Positionen", price: "Einzelpreis netto", lineDiscount: "Rabatt %",
-    skontoPreview: "Bei Zahlung bis {date}", skontoSave: "spart",
-    docDiscount: "Gesamtrabatt %", skonto: "Skonto %", skontoDays: "Skonto-Tage", subtotal: "Zwischensumme", discount: "Rabatt",
+    docDiscount: "Gesamtrabatt %", subtotal: "Zwischensumme", discount: "Rabatt",
     net: "Netto", vat: "USt.", gross: "Gesamt", validUntil: "Gültig bis", channel: "Verkaufsweg",
     channels: { STORE: "Laden / direkt", BRAND_SHOP: "Marken-Shop", GENERAL_SHOP: "Allgemeiner Shop" },
     status: { DRAFT: "Entwurf", SENT: "Gesendet", ACCEPTED: "Angenommen", REJECTED: "Abgelehnt", EXPIRED: "Abgelaufen", CONVERTED: "In Rechnung", ISSUED: "Ausgestellt", CANCELLED: "Storniert" },
@@ -95,7 +94,6 @@ const de = {
     retention: "Eigentumsvorbehalt", reservation: "Reservierung",
   },
   pay: {
-    skontoGranted: "Skonto", withSkonto: "Mit Skonto bezahlt", withSkontoHint: "Die Differenz wird als Skonto gebucht, die Rechnung ist erledigt", skontoUntil: "Skonto bis", noSkonto: "Diese Rechnung hat kein Skonto", skontoExpired: "Die Skontofrist ist abgelaufen", skontoAmount: "Der Betrag muss mindestens sein",
     amountInvalid: "Bitte einen gültigen Betrag eingeben", planInvalid: "Ratenplan unvollständig (Datum und Betrag prüfen)", planOrder: "Raten bitte nach Datum sortieren", reason: "Bitte einen Grund angeben", notOverdue: "Nichts überfällig – keine Mahnung nötig", notPayable: "Für diese Rechnung kann keine Zahlung erfasst werden", alreadyCancelled: "Schon storniert", dunningsDone: "Erstellte Mahnungen", schedule: "Zahlungsplan", payments: "Eingegangene Zahlungen", noPayments: "Noch keine Zahlung", fee: "Gebühr", newDue: "Neue Frist", editPlan: "Ratenplan ändern", kpiOpen: "Offene Forderungen", openInvoices: "offene Rechnungen", days: "Tage",
     title: "Zahlungen", receivables: "Offene Posten", paid: "Bezahlt", open: "Offen", overdue: "Überfällig", credit: "Guthaben",
     status: { PAID: "Bezahlt", OPEN: "Offen", PARTIAL: "Teilweise bezahlt", OVERDUE: "Überfällig", CREDIT: "Guthaben – erstatten" },

@@ -135,33 +135,6 @@ function computeGrossTotals(lines: LineIn[], documentDiscountBp: number): Totals
   return { lines: out, subtotalCents: netCents + discountNet, discountCents: discountNet, netCents, vatByRate, vatCents, grossCents };
 }
 
-/** Betrag bei Zahlung innerhalb der Skontofrist */
-export function skontoAmount(grossCents: number, skontoBp: number) {
-  return grossCents - applyBp(grossCents, skontoBp);
-}
-
-/** Höchster Skonto-Abzug (brutto) */
-export function skontoMax(grossCents: number, skontoBp: number) {
-  return grossCents - skontoAmount(grossCents, skontoBp);
-}
-
-/**
- * Skonto (brutto) anteilig auf die Steuersätze der Rechnung verteilen (Erlösschmälerung + USt-Korrektur).
- * Rest-Cent geht an die größte Gruppe, damit die Summe exakt stimmt.
- */
-export function skontoSplit(skontoGross: number, breakdown: { rateBp: number; netCents: number; vatCents: number }[]) {
-  const groups = breakdown.map((g) => ({ rateBp: g.rateBp, gross: g.netCents + g.vatCents })).filter((g) => g.gross > 0);
-  const total = groups.reduce((s, g) => s + g.gross, 0);
-  if (!total || skontoGross <= 0) return [];
-  const parts = groups.map((g) => ({ rateBp: g.rateBp, gross: Math.floor((skontoGross * g.gross) / total) }));
-  const rest = skontoGross - parts.reduce((s, g) => s + g.gross, 0);
-  if (rest) parts.reduce((a, b) => (b.gross > a.gross ? b : a)).gross += rest;
-  return parts.filter((p) => p.gross > 0).map((p) => {
-    const vatCents = Math.round((p.gross * p.rateBp) / (10000 + p.rateBp));
-    return { rateBp: p.rateBp, netCents: p.gross - vatCents, vatCents };
-  });
-}
-
 /** Pflichthinweise auf der Rechnung je Steuerbehandlung (deutsch, rechtlich maßgeblich). */
 export function legalNotes(mode: TaxMode, o: { ossCountry?: string | null; retentionOfTitle?: boolean }): string[] {
   const n: string[] = [];

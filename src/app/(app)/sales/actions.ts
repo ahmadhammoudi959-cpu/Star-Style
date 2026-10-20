@@ -67,8 +67,8 @@ export async function convertOfferAction(_: DocState, fd: FormData): Promise<Doc
 const InvoiceIn = z.object({
   id: z.string().optional(), customerId: z.string().min(1), offerId: z.string().optional(), replacesInvoiceId: z.string().optional(),
   channel: z.enum(["STORE", "BRAND_SHOP", "GENERAL_SHOP"]), deliveryDate: date.or(z.literal("")).default(""),
-  discountBp: z.coerce.number().int().min(0).max(10000), skontoBp: z.coerce.number().int().min(0).max(10000).default(0),
-  skontoDays: z.coerce.number().int().min(0).max(365).default(0), notes: z.string().max(2000).default(""),
+  discountBp: z.coerce.number().int().min(0).max(10000),
+  notes: z.string().max(2000).default(""),
   retentionOfTitle: z.string().optional().transform((v) => v === "on"), intent: z.enum(["save", "issue"]).default("save"), lines,
   initialPaymentCents: z.coerce.number().int().min(0).default(0),
   initialPaymentMethod: z.enum(["CASH", "BANK", "CARD", "ONLINE"]).default("CASH"),

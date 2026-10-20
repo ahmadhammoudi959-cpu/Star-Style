@@ -185,7 +185,7 @@ export async function offerToInvoice(offerId: string, userId?: string) {
 
 export type InvoiceDraftInput = {
   id?: string; customerId: string; offerId?: string | null; replacesInvoiceId?: string | null; channel: Channel;
-  deliveryDate?: string | null; discountBp: number; skontoBp?: number; skontoDays?: number; notes: string; lines: LineInput[];
+  deliveryDate?: string | null; discountBp: number; notes: string; lines: LineInput[];
   retentionOfTitle?: boolean;
   /** Zahlung bei Ausstellung (z. B. bar im Laden oder Anzahlung) */
   initialPaymentCents?: number; initialPaymentMethod?: (typeof schema.paymentMethod.enumValues)[number] | null;
@@ -208,7 +208,7 @@ async function createDraft(tx: Tx, input: InvoiceDraftInput) {
   const values = {
     customerId: input.customerId, offerId: input.offerId ?? null, replacesInvoiceId: input.replacesInvoiceId ?? null,
     channel: input.channel, deliveryDate: input.deliveryDate || null, discountBp: input.discountBp,
-    skontoBp: input.skontoBp ?? 0, skontoDays: input.skontoDays ?? 0, notes: input.notes, taxMode: t.mode, ossCountry: t.ossCountry,
+    notes: input.notes, taxMode: t.mode, ossCountry: t.ossCountry,
     subtotalCents: t.totals.subtotalCents, discountCents: t.totals.discountCents, netCents: t.totals.netCents,
     vatCents: t.totals.vatCents, grossCents: t.totals.grossCents, vatBreakdown: t.totals.vatByRate,
     retentionOfTitle: input.retentionOfTitle ?? true,
@@ -388,7 +388,7 @@ export async function startCorrection(invoiceId: string, userId?: string) {
     if (open) return open.id;
     const id = await createDraft(tx, {
       customerId: inv.customerId, replacesInvoiceId: inv.id, channel: inv.channel, deliveryDate: inv.deliveryDate,
-      discountBp: inv.discountBp, skontoBp: inv.skontoBp, skontoDays: inv.skontoDays, notes: inv.notes, retentionOfTitle: inv.retentionOfTitle,
+      discountBp: inv.discountBp, notes: inv.notes, retentionOfTitle: inv.retentionOfTitle,
       installments: inv.installments.map((r) => ({ dueDate: r.dueDate, amountCents: r.amountCents })),
       pricesGross: inv.pricesGross, externalOrderId: inv.externalOrderId,
       taxOverride: inv.taxLocked ? { mode: inv.taxMode, ossCountry: inv.ossCountry } : undefined,

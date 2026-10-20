@@ -35,7 +35,7 @@ export default async function WriteOffDetail({ params }: { params: Promise<{ id:
           </div>
         </header>
         <p className="mb-4 text-sm"><b>Grund:</b> {(await import("@/i18n/de")).default.writeOff.reasons[wo.reason]}{wo.note && <> · {wo.note}</>}</p>
-        <table className="tbl">
+        <div className="table-wrap"><table className="tbl">
           <thead><tr><th>Artikel</th><th>Art.-Nr.</th><th className="!text-end">Menge</th><th className="!text-end">EK/Stück</th><th className="!text-end">Wert</th></tr></thead>
           <tbody>{wo.lines.map((l) => (
             <tr key={l.id}>
@@ -47,7 +47,7 @@ export default async function WriteOffDetail({ params }: { params: Promise<{ id:
             </tr>
           ))}</tbody>
           <tfoot><tr><td colSpan={4} className="px-3 py-3 text-end font-bold">Gesamtwert (Einkauf netto)</td><td className="num px-3 py-3 text-end font-bold">{formatCents(total)}</td></tr></tfoot>
-        </table>
+        </table></div>
         {wo.photoFileId && (
           <div className="mt-6">
             <p className="mb-2 text-sm font-semibold">Fotonachweis</p>

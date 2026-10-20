@@ -79,8 +79,7 @@ const ar: Dict = {
   sales: {
     invoice: "فاتورة", offer: "عرض سعر", title: "المبيعات", newOffer: "عرض سعر جديد", newInvoice: "فاتورة مباشرة", offers: "عروض الأسعار", invoices: "الفواتير",
     customer: "الزبون", pickCustomer: "اختار الزبون", lines: "البنود", price: "سعر القطعة بدون ضريبة", lineDiscount: "خصم %",
-    skontoPreview: "إذا دفع لحد {date}", skontoSave: "بيوفّر",
-    docDiscount: "خصم على كل الفاتورة %", skonto: "خصم الدفع المبكر %", skontoDays: "خلال كم يوم", subtotal: "المجموع قبل الخصم", discount: "الخصم",
+    docDiscount: "خصم على كل الفاتورة %", subtotal: "المجموع قبل الخصم", discount: "الخصم",
     net: "الصافي", vat: "الضريبة", gross: "المجموع الكلي", validUntil: "صالح لغاية", channel: "مصدر البيع",
     channels: { STORE: "المحل / مباشر", BRAND_SHOP: "متجر البراند", GENERAL_SHOP: "المتجر العام" },
     status: { DRAFT: "مسودة", SENT: "مبعوت", ACCEPTED: "مقبول", REJECTED: "مرفوض", EXPIRED: "منتهي", CONVERTED: "صار فاتورة", ISSUED: "صادرة", CANCELLED: "ملغاة" },
@@ -97,7 +96,6 @@ const ar: Dict = {
     retention: "الاحتفاظ بالملكية", reservation: "الحجز",
   },
   pay: {
-    skontoGranted: "خصم دفع مبكر", withSkonto: "دفع خلال مدة خصم الدفع المبكر", withSkontoHint: "الباقي بيتسجّل كخصم وبتتسكّر الفاتورة", skontoUntil: "خصم الدفع المبكر لحد", noSkonto: "هالفاتورة ما فيها خصم دفع مبكر", skontoExpired: "انتهت مدة خصم الدفع المبكر", skontoAmount: "المبلغ لازم يكون على الأقل",
     amountInvalid: "اكتب مبلغ صحيح", planInvalid: "خطة الأقساط ناقصة، شيك التاريخ والمبلغ", planOrder: "رتب الأقساط حسب التاريخ", reason: "اكتب السبب", notOverdue: "ما في شي متأخر، ما بدها تذكير", notPayable: "ما فيك تسجل دفعة على هالفاتورة", alreadyCancelled: "ملغاة من قبل", dunningsDone: "رسائل التذكير يلي انعملت", schedule: "جدول الدفع", payments: "الدفعات الواصلة", noPayments: "لسا ما في ولا دفعة", fee: "رسوم", newDue: "المهلة الجديدة", editPlan: "تعديل خطة الأقساط", kpiOpen: "ديون عند الزبائن", openInvoices: "فواتير مفتوحة", days: "يوم",
     title: "الدفعات", receivables: "المستحقات", paid: "مدفوع", open: "باقي", overdue: "متأخر", credit: "رصيد للزبون",
     status: { PAID: "مدفوع", OPEN: "مو مدفوع", PARTIAL: "مدفوع جزئياً", OVERDUE: "متأخر", CREDIT: "رصيد للزبون، لازم يرجعله" },
