@@ -44,6 +44,7 @@ Next.js 15 (App Router, Server Actions) · TypeScript strict · Drizzle ORM + Po
   - Rechnungs-PDF zeigt bei Ausstellung erhaltene Zahlungen und den Ratenplan; es wird beim ersten Abruf archiviert und danach nie neu erzeugt.
   - Keine Mahngebühren (Entscheidung Inhaber). Feld `fee_cents` bleibt für später.
   - Kein Skonto (Entscheidung Inhaber, zu kompliziert für den Nutzer) – wurde mit Migration 0008 komplett entfernt.
+  - Kein Löschen/Ausblenden-Knopf für Kunden, Lieferanten, Artikel (Entscheidung Inhaber: Fehlbedienung vermeiden). Felder `active` bleiben, aber ohne Oberfläche.
 - [x] **4 Shopify** (zwei Shops = Kanäle BRAND_SHOP / GENERAL_SHOP, `/shops`):
   - Zugang: App im Shopify Dev Dashboard, Token per Client-Credentials (24 h, automatisch erneuert) – oder ältere Custom App mit festem Token. Geheimnisse AES-GCM-verschlüsselt in `shops` (Schlüssel aus SESSION_SECRET → SESSION_SECRET nie ändern, sonst neu eintragen). Admin GraphQL `SHOPIFY_API_VERSION` (Standard 2026-07).
   - Bestand: unser System ist die Wahrheit. `bookMovement` und Reservierungen schreiben `stock_dirty`; Hintergrund-Abgleich (`src/instrumentation.ts` → `worker.ts`) meldet alle 20 s per `inventorySetQuantities` (mit `@idempotent`, `changeFromQuantity: null`), alle 5 min Vollvergleich + Bestellungen abholen. Verfügbar = Lager − Reservierungen − Sicherheitsbestand.
