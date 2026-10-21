@@ -24,8 +24,10 @@ export async function setupSteps() {
       exists(select 1 from goods_receipts) as receive,
       exists(select 1 from customers) as customer,
       exists(select 1 from invoices where number is not null and kind = 'INVOICE') as invoice,
-      exists(select 1 from payments) as payment`)).rows[0] ?? {};
+      exists(select 1 from payments) as payment,
+      coalesce((select show_guide from company_settings limit 1), false) as show_guide`)).rows[0] ?? {};
   const steps = STEP_KEYS.map((key, i) => ({ key, n: i + 1, href: STEP_HREF[key], nav: STEP_NAV[key], done: Boolean(r[key]) }));
   const next = steps.find((s) => !s.done)?.key ?? null;
-  return { steps, next, doneCount: steps.filter((s) => s.done).length, allDone: !next };
+  // allDone = Anleitung ausblenden: alles erledigt UND nicht in den Einstellungen dauerhaft eingeschaltet
+  return { steps, next, doneCount: steps.filter((s) => s.done).length, allDone: !next && !r.show_guide, showGuide: Boolean(r.show_guide) };
 }

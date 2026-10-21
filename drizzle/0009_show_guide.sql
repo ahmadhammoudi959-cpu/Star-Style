@@ -1,0 +1,1 @@
+ALTER TABLE "company_settings" ADD COLUMN "show_guide" boolean DEFAULT false NOT NULL;

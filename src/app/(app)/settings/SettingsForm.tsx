@@ -51,6 +51,13 @@ export function SettingsForm({ t, s }: { t: Dict; s: Record<string, string | num
         <Field label={t.settings.offerDays}><input name="offerValidityDays" type="number" min={1} defaultValue={v("offerValidityDays") || "14"} className="input num" /></Field>
         <Field label={t.settings.footer} className="md:col-span-2"><textarea name="invoiceFooter" rows={3} defaultValue={v("invoiceFooter")} className="input" /></Field>
       </section>
+      <section className="card flex items-start gap-3 p-5 animate-rise">
+        <input id="showGuide" type="checkbox" name="showGuide" defaultChecked={v("showGuide") === "true" || v("showGuide") === "1"} className="mt-1 h-5 w-5 accent-brand-600" />
+        <label htmlFor="showGuide" className="cursor-pointer">
+          <span className="block font-bold">{t.setup1.showGuide}</span>
+          <span className="block text-sm text-ink-soft">{t.setup1.showGuideHint}</span>
+        </label>
+      </section>
       <section id="datev" className="card grid scroll-mt-6 gap-4 p-5 md:grid-cols-3 animate-rise">
         <div className="flex flex-wrap items-center justify-between gap-2 md:col-span-3">
           <h2 className="text-lg font-bold">{t.settings.datev}</h2>

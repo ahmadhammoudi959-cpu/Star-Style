@@ -70,6 +70,7 @@ export const companySettings = pgTable("company_settings", {
   defaultPaymentDays: integer("default_payment_days").notNull().default(14),
   offerValidityDays: integer("offer_validity_days").notNull().default(14),
   invoiceFooter: text("invoice_footer").notNull().default(""),
+  showGuide: boolean("show_guide").notNull().default(false), // „Erste Schritte“ auch nach Abschluss anzeigen (z. B. zum Einarbeiten)
   // Steuerberater / DATEV
   datevConsultant: integer("datev_consultant"),
   datevClient: integer("datev_client"),

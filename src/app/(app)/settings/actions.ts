@@ -22,6 +22,7 @@ const S = z.object({
   chartOfAccounts: z.enum(["SKR03", "SKR04"]).default("SKR03"),
   fiscalYearStartMonth: z.coerce.number().int().min(1).max(12).default(1),
   advisorEmail: str(),
+  showGuide: z.string().optional().transform((v) => v === "on"),
 });
 
 export async function saveSettings(_: SettingsState, fd: FormData): Promise<SettingsState> {

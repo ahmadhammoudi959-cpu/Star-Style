@@ -64,6 +64,13 @@
       "when": 1792487651429,
       "tag": "0008_remove_skonto",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792577648430,
+      "tag": "0009_show_guide",
+      "breakpoints": true
     }
   ]
 }

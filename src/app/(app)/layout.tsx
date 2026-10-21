@@ -32,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const setup = await setupSteps();
   if (!setup.allDone) for (const s of setup.steps) {
     const it = items.find((i) => i.href === s.nav);
-    if (it && !s.done) it.step = { n: s.n, next: s.key === setup.next };
+    if (it && (!s.done || setup.showGuide)) it.step = { n: s.n, next: s.key === setup.next };
   }
   const mobile = [items[0], items[1], items[2], items[8], items[6]];
   return (
