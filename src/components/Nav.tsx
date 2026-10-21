@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "./Icon";
 
-export type NavItem = { href: string; label: string; icon: IconName; soon?: boolean };
+export type NavItem = { href: string; label: string; icon: IconName; soon?: boolean; step?: { n: number; next: boolean } };
 
 export function SideNav({ items, soonLabel }: { items: NavItem[]; soonLabel: string }) {
   const path = usePathname();
@@ -21,6 +21,9 @@ export function SideNav({ items, soonLabel }: { items: NavItem[]; soonLabel: str
           <Link key={it.href} href={it.href}
             className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? "border-s-4 border-accent-500 bg-white text-brand-700 shadow-card" : "text-white/80 hover:bg-white/10 hover:text-white"}`}>
             <Icon name={it.icon} />{it.label}
+            {it.step && (
+              <span title={String(it.step.n)} className={`ms-auto grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${it.step.next ? "bg-accent-500 text-white animate-pulse" : active ? "bg-brand-100 text-brand-700" : "bg-white/15 text-white"}`}>{it.step.n}</span>
+            )}
           </Link>
         );
       })}

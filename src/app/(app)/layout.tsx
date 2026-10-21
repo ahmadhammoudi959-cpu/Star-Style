@@ -4,6 +4,7 @@ import { BottomNav, SideNav, type NavItem } from "@/components/Nav";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Icon } from "@/components/Icon";
 import { logout } from "@/app/actions-auth";
+import { setupSteps } from "@/lib/onboarding";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/suppliers", label: t.nav.suppliers, icon: "truck" },
     { href: "/settings", label: t.nav.settings, icon: "settings" },
   ];
+  // Nummern der ersten Schritte am Menü, solange noch nicht alles erledigt ist
+  const setup = await setupSteps();
+  if (!setup.allDone) for (const s of setup.steps) {
+    const it = items.find((i) => i.href === s.nav);
+    if (it && !s.done) it.step = { n: s.n, next: s.key === setup.next };
+  }
   const mobile = [items[0], items[1], items[2], items[8], items[6]];
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[15.625rem_1fr]">

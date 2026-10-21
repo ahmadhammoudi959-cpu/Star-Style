@@ -12,6 +12,9 @@ const de = {
     home: "Start", products: "Artikel", receive: "Wareneingang", stock: "Lager", writeOffs: "Verluste",
     receivables: "Offene Posten", customers: "Kunden", suppliers: "Lieferanten", settings: "Einstellungen", sales: "Verkauf", reports: "Berichte", expenses: "Ausgaben", insights: "Hinweise", shops: "Shops", ask: "Frag dein Geschäft",
   },
+  setup1: {
+    title: "Erste Schritte", intro: "Einfach der Reihe nach. Jeder erledigte Schritt bekommt ein ✓. Wenn alles erledigt ist, verschwindet diese Liste.", progress: "{d} von {n}", start: "Hier starten", done: "Erledigt", company: "Firmendaten ergänzen", companyHint: "Adresse, Steuernummer, Bank und Logo", supplier: "Ersten Lieferanten anlegen", supplierHint: "Bei wem du die Ware kaufst", product: "Artikel anlegen", productHint: "Foto, Name, Preise und vorhandene Menge", receive: "Wareneingang buchen", receiveHint: "Jede neue Lieferung vom Lieferanten", customer: "Ersten Kunden anlegen", customerHint: "Salon oder Person, die bei dir kauft", invoice: "Erste Rechnung schreiben", invoiceHint: "Oder ein Angebot – danach drucken", payment: "Erste Zahlung erfassen", paymentHint: "Wenn der Kunde bezahlt",
+  },
   home: {
     greeting: "Hallo", subtitle: "Was möchtest du tun?",
     sell: "Verkaufen", sellHint: "Angebot oder Rechnung",

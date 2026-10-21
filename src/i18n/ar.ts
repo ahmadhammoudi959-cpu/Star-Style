@@ -14,6 +14,9 @@ const ar: Dict = {
     home: "الرئيسية", products: "المنتجات", receive: "إدخال بضاعة", stock: "المخزون", writeOffs: "التالف",
     receivables: "المستحقات", customers: "الزبائن", suppliers: "الموردين", settings: "الإعدادات", sales: "المبيعات", reports: "التقارير", expenses: "المصاريف", insights: "تنبيهات ذكية", shops: "المتاجر", ask: "اسأل عن شغلك",
   },
+  setup1: {
+    title: "خطوات البداية", intro: "اتبع الأرقام بالترتيب. كل خطوة بتخلص، بتصير علامة ✓ جنبها. لما تخلص كلهن، بتختفي هالقائمة.", progress: "{d} من {n}", start: "ابدأ هون", done: "تمام", company: "كمّل بيانات الشركة", companyHint: "العنوان، الرقم الضريبي، البنك والشعار", supplier: "فوّت أول مورد", supplierHint: "الشركة يلي بتشتري منها البضاعة", product: "فوّت المنتجات", productHint: "صورة، اسم، سعر، والكمية الموجودة هلق", receive: "سجّل البضاعة الجاية", receiveHint: "كل شحنة جديدة بتوصل من المورد", customer: "فوّت أول زبون", customerHint: "الصالون أو الشخص يلي بيشتري منك", invoice: "اعمل أول فاتورة", invoiceHint: "أو عرض سعر، وبعدين اطبعها", payment: "سجّل أول دفعة", paymentHint: "لما يدفعلك الزبون",
+  },
   home: {
     greeting: "أهلاً", subtitle: "شو بدك تعمل اليوم؟",
     sell: "بيع", sellHint: "عرض سعر أو فاتورة",

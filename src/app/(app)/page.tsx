@@ -8,11 +8,13 @@ import { loadInsights } from "@/lib/insights-data";
 import { aiConfigured } from "@/lib/ai/client";
 import { formatCents } from "@/lib/money";
 import { daysBetween, formatDate, todayIso } from "@/lib/dates";
+import { setupSteps } from "@/lib/onboarding";
+import { fill } from "@/i18n";
 
 export default async function Home() {
   const session = await requireSession();
   const { t, intl } = await getI18n();
-  const [stats, al, open, ins] = await Promise.all([dashboardStats(), alerts(), openItems(), loadInsights()]);
+  const [stats, al, open, ins, setup] = await Promise.all([dashboardStats(), alerts(), openItems(), loadInsights(), setupSteps()]);
   const ai = aiConfigured();
   const debts = open.filter((r) => r.state.openCents > 0);
   const rOpen = debts.reduce((s, r) => s + r.state.openCents, 0);
@@ -35,6 +37,41 @@ export default async function Home() {
         <h1 className="text-3xl font-bold tracking-tight">{t.home.greeting}, {session.name.split(" ")[0]}</h1>
         <p className="text-ink-soft">{t.home.subtitle}</p>
       </div>
+
+      {!setup.allDone && (
+        <section className="card animate-rise overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/5 bg-gradient-to-l from-brand-50 to-white p-5">
+            <div>
+              <h2 className="text-lg font-bold">{t.setup1.title}</h2>
+              <p className="text-sm text-ink-soft">{t.setup1.intro}</p>
+            </div>
+            <div className="min-w-[10rem]">
+              <div className="mb-1 text-end text-sm font-bold text-brand-700">{fill(t.setup1.progress, { d: setup.doneCount, n: setup.steps.length })}</div>
+              <div className="h-2 overflow-hidden rounded-full bg-brand-100"><div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all" style={{ width: `${(setup.doneCount / setup.steps.length) * 100}%` }} /></div>
+            </div>
+          </div>
+          <ol className="grid gap-2 p-4 sm:grid-cols-2 xl:grid-cols-4">
+            {setup.steps.map((s) => {
+              const isNext = s.key === setup.next;
+              const k = s.key as keyof typeof t.setup1;
+              return (
+                <li key={s.key}>
+                  <Link href={s.href} className={`group flex h-full items-start gap-3 rounded-xl p-3 ring-1 transition hover:-translate-y-0.5 hover:shadow-card ${s.done ? "bg-emerald-50/60 ring-emerald-100" : isNext ? "bg-white ring-2 ring-accent-500 shadow-card" : "bg-white ring-black/5"}`}>
+                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-base font-bold ${s.done ? "bg-emerald-500 text-white" : isNext ? "bg-accent-500 text-white animate-pulse" : "bg-brand-50 text-brand-700"}`}>
+                      {s.done ? <Icon name="check" className="h-5 w-5" /> : s.n}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block font-bold ${s.done ? "text-emerald-800 line-through decoration-emerald-300" : ""}`}>{t.setup1[k]}</span>
+                      <span className="block text-xs text-ink-soft">{t.setup1[(s.key + "Hint") as keyof typeof t.setup1]}</span>
+                      {isNext && <span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-accent-600">{t.setup1.start} <Icon name="arrowRight" className="h-3.5 w-3.5 rtl:rotate-180" /></span>}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
 
       <div className="stagger grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {actions.map((a) => {

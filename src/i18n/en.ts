@@ -14,6 +14,9 @@ const en: Dict = {
     home: "Home", products: "Products", receive: "Goods in", stock: "Stock", writeOffs: "Losses",
     receivables: "Receivables", customers: "Customers", suppliers: "Suppliers", settings: "Settings", sales: "Sales", reports: "Reports", expenses: "Expenses", insights: "Insights", shops: "Shops", ask: "Ask your business",
   },
+  setup1: {
+    title: "Getting started", intro: "Follow the numbers in order. Each finished step gets a ✓. When everything is done, this list disappears.", progress: "{d} of {n}", start: "Start here", done: "Done", company: "Complete company details", companyHint: "Address, tax number, bank and logo", supplier: "Add your first supplier", supplierHint: "Who you buy goods from", product: "Add products", productHint: "Photo, name, prices and current stock", receive: "Book incoming goods", receiveHint: "Every new delivery from a supplier", customer: "Add your first customer", customerHint: "The salon or person buying from you", invoice: "Write your first invoice", invoiceHint: "Or a quote – then print it", payment: "Record your first payment", paymentHint: "When the customer pays",
+  },
   home: {
     greeting: "Hello", subtitle: "What would you like to do?",
     sell: "Sell", sellHint: "Quote or invoice",
