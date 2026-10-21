@@ -30,7 +30,7 @@ Next.js 15 (App Router, Server Actions) · TypeScript strict · Drizzle ORM + Po
 - Beträge in Arabisch: `.num` bekommt in RTL `direction: ltr` (globals.css), damit „-400,00 €“ richtig steht.
 - Markenfarben aus dem Logo (tailwind `brand` = Blau, `accent` = Rot, `navy` = Seitenleiste); Logo in `public/brand/` (hell/dunkel) und `assets/logo.jpg` (PDF-Fallback, wenn in Einstellungen keins hochgeladen). Erfolg-Status bewusst grün (emerald), nicht Markenfarbe.
 - PDF-Arabisch: `TFont` in pdf.ts – arabische Stücke mit IBM Plex Sans Arabic (ganz eingebettet + eigene Breitentabelle, sonst falsche Abstände), vereinfachter Bidi in `visualRuns` (getestet).
-- Oberfläche ab 768 px Breite auf 80 % (`html { font-size: 80% }`, Wunsch Inhaber) – darum Größen nur in rem, keine festen px-Werte. Handy bleibt 100 %.
+- Oberfläche ab 768 px Breite auf 90 % (`html { font-size: 90% }`, Wunsch Inhaber) – darum Größen nur in rem, keine festen px-Werte. Handy bleibt 100 %.
 - Grid-Spalten haben global `min-width: 0` (globals.css), sonst schieben Tabellen die Seite auf dem Handy seitlich.
 - E2E lokal: Sprach-Cookie heißt `ss_lang`; `next dev` und `next start` nie gleichzeitig im selben Ordner (teilen `.next`).
 - Formulare mit zwei Absende-Knöpfen: Absicht als **kontrolliertes** Hidden-Feld übergeben (`DocEditor`), nicht über name/value am Knopf – sonst geht der Wert verloren.
