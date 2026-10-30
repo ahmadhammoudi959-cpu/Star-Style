@@ -24,7 +24,8 @@ export type ProductDraft = {
   imageUrl: string | null; variants: DraftVariant[];
 };
 
-const COLOR = /^(farbe|farben|colou?rs?|kleur|couleur|لون|اللون)$/i;
+// Farb-Optionen (bei Haarfarben heißt die Option oft „Farbton“/„Nuance“) → Farbe; alle anderen Optionen → Größe
+const COLOR = /^(farbe|farben|farbton|farbtöne|nuance|nuancen|colou?rs?|shades?|tint|teinte|kleur|couleur|لون|اللون|الألوان)$/i;
 const clip = (s: string | null | undefined, n: number) => (s ?? "").trim().slice(0, n).trim();
 const isDefault = (o: { name: string; value: string }) => o.name === "Title" && o.value === "Default Title";
 
