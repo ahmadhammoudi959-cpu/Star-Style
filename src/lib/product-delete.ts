@@ -1,11 +1,12 @@
 import "server-only";
 /**
  * Artikel endgültig löschen – nur für Test- oder Fehleinträge (Wunsch Inhaber).
- * Erlaubt nur, solange der Artikel nie in Angebot, Rechnung oder Verlust stand und nicht mit einem Shop mit laufendem Abgleich verbunden ist.
+ * Erlaubt nur, solange der Artikel nie in Angebot, Rechnung oder Verlust stand und kein Shop dafür Bestand zeigt
+ * (verbunden mit laufendem Abgleich oder schon Bestand gemeldet).
  * Löscht mit: Varianten, Chargen, Lagerbewegungen, Wareneingangszeilen (leer gewordene Wareneingänge ganz), Reservierungen, Fotos.
  * Der Vorher-Stand bleibt im audit_log.
  */
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { audit } from "./stock";
 
@@ -37,9 +38,10 @@ export async function deleteProduct(id: string, userId?: string) {
         ...(await tx.select({ id: schema.writeOffLines.id }).from(schema.writeOffLines).where(inArray(schema.writeOffLines.variantId, vids)).limit(1)),
       ];
       if (used.length) throw new ProductDeleteError("productUsed");
+      // gesperrt, solange der Shop dafür Bestand zeigt: Abgleich läuft oder schon Bestand gemeldet (sonst bliebe der Shop-Bestand stehen)
       const linked = await tx.select({ ch: schema.shopVariants.channel }).from(schema.shopVariants)
         .innerJoin(schema.shops, eq(schema.shops.channel, schema.shopVariants.channel))
-        .where(and(inArray(schema.shopVariants.variantId, vids), eq(schema.shops.active, true))).limit(1);
+        .where(and(inArray(schema.shopVariants.variantId, vids), or(eq(schema.shops.active, true), gt(schema.shopVariants.lastPushedQty, 0)))).limit(1);
       if (linked.length) throw new ProductDeleteError("productLinked");
 
       const receiptIds = [...new Set((await tx.select({ r: schema.receiptLines.receiptId }).from(schema.receiptLines)
