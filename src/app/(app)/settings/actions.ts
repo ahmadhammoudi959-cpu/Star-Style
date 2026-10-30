@@ -66,16 +66,15 @@ export async function saveAccountsAction(_: SettingsState, fd: FormData): Promis
 export async function resetTestDataAction(_: SettingsState, fd: FormData): Promise<SettingsState> {
   const session = await requireSession();
   if (fd.get("confirm") !== "on") return { error: "needConfirm" };
+  let outcome = "1";
   try {
     await resetTestData(String(fd.get("expect") ?? ""), session.uid);
   } catch (e) {
-    if (e instanceof ResetError) {
-      revalidatePath("/settings"); // Liste neu zeigen (z. B. nach „resetChanged“)
-      return { error: e.code };
-    }
-    console.error(e);
-    return { error: "error" };
+    if (!(e instanceof ResetError)) { console.error(e); return { error: "error" }; }
+    // veraltete Vorschau: Karte mit neuer Liste zeigen; sonst verschwindet die Karte → Meldung oben auf der Seite
+    if (e.code === "resetChanged") { revalidatePath("/settings"); return { error: e.code }; }
+    outcome = e.code;
   }
   revalidatePath("/", "layout"); // alle Listen, Dashboard, „Erste Schritte“
-  redirect("/settings?reset=1");
+  redirect(`/settings?reset=${outcome}`);
 }

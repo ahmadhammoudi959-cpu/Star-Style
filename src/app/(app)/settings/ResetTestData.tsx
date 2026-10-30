@@ -6,19 +6,19 @@ import { Icon } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
 import type { ResetPreview } from "@/lib/test-reset-sql";
 
-const MAX_NAMES = 8;
+const MAX_CUSTOMERS = 8; // Kunden werden alle gelöscht → ein paar Namen reichen; Artikel und Lieferanten immer vollständig
 
 /** „Testdaten löschen“ – nur sichtbar, solange der Echtbetrieb nicht begonnen hat und es Testdaten gibt */
 export function ResetTestData({ t, p, fingerprint, syncOn }: { t: Dict; p: ResetPreview; fingerprint: string; syncOn: boolean }) {
   const [state, action] = useActionState(resetTestDataAction, undefined);
   const r = t.reset;
   const err = state?.error ? ((r as Record<string, unknown>)[state.error] as string | undefined) ?? t.common.error : undefined;
-  const names = (l: string[]) => (l.length > MAX_NAMES ? [...l.slice(0, MAX_NAMES), "…"] : l).join(" · ");
+  const names = (l: string[], max = Infinity) => (l.length > max ? [...l.slice(0, max), "…"] : l).join(" · ");
   const rows: { label: string; n: number; names?: string }[] = [
     { label: r.invoices, n: p.invoices }, { label: r.cancellations, n: p.cancellations }, { label: r.drafts, n: p.drafts },
     { label: r.offers, n: p.offers }, { label: r.payments, n: p.payments }, { label: r.receipts, n: p.receipts },
     { label: r.writeOffs, n: p.writeOffs }, { label: r.expenses, n: p.expenses },
-    { label: r.customers, n: p.customers, names: names(p.customerNames) },
+    { label: r.customers, n: p.customers, names: names(p.customerNames, MAX_CUSTOMERS) },
     { label: r.products, n: p.products.length, names: names(p.products) },
     { label: r.suppliers, n: p.suppliers.length, names: names(p.suppliers) },
     { label: r.units, n: p.units },
@@ -42,6 +42,7 @@ export function ResetTestData({ t, p, fingerprint, syncOn }: { t: Dict; p: Reset
         ))}
       </ul>
       <p className="mt-3 text-sm text-ink-soft">{r.keeps}</p>
+      <p className="mt-2 rounded-xl bg-brand-50/60 px-3 py-2 text-sm font-semibold text-brand-800 ring-1 ring-brand-100">{r.order}</p>
       {syncOn ? (
         <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">{r.syncOn}</p>
       ) : (

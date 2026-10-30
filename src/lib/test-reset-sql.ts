@@ -5,20 +5,20 @@
  * Gelöscht wird: alle Rechnungen (mit Positionen, Raten, Mahnungen), Zahlungen, Angebote (mit Reservierungen),
  * Verluste, Ausgaben, Wareneingänge, Lagerbewegungen und Chargen (Bestand → 0), alle Kunden (Kundennummern ab 1),
  * Nummernkreise (alle Belege wieder ab 0001) und die Dateien dieser Belege.
- * Dazu Testartikel = mit keinem Shop verbunden UND in einem Testbeleg benutzt, und Lieferanten, die nur in
- * Testdaten vorkommen. Shop-Bestellungen werden erst ab dem nächsten Einschalten des Abgleichs übernommen.
- * Bleiben: Artikel aus den Shops, Zuordnungen, Shops, Einstellungen, Benutzer, Protokolle.
+ * Dazu Testartikel = mit keinem Shop verbunden UND in Rechnung, Angebot oder Verlust benutzt (nur Wareneingang zählt
+ * nicht: das ist auch der Anfangsbestand echter Artikel), und Lieferanten, die nur in Testdaten vorkommen.
+ * Shop-Bestellungen werden erst ab dem nächsten Einschalten des Abgleichs übernommen.
+ * Bleiben: Artikel aus den Shops, andere Artikel ohne Verkauf, Zuordnungen, Shops, Einstellungen, Benutzer, Protokolle.
  */
 
-/** Testartikel: mit keinem Shop verbunden und in Rechnung, Angebot, Verlust oder Wareneingang benutzt */
+/** Testartikel: mit keinem Shop verbunden und in Rechnung, Angebot oder Verlust benutzt */
 const TEST_PRODUCTS = `
   select p.id from products p
   where not exists (select 1 from variants v join shop_variants sv on sv.variant_id = v.id where v.product_id = p.id)
     and exists (select 1 from variants v where v.product_id = p.id and (
          exists (select 1 from invoice_lines x where x.variant_id = v.id)
       or exists (select 1 from offer_lines x where x.variant_id = v.id)
-      or exists (select 1 from write_off_lines x where x.variant_id = v.id)
-      or exists (select 1 from receipt_lines x where x.variant_id = v.id)))`;
+      or exists (select 1 from write_off_lines x where x.variant_id = v.id)))`;
 
 /** Lieferanten, die nur in Testdaten vorkommen (Wareneingang, Ausgabe, Testartikel) und bei keinem anderen Artikel stehen */
 const TEST_SUPPLIERS = (testProducts: string) => `
@@ -28,14 +28,17 @@ const TEST_SUPPLIERS = (testProducts: string) => `
       or exists (select 1 from products p where p.supplier_id = s.id and p.id in (select id from ${testProducts})))
     and not exists (select 1 from products p where p.supplier_id = s.id and p.id not in (select id from ${testProducts}))`;
 
-/** Sperren: „live“ = Echtbetrieb hat begonnen (Monat abgeschlossen, Mappe an Steuerberater, Shop-Bestellung) → nie mehr */
+/**
+ * Sperren: „live“ = Echtbetrieb hat begonnen → nie mehr: Monat abgeschlossen, Monatsmappe erstellt oder
+ * Bestellung aus einem Shop übernommen (nur der Shop-Import setzt external_order_id; von Hand gewählter Kanal zählt nicht).
+ */
 export const STATUS_SQL = `
   select
     (exists (select 1 from period_locks) or exists (select 1 from advisor_exports)
-      or exists (select 1 from invoices where channel <> 'STORE')) as live,
+      or exists (select 1 from invoices where external_order_id is not null)) as live,
     exists (select 1 from shops where active) as sync_on`;
 
-/** Vorschau: was gelöscht würde (Zahlen + Namen). Auch in der Transaktion zum Vergleich mit dem, was der Nutzer gesehen hat. */
+/** Vorschau: was gelöscht würde (Zahlen + Namen + Prüfsumme der IDs). Auch in der Transaktion zum Vergleich mit dem, was der Nutzer gesehen hat. */
 export const PREVIEW_SQL = `
   with tp as (${TEST_PRODUCTS}), ts as (${TEST_SUPPLIERS("tp")})
   select
@@ -50,12 +53,26 @@ export const PREVIEW_SQL = `
     (select count(*) from customers)::int as customers,
     (select coalesce(sum(stock_qty) filter (where stock_qty > 0), 0) from variants)::int as units,
     (select count(*) from variants where stock_qty <> 0)::int as stocked,
+    (select count(*) from number_sequences)::int as sequences,
     (select coalesce(json_agg(c.name order by c.number), '[]'::json) from customers c) as customer_names,
     (select coalesce(json_agg(p.name_de order by p.name_de), '[]'::json) from products p where p.id in (select id from tp)) as products,
     (select coalesce(json_agg(s.name order by s.name), '[]'::json) from suppliers s where s.id in (select id from ts)) as suppliers,
     (select coalesce(json_agg(n order by n), '[]'::json) from (
        select number as n from invoices where number is not null union all select number from offers
-       union all select number from payments union all select number from goods_receipts union all select number from write_offs) d) as numbers`;
+       union all select number from payments union all select number from goods_receipts union all select number from write_offs) d) as numbers,
+    md5(concat_ws('#',
+      'p:' || coalesce((select string_agg(id, ',' order by id) from tp), ''),
+      's:' || coalesce((select string_agg(id, ',' order by id) from ts), ''),
+      'c:' || coalesce((select string_agg(id, ',' order by id) from customers), ''),
+      'i:' || coalesce((select string_agg(id, ',' order by id) from invoices), ''),
+      'o:' || coalesce((select string_agg(id, ',' order by id) from offers), ''),
+      'q:' || coalesce((select string_agg(id, ',' order by id) from payments), ''),
+      'g:' || coalesce((select string_agg(id, ',' order by id) from goods_receipts), ''),
+      'w:' || coalesce((select string_agg(id, ',' order by id) from write_offs), ''),
+      'e:' || coalesce((select string_agg(id, ',' order by id) from expenses), ''),
+      'v:' || coalesce((select string_agg(id || ':' || stock_qty::text, ',' order by id) from variants where stock_qty <> 0), ''),
+      'n:' || coalesce((select string_agg(kind::text || '-' || year::text || ':' || next::text, ',' order by kind, year) from number_sequences), '')
+    )) as digest`;
 
 /** Zuerst in der Transaktion: gleichzeitige Belegnummern warten, bis wir fertig sind */
 export const RESET_LOCK = `lock table number_sequences in exclusive mode`;
@@ -72,11 +89,8 @@ export const RESET_STATEMENTS: string[] = [
      union select file_id from expenses where file_id is not null
      union select image_file_id from products where image_file_id is not null and id in (select id from _reset_products)
      union select image_file_id from variants where image_file_id is not null and product_id in (select id from _reset_products)`,
-  // Shops sollen den neuen Bestand (0) erfahren, sobald der Abgleich läuft
-  `insert into stock_dirty (variant_id)
-     select id from variants where stock_qty <> 0 and product_id not in (select id from _reset_products)
-     on conflict (variant_id) do update set at = now()`,
-  `delete from stock_dirty where variant_id in (select id from variants where product_id in (select id from _reset_products))`,
+  // kein Shop läuft (geprüft); beim Einschalten gleicht der Abgleich ohnehin alle Bestände ab
+  `delete from stock_dirty`,
   `delete from payments`,
   `delete from invoices`, // + Positionen, Raten, Mahnungen (Kaskade)
   `delete from offers`, // + Positionen, Reservierungen
@@ -102,8 +116,8 @@ export const RESET_STATEMENTS: string[] = [
 
 export type ResetPreview = {
   invoices: number; cancellations: number; drafts: number; offers: number; payments: number; receipts: number;
-  writeOffs: number; expenses: number; customers: number; units: number; stocked: number;
-  customerNames: string[]; products: string[]; suppliers: string[]; numbers: string[];
+  writeOffs: number; expenses: number; customers: number; units: number; stocked: number; sequences: number;
+  customerNames: string[]; products: string[]; suppliers: string[]; numbers: string[]; digest: string;
 };
 
 export function toPreview(r: Record<string, unknown>): ResetPreview {
@@ -111,18 +125,20 @@ export function toPreview(r: Record<string, unknown>): ResetPreview {
   const list = (k: string) => (Array.isArray(r[k]) ? (r[k] as unknown[]).map(String) : typeof r[k] === "string" ? (JSON.parse(r[k] as string) as unknown[]).map(String) : []);
   return {
     invoices: n("invoices"), cancellations: n("cancellations"), drafts: n("drafts"), offers: n("offers"), payments: n("payments"),
-    receipts: n("receipts"), writeOffs: n("write_offs"), expenses: n("expenses"), customers: n("customers"), units: n("units"), stocked: n("stocked"),
+    receipts: n("receipts"), writeOffs: n("write_offs"), expenses: n("expenses"), customers: n("customers"), units: n("units"),
+    stocked: n("stocked"), sequences: n("sequences"),
     customerNames: list("customer_names"), products: list("products"), suppliers: list("suppliers"), numbers: list("numbers"),
+    digest: String(r.digest ?? ""),
   };
 }
 
-/** Kurzer Fingerabdruck: hat sich seit der Anzeige etwas geändert? */
+/** Fingerabdruck: Zahlen + Prüfsumme der betroffenen IDs – ändert sich, sobald etwas anderes gelöscht würde als angezeigt */
 export function fingerprint(p: ResetPreview): string {
   return [p.invoices, p.cancellations, p.drafts, p.offers, p.payments, p.receipts, p.writeOffs, p.expenses, p.customers, p.units, p.stocked,
-    p.products.length, p.suppliers.length, p.numbers.length].join(".");
+    p.sequences, p.products.length, p.suppliers.length, p.numbers.length, p.digest].join(".");
 }
 
 export function isEmpty(p: ResetPreview): boolean {
   return !(p.invoices || p.cancellations || p.drafts || p.offers || p.payments || p.receipts || p.writeOffs || p.expenses
-    || p.customers || p.stocked || p.products.length || p.suppliers.length);
+    || p.customers || p.stocked || p.sequences || p.products.length || p.suppliers.length);
 }

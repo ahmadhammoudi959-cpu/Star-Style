@@ -16,7 +16,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <div>
       <PageHeader title={t.settings.title} />
-      {reset && <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200"><Icon name="check" className="h-4 w-4" />{t.reset.done}</div>}
+      {reset === "1" && <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200"><Icon name="check" className="h-4 w-4 shrink-0" />{t.reset.done}</div>}
+      {(reset === "resetLive" || reset === "resetEmpty" || reset === "resetSyncOn") && (
+        <div role="alert" className="mb-4 animate-rise rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">{t.reset[reset]}</div>
+      )}
       <SettingsForm t={t} s={plain} />
       <section className="card mt-5 flex animate-rise flex-wrap items-center justify-between gap-3 p-5">
         <div className="flex items-center gap-3">
