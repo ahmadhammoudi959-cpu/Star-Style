@@ -25,7 +25,7 @@ Next.js 15 (App Router, Server Actions) · TypeScript strict · Drizzle ORM + Po
 9. Sehr einfache Bedienung: ein Nutzer, wenig Vorkenntnisse. Max. 3 Schritte pro Vorgang, klare Fehlermeldungen in seiner Sprache.
 
 ## Bekannte Punkte
-- Git: immer direkt auf `main` committen und pushen – keine weiteren Branches, keine PRs (Wunsch Inhaber 30.10.2026). Push auf `main` = Deploy auf Render.
+- Git: immer direkt auf `main` committen und pushen – keine weiteren Branches, keine PRs (Wunsch Inhaber 30.10.2026). Render deployt trotz „Auto-Deploy: On Commit“ nicht von selbst (alle Deploys „Manual“) → nach dem Push im Render-Dashboard „Manual Deploy → Deploy latest commit“.
 - `npm audit`: verbleibend nur `braces` (Dateibeobachter von Tailwind, nur beim Bauen, es gibt keine korrigierte Version). postcss, postcss-selector-parser und esbuild per `overrides` in package.json angehoben; vitest auf v5.
 - Shell: nie `pkill -f` benutzen (beendet die eigene Shell) – Ports mit `fuser -k PORT/tcp` freigeben.
 - Beträge in Arabisch: `.num` bekommt in RTL `direction: ltr` (globals.css), damit „-400,00 €“ richtig steht.
