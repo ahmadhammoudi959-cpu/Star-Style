@@ -1,11 +1,13 @@
 import "server-only";
 /**
- * Produkte aus einem Shopify-Shop als Artikel übernehmen (einmalig beim Start oder für neue Shop-Produkte).
- * - legt nur fehlende Artikel an; vorhanden = gleicher Barcode oder gleiche Art.-Nr. → bleibt unverändert
+ * Fehlende Artikel aus einem Shopify-Shop anlegen (beim Start oder später für neue Shop-Produkte).
+ * - vorhanden = Shop-Variante schon zugeordnet (automatisch oder von Hand), gleicher Barcode oder gleiche Art.-Nr.
+ *   → Artikel bleibt unverändert (fehlt ihm ein Foto, wird das Shop-Foto ergänzt; nicht bei Treffer nur über die Art.-Nr.)
  * - Bestand 0 (Ware kommt nur über den Wareneingang), Preise netto, Großhandelspreis = Einzelhandelspreis
- * - danach automatische Zuordnung (syncProducts); Fotos werden im Hintergrund geladen
+ * - jede neue Variante wird direkt mit ihrer Shop-Variante verbunden (matched_by „import“), auch ohne Barcode
+ * - Fotos lädt der Server danach im Hintergrund
  */
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { gql, getShop, ShopifyError, type ShopChannel } from "./client";
 import { groupByProduct, mapShopProduct, type ProductDraft, type ShopImportVariant } from "./product-map";
@@ -44,6 +46,12 @@ export async function importProducts(channel: ShopChannel, o: { userId?: string;
     } while (after);
     const drafts = groupByProduct(nodes).map((g) => mapShopProduct(g, { taxesIncluded: info.shop.taxesIncluded }));
 
+    // Zuerst die Zuordnung auffrischen: was schon verbunden ist (Barcode, Art.-Nr. oder von Hand), gilt als vorhanden
+    await syncProducts(channel);
+    const linkOwner = new Map<string, string>((await db.select({ s: schema.shopVariants.shopVariantId, p: schema.variants.productId })
+      .from(schema.shopVariants).innerJoin(schema.variants, eq(schema.variants.id, schema.shopVariants.variantId))
+      .where(eq(schema.shopVariants.channel, channel))).map((r) => [r.s, r.p]));
+
     // Bestehende Artikel, Barcodes und Lieferanten (Lieferant = Hersteller/Vendor mit gleichem Namen, sonst leer)
     const products = await db.select({ id: schema.products.id, sku: schema.products.sku, imageFileId: schema.products.imageFileId }).from(schema.products);
     const skuOwner = new Map<string, string>(products.map((p) => [p.sku.toLowerCase(), p.id]));
@@ -57,36 +65,52 @@ export async function importProducts(channel: ShopChannel, o: { userId?: string;
     let created = 0, variants = 0, noBarcode = 0, failed = 0;
     const existing = new Set<string>();
     const images: ImageJob[] = [];
+    const links: [string, string][] = []; // [Shop-Variante, unsere Variante]
 
     for (const d of drafts) {
-      const byBarcode = d.variants.map((v) => (v.barcode ? barcodeOwner.get(v.barcode) : undefined)).find((x): x is string => Boolean(x));
-      const owner = byBarcode ?? skuOwner.get(d.sku.toLowerCase());
+      const sure = d.variants.map((v) => linkOwner.get(v.shopVariantId) ?? (v.barcode ? barcodeOwner.get(v.barcode) : undefined)).find((x): x is string => Boolean(x));
+      const owner = sure ?? skuOwner.get(d.sku.toLowerCase());
       if (owner) {
         existing.add(owner);
-        if (d.imageUrl && !hasImage.get(owner)) { images.push({ productId: owner, url: d.imageUrl, name: d.handle }); hasImage.set(owner, true); }
+        // fehlendes Foto nur ergänzen, wenn sicher derselbe Artikel (Zuordnung oder Barcode)
+        if (sure && d.imageUrl && !hasImage.get(owner)) { images.push({ productId: owner, url: d.imageUrl, name: d.handle }); hasImage.set(owner, true); }
         continue;
       }
       try {
         const r = await createProduct(d, channel, { usedSkus, barcodeOwner, supplierId: supplierByName.get(d.vendor.toLowerCase()) ?? null, userId: o.userId });
-        created++; variants += r.variants; noBarcode += r.noBarcode;
+        created++; variants += r.links.length; noBarcode += r.noBarcode;
+        links.push(...r.links);
         if (d.imageUrl) images.push({ productId: r.id, url: d.imageUrl, name: d.handle });
       } catch (e) {
         failed++;
-        await logEvent(channel, "warn", "import", `importFailed:${(e as Error).message.slice(0, 200)}`, d.handle);
+        console.error("shopify import", d.handle, e);
+        const err = e as { code?: string; cause?: { code?: string } };
+        await logEvent(channel, "warn", "import", (err.code ?? err.cause?.code) === "23505" ? "importFailed:dup" : "importFailed:other", d.handle);
       }
     }
     await flagExisting([...existing], channel, o.userId);
     await logEvent(channel, failed ? "warn" : "info", "import", `productsImported:${created}|${variants}|${existing.size}|${noBarcode}`);
 
-    // Jetzt gleich zuordnen (Barcode → Art.-Nr.), damit „nicht zugeordnet“ sofort stimmt
-    const s = await syncProducts(channel);
+    // Neue Artikel direkt mit ihren Shop-Varianten verbinden (auch ohne Barcode; ersetzt eine evtl. falsche Zuordnung per Art.-Nr.)
+    if (links.length) {
+      await syncProducts(channel);
+      await db.transaction(async (tx) => {
+        for (const [s, v] of links) {
+          await tx.update(schema.shopVariants).set({ variantId: v, matchedBy: "import", lastPushedQty: null })
+            .where(and(eq(schema.shopVariants.channel, channel), eq(schema.shopVariants.shopVariantId, s)));
+        }
+      });
+    }
+    const counts = (await db.execute<{ matched: number; open: number }>(sql`
+      select count(*) filter (where variant_id is not null)::int as matched, count(*) filter (where variant_id is null and tracked)::int as open
+      from shop_variants where channel = ${channel}`)).rows[0];
 
     if (images.length) {
       release = false;
       const job = loadImages(channel, images, o.userId).finally(() => { running = false; });
       if (o.waitForImages) await job; else void job.catch((e) => console.error("shopify import images", e));
     }
-    return { created, variants, existing: existing.size, noBarcode, failed, images: images.length, matched: s.matched, open: s.open };
+    return { created, variants, existing: existing.size, noBarcode, failed, images: images.length, matched: counts?.matched ?? 0, open: counts?.open ?? 0 };
   } finally {
     if (release) running = false;
   }
@@ -105,21 +129,23 @@ async function createProduct(d: ProductDraft, channel: ShopChannel, c: { usedSku
   const rows = d.variants.map((v) => {
     const barcode = v.barcode && !c.barcodeOwner.has(v.barcode) && !taken.has(v.barcode) ? v.barcode : null;
     if (barcode) taken.add(barcode);
-    return { size: v.size, color: v.color, barcode, wholesalePriceCents: v.priceCents, retailPriceCents: v.priceCents };
+    return { shopVariantId: v.shopVariantId, size: v.size, color: v.color, barcode, wholesalePriceCents: v.priceCents, retailPriceCents: v.priceCents };
   });
-  const id = await db.transaction(async (tx) => {
+  const r = await db.transaction(async (tx) => {
     const [p] = await tx.insert(schema.products).values(values).returning({ id: schema.products.id });
-    await tx.insert(schema.variants).values(rows.map((r) => ({ productId: p.id, ...r })));
+    const vs = await tx.insert(schema.variants).values(rows.map(({ shopVariantId: _s, ...x }) => ({ productId: p.id, ...x })))
+      .returning({ id: schema.variants.id, size: schema.variants.size, color: schema.variants.color });
     await audit(tx, { entity: "product", entityId: p.id, action: "import", after: { ...values, source: channel, handle: d.handle, variants: rows }, userId: c.userId });
-    return p.id;
+    const byKey = new Map<string, string>(vs.map((v) => [`${v.size}|${v.color}`, v.id]));
+    return { id: p.id, links: rows.map((x) => [x.shopVariantId, byKey.get(`${x.size}|${x.color}`)!] as [string, string]) };
   });
   // erst nach erfolgreichem Speichern als belegt merken
   c.usedSkus.add(sku.toLowerCase());
-  for (const b of taken) c.barcodeOwner.set(b, id);
-  return { id, variants: rows.length, noBarcode: rows.filter((r) => !r.barcode).length };
+  for (const b of taken) c.barcodeOwner.set(b, r.id);
+  return { id: r.id, links: r.links, noBarcode: rows.filter((x) => !x.barcode).length };
 }
 
-/** Vorhandene Artikel als „im Shop sichtbar“ markieren (nur Hinweis, die echte Verbindung ist der Barcode) */
+/** Vorhandene Artikel als „im Shop sichtbar“ markieren (nur Hinweis, die echte Verbindung ist die Zuordnung) */
 async function flagExisting(ids: string[], channel: ShopChannel, userId?: string) {
   if (!ids.length) return;
   const col = channel === "BRAND_SHOP" ? schema.products.inBrandShop : schema.products.inGeneralShop;
@@ -142,10 +168,12 @@ async function loadImages(channel: ShopChannel, jobs: ImageJob[], userId?: strin
   const worker = async () => {
     for (let j = queue.shift(); j; j = queue.shift()) {
       try {
+        // inzwischen von Hand ein Foto gesetzt? Dann nichts tun
+        const [cur] = await db.select({ img: schema.products.imageFileId }).from(schema.products).where(eq(schema.products.id, j.productId));
+        if (!cur || cur.img) continue;
         const res = await fetch(j.url, { signal: AbortSignal.timeout(20_000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const fileId = await storeImageBytes(Buffer.from(await res.arrayBuffer()), `${j.name}.webp`);
-        // ein inzwischen von Hand gesetztes Foto nicht überschreiben
         const done = await db.transaction(async (tx) => {
           const r = await tx.update(schema.products).set({ imageFileId: fileId })
             .where(and(eq(schema.products.id, j.productId), isNull(schema.products.imageFileId))).returning({ id: schema.products.id });
@@ -153,6 +181,7 @@ async function loadImages(channel: ShopChannel, jobs: ImageJob[], userId?: strin
           return r.length > 0;
         });
         if (done) ok++;
+        else await db.delete(schema.storedFiles).where(eq(schema.storedFiles.id, fileId)); // Foto wurde gerade von Hand gesetzt → unbenutzte Datei weg
       } catch { bad++; }
     }
   };

@@ -54,6 +54,12 @@ describe("Shopify-Produkt → Artikel", () => {
     expect(d.variants.map((v) => [v.size, v.color])).toEqual([["Sebastian / M", ""], ["sebastian / m (2)", ""]]);
   });
 
+  it("Haarfarben: Option „Farbton“ zählt als Farbe", () => {
+    const p = product({ options: [{ name: "Farbton", position: 1 }] });
+    expect(mapShopProduct([variant({ product: p, selectedOptions: [{ name: "Farbton", value: "6.0 Dunkelblond" }] })], { taxesIncluded: true }).variants[0])
+      .toMatchObject({ size: "", color: "6.0 Dunkelblond" });
+  });
+
   it("Barcode: leer oder zu lang → keiner; ohne SKU wird Barcode bzw. Handle zur Art.-Nr.", () => {
     expect(mapShopProduct([variant({ barcode: "  " })], { taxesIncluded: true }).variants[0].barcode).toBeNull();
     expect(mapShopProduct([variant({ barcode: "1".repeat(33) })], { taxesIncluded: true }).variants[0].barcode).toBeNull();
@@ -78,6 +84,7 @@ run("Produkt-Import aus Shopify (Datenbank, Shopify simuliert)", async () => {
   const { eq } = await import("drizzle-orm");
   const { encrypt } = await import("../src/lib/crypto");
   const { importProducts } = await import("../src/lib/shopify/import");
+  const sync = await import("../src/lib/shopify/sync");
   const tag = String(Date.now()).slice(-8);
   const ean = (n: number) => `41${tag}${String(n).padStart(3, "0")}`;
   const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
@@ -89,6 +96,9 @@ run("Produkt-Import aus Shopify (Datenbank, Shopify simuliert)", async () => {
     variant({ id: `gid://shopify/ProductVariant/${tag}1`, sku: ean(1), barcode: ean(1), price: "11.90", product: gel }),
     variant({ id: `gid://shopify/ProductVariant/${tag}2`, sku: ean(2), barcode: ean(2), price: "1190.00", product: chair, selectedOptions: [{ name: "Farbe", value: "Gold" }] }),
     variant({ id: `gid://shopify/ProductVariant/${tag}3`, sku: ean(3), barcode: ean(3), price: "1309.00", position: 2, product: chair, selectedOptions: [{ name: "Farbe", value: "Schwarz" }] }),
+    // schon von Hand zugeordnet (anderer Barcode als bei uns) → darf nicht doppelt angelegt werden
+    variant({ id: `gid://shopify/ProductVariant/${tag}4`, sku: ean(4), barcode: ean(4), price: "19.90",
+      product: product({ id: `gid://shopify/Product/${tag}4`, title: `Handspiegel ${tag}`, handle: `spiegel-${tag}`, featuredMedia: null }) }),
   ];
 
   function shopifyMock() {
@@ -114,8 +124,18 @@ run("Produkt-Import aus Shopify (Datenbank, Shopify simuliert)", async () => {
 
   it("legt fehlende Artikel an (netto, Farbe, Barcode, Foto, Bestand 0), ordnet zu und doppelt nichts", async () => {
     vi.stubGlobal("fetch", shopifyMock());
+    // Handspiegel gibt es schon bei uns (eigene Art.-Nr., anderer Barcode) und ist von Hand zugeordnet
+    const [mirror] = await db.insert(schema.products).values({ sku: `HSP-${tag}`, nameDe: `Handspiegel ${tag}`, vatRateBp: 1900 }).returning();
+    const [mirrorVariant] = await db.insert(schema.variants).values({ productId: mirror.id, barcode: `42${tag}999` }).returning();
+    await sync.syncProducts("GENERAL_SHOP");
+    const row = await db.query.shopVariants.findFirst({ where: eq(schema.shopVariants.shopVariantId, nodes[3].id) });
+    await sync.linkVariant("GENERAL_SHOP", row!.id, mirrorVariant.id);
+
     const r = await importProducts("GENERAL_SHOP", { waitForImages: true });
-    expect(r).toMatchObject({ created: 2, variants: 3, existing: 0, noBarcode: 0, failed: 0, images: 2, matched: 3, open: 0 });
+    expect(r).toMatchObject({ created: 2, variants: 3, existing: 1, noBarcode: 0, failed: 0, images: 2, matched: 4, open: 0 });
+    expect((await db.select().from(schema.products).where(eq(schema.products.sku, ean(4)))).length).toBe(0);
+    const links = await db.select().from(schema.shopVariants).where(eq(schema.shopVariants.channel, "GENERAL_SHOP"));
+    expect(links.map((l) => l.matchedBy).sort()).toEqual(["import", "import", "import", "manual"]);
 
     const g = await db.query.products.findFirst({ where: eq(schema.products.sku, ean(1)), with: { variants: true } });
     expect(g).toMatchObject({ nameDe: `Rasiergel ${tag}`, retailPriceCents: 1000, wholesalePriceCents: 1000, inGeneralShop: true, inBrandShop: false });
@@ -128,6 +148,6 @@ run("Produkt-Import aus Shopify (Datenbank, Shopify simuliert)", async () => {
     expect((await db.select().from(schema.auditLog).where(eq(schema.auditLog.entityId, c!.id))).some((a) => a.action === "import")).toBe(true);
 
     const again = await importProducts("GENERAL_SHOP", { waitForImages: true });
-    expect(again).toMatchObject({ created: 0, existing: 2, images: 0, matched: 3, open: 0 });
+    expect(again).toMatchObject({ created: 0, existing: 3, images: 0, matched: 4, open: 0 });
   }, 30_000);
 });

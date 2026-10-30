@@ -68,7 +68,7 @@ export function ShopControls({ t, s }: { t: Dict; s: ShopData }) {
       )}
       <Btn icon="layers" label={t.shop.loadProducts} disabled={!ready} onClick={() => run(() => loadProductsAction(s.channel), (r) => { const [a, b, c] = (r.ok ?? "").split("|"); return (t.shop.ev.productsLoaded).replace("{t}", a).replace("{m}", b).replace("{o}", c); })} />
       <div>
-        <Btn icon="download" label={t.shop.importProducts} disabled={!ready} onClick={() => { if (confirm(t.shop.importConfirm)) run(() => importProductsAction(s.channel), (r) => importText(t, r.ok)); }} />
+        <Btn icon="download" label={t.shop.importProducts} disabled={!ready} onClick={() => { if (confirm(active ? t.shop.importConfirmActive : t.shop.importConfirm)) run(() => importProductsAction(s.channel), (r) => importText(t, r.ok)); }} />
         <p className="mt-1 px-1 text-xs leading-relaxed text-ink-soft">{t.shop.importHint}</p>
       </div>
       <div className="rounded-xl bg-brand-50/60 p-3 ring-1 ring-brand-100">
