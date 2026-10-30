@@ -9,6 +9,7 @@ import { parseMoney } from "@/lib/money";
 import { audit, receiveGoodsTx } from "@/lib/stock";
 import { storeImage } from "@/lib/files";
 import { todayIso } from "@/lib/dates";
+import { deleteProduct, ProductDeleteError } from "@/lib/product-delete";
 
 export type ProductFormState = { error?: string; field?: string } | undefined;
 
@@ -171,6 +172,20 @@ export async function saveProduct(_: ProductFormState, fd: FormData): Promise<Pr
   revalidatePath("/products");
   revalidatePath("/stock");
   redirect(`/products/${productId}?saved=1`);
+}
+
+/** Test- oder Fehleintrag endgültig löschen (nur wenn nie verkauft, angeboten oder als Verlust gebucht) */
+export async function deleteProductAction(_: ProductFormState, fd: FormData): Promise<ProductFormState> {
+  const session = await requireSession();
+  try {
+    await deleteProduct(String(fd.get("id") ?? ""), session.uid);
+  } catch (e) {
+    if (e instanceof ProductDeleteError) return { error: e.code };
+    console.error(e);
+    return { error: "error" };
+  }
+  revalidatePath("/", "layout"); // Artikel, Lager, Wareneingang, „Erste Schritte“
+  redirect("/products");
 }
 
 export async function setProductActive(id: string, active: boolean) {
