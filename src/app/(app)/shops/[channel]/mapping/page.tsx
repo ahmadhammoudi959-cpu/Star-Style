@@ -31,7 +31,7 @@ export default async function MappingPage({ params, searchParams }: { params: Pr
         ))}
       </div>
       <div className="card animate-rise overflow-visible">
-        {rows.length === 0 ? <p className="p-8 text-center text-ink-soft">{f === "open" ? "✓" : t.shop.noVariants}</p> : (
+        {rows.length === 0 ? <p className="p-8 text-center text-ink-soft">{f === "all" ? t.shop.noVariants : "✓"}</p> : (
           <table className="tbl">
             <thead><tr><th>{t.shop.shopVariant}</th><th>{t.shop.ours}</th></tr></thead>
             <tbody>{rows.map((r) => (
