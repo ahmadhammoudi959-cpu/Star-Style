@@ -1,11 +1,13 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { audit } from "@/lib/stock";
 import { storeUpload } from "@/lib/files";
+import { ResetError, resetTestData } from "@/lib/test-reset";
 
 export type SettingsState = { error?: string; ok?: boolean } | undefined;
 const str = (max = 200) => z.string().trim().max(max).default("");
@@ -58,4 +60,22 @@ export async function saveAccountsAction(_: SettingsState, fd: FormData): Promis
   });
   revalidatePath("/settings/accounts");
   return { ok: true };
+}
+
+/** Testdaten löschen – einmalig vor dem echten Start (nur solange kein Echtbetrieb, siehe lib/test-reset.ts) */
+export async function resetTestDataAction(_: SettingsState, fd: FormData): Promise<SettingsState> {
+  const session = await requireSession();
+  if (fd.get("confirm") !== "on") return { error: "needConfirm" };
+  try {
+    await resetTestData(String(fd.get("expect") ?? ""), session.uid);
+  } catch (e) {
+    if (e instanceof ResetError) {
+      revalidatePath("/settings"); // Liste neu zeigen (z. B. nach „resetChanged“)
+      return { error: e.code };
+    }
+    console.error(e);
+    return { error: "error" };
+  }
+  revalidatePath("/", "layout"); // alle Listen, Dashboard, „Erste Schritte“
+  redirect("/settings?reset=1");
 }

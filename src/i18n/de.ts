@@ -199,6 +199,22 @@ const de = {
     taxNumber: "Steuernummer", bankName: "Bank", iban: "IBAN", bic: "BIC", paymentDays: "Zahlungsziel (Tage)",
     offerDays: "Angebot gültig (Tage)", footer: "Fußzeile auf Rechnungen", website: "Webseite",
   },
+  reset: {
+    title: "Testdaten löschen",
+    hint: "Vor dem echten Start: löscht alles, was zum Ausprobieren angelegt wurde. Danach beginnen alle Nummern wieder bei 0001, Kundennummern bei 1.",
+    invoices: "Rechnungen", cancellations: "Stornorechnungen", drafts: "Rechnungsentwürfe", offers: "Angebote", payments: "Zahlungen",
+    receipts: "Wareneingänge", writeOffs: "Verluste", expenses: "Ausgaben", customers: "Kunden",
+    products: "Testartikel (in keinem Shop)", suppliers: "Lieferanten (nur in Testdaten)", units: "Stück im Lager (werden 0)",
+    keeps: "Bleibt: Artikel aus den Shops mit Zuordnung, Shops, Einstellungen, Benutzer und Protokoll. Shop-Bestellungen werden erst ab dem nächsten Einschalten des Abgleichs übernommen.",
+    understand: "Verstanden: Das wird endgültig gelöscht und lässt sich nicht rückgängig machen.",
+    button: "Testdaten löschen", confirm: "Letzte Frage: Wirklich alle Testdaten löschen?",
+    syncOn: "Ein Shop-Abgleich läuft. Bitte zuerst in beiden Shops anhalten, dann löschen.",
+    done: "Testdaten gelöscht. Alle Nummern beginnen wieder bei 0001.",
+    resetLive: "Nicht mehr möglich: Der Echtbetrieb hat begonnen (Monat abgeschlossen, Mappe an den Steuerberater oder Shop-Bestellung).",
+    resetSyncOn: "Ein Shop-Abgleich läuft. Bitte zuerst in beiden Shops anhalten, dann löschen.",
+    resetChanged: "Inzwischen hat sich etwas geändert. Die Liste ist aktualisiert – bitte prüfen und noch einmal löschen.",
+    resetEmpty: "Keine Testdaten vorhanden.", needConfirm: "Bitte zuerst „Verstanden“ ankreuzen.",
+  },
 };
 export default de;
 export type Dict = typeof de;

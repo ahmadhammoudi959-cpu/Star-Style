@@ -201,5 +201,21 @@ const en: Dict = {
     taxNumber: "Tax number", bankName: "Bank", iban: "IBAN", bic: "BIC", paymentDays: "Payment term (days)",
     offerDays: "Quote valid (days)", footer: "Invoice footer", website: "Website",
   },
+  reset: {
+    title: "Delete test data",
+    hint: "Before going live: deletes everything created for trying things out. Afterwards all numbers start again at 0001, customer numbers at 1.",
+    invoices: "Invoices", cancellations: "Cancellation invoices", drafts: "Invoice drafts", offers: "Quotes", payments: "Payments",
+    receipts: "Goods receipts", writeOffs: "Losses", expenses: "Expenses", customers: "Customers",
+    products: "Test products (in no shop)", suppliers: "Suppliers (only in test data)", units: "Pieces in stock (become 0)",
+    keeps: "Stays: products from the shops with their links, shops, settings, user and log. Shop orders are only taken over from the next time the sync is switched on.",
+    understand: "Understood: this is deleted permanently and cannot be undone.",
+    button: "Delete test data", confirm: "Last question: really delete all test data?",
+    syncOn: "A shop sync is running. Pause it in both shops first, then delete.",
+    done: "Test data deleted. All numbers start again at 0001.",
+    resetLive: "No longer possible: live operation has started (month closed, folder sent to the tax advisor or a shop order).",
+    resetSyncOn: "A shop sync is running. Pause it in both shops first, then delete.",
+    resetChanged: "Something changed in the meantime. The list is updated – please check and delete again.",
+    resetEmpty: "No test data.", needConfirm: "Please tick “Understood” first.",
+  },
 };
 export default en;
