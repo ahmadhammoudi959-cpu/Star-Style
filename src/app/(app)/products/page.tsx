@@ -32,7 +32,10 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       </form>
       <div className="card overflow-hidden animate-rise">
         {rows.length === 0 ? (
-          <div className="p-10 text-center text-ink-soft">{t.product.empty}</div>
+          <div className="p-10 text-center text-ink-soft">
+            {t.product.empty}
+            {!q.trim() && <Link href="/shops" className="mt-3 block font-semibold text-brand-700 hover:underline">{t.product.importLink}</Link>}
+          </div>
         ) : (
           <div className="table-wrap">
             <table className="tbl">

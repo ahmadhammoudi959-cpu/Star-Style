@@ -24,6 +24,17 @@ function imageMime(buf: Buffer): string | null {
   return null;
 }
 
+/** Foto aus einer bekannten Quelle (z. B. Shopify-CDN beim Produkt-Import) speichern – gleiche Prüfung wie beim Hochladen */
+export async function storeImageBytes(buf: Buffer, name: string): Promise<string> {
+  if (buf.length === 0 || buf.length > MAX) throw new Error("fileTooLarge");
+  const mime = imageMime(buf);
+  if (!mime) throw new Error("imageType");
+  const [row] = await db.insert(schema.storedFiles).values({
+    name: (name || "foto").slice(0, 200), mime, size: buf.length, sha256: createHash("sha256").update(buf).digest("hex"), data: buf,
+  }).returning({ id: schema.storedFiles.id });
+  return row.id;
+}
+
 export async function storeImage(file: File | null): Promise<string | null> {
   if (!file || typeof file === "string" || file.size === 0) return null;
   if (file.size > MAX) throw new Error("fileTooLarge");
