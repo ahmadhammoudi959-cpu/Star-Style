@@ -46,7 +46,7 @@ const en: Dict = {
     initialQty: "Stock on hand now", initialExpiry: "Best before", initialHint: "Already have stock? Enter the quantity – it is booked automatically as goods receipt at the purchase price.", initialNote: "Opening stock when created",
     minStock: "Warn below", stock: "Stock", addVariant: "Add variant", noVariantsHint: "No size/colour? Leave one row empty.",
     skuTaken: "This product number already exists.", barcodeTaken: "This barcode is already used.", duplicateVariant: "Same size/colour twice.",
-    variantHasStock: "A variant with stock cannot be removed.", empty: "No products yet. Add the first one.", importLink: "Or import all products from your shop →", margin: "Margin", reserved: "reserved", available: "available",
+    variantHasStock: "A variant with stock cannot be removed.", empty: "No products yet. Add the first one.", delete: "Delete item", deleteConfirm: "Permanently delete this item with all its variants, stock movements, goods receipts and photos? This cannot be undone.", deleteHint: "Only for test or mistaken entries. Possible only while the item was never used in an offer, invoice or loss.", productUsed: "This item was already used in offers, invoices or losses and cannot be deleted.", productLinked: "This item is linked to a shop with sync running. Unlink it first under “Match products”.", notFound: "Item not found.", importLink: "Or import all products from your shop →", margin: "Margin", reserved: "reserved", available: "available",
   },
   receive: {
     title: "Goods in", new: "New delivery", supplier: "Supplier", supplierInvoice: "Supplier invoice / note no.",

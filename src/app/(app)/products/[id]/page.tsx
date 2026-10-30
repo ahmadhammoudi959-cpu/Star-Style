@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { ProductForm } from "../ProductForm";
 import { formLookups } from "../helpers";
+import { productDeletable } from "@/lib/product-delete";
+import { DeleteProduct } from "./DeleteProduct";
 
 const toInput = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
@@ -18,7 +20,7 @@ export default async function EditProduct({ params, searchParams }: { params: Pr
   if (!p) notFound();
   const vs = await db.select().from(schema.variants)
     .where(and(eq(schema.variants.productId, id), eq(schema.variants.active, true))).orderBy(asc(schema.variants.createdAt));
-  const { suppliers, categories } = await formLookups();
+  const [{ suppliers, categories }, deletable] = await Promise.all([formLookups(), productDeletable(id)]);
   return (
     <div>
       <PageHeader title={p.nameDe} subtitle={p.sku} back="/products"
@@ -31,6 +33,7 @@ export default async function EditProduct({ params, searchParams }: { params: Pr
         tracksExpiry: p.tracksExpiry, inBrandShop: p.inBrandShop, inGeneralShop: p.inGeneralShop, imageFileId: p.imageFileId,
         variants: vs.map((v) => ({ id: v.id, size: v.size, color: v.color, barcode: v.barcode ?? "", minStock: v.minStock, stockQty: v.stockQty, imageFileId: v.imageFileId })),
       }} />
+      {deletable && <DeleteProduct t={t} id={p.id} />}
     </div>
   );
 }
