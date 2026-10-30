@@ -7,6 +7,7 @@ import { encrypt } from "@/lib/crypto";
 import { normalizeDomain, ShopifyError, type ShopChannel } from "@/lib/shopify/client";
 import { linkVariant, processDirty, pushStock, syncOrders, syncProducts, testConnection, runCycle } from "@/lib/shopify/sync";
 import { registerWebhooks } from "@/lib/shopify/webhooks";
+import { importProducts } from "@/lib/shopify/import";
 
 export type ShopResult = { ok?: string; error?: string; detail?: string; locations?: { id: string; name: string }[] };
 const CH = (v: unknown): ShopChannel => (v === "GENERAL_SHOP" ? "GENERAL_SHOP" : "BRAND_SHOP");
@@ -71,6 +72,21 @@ export async function activateAction(channel: string, on: boolean): Promise<Shop
 export async function loadProductsAction(channel: string): Promise<ShopResult> {
   await requireSession();
   try { const r = await syncProducts(CH(channel)); return { ...done(CH(channel)), ok: `${r.total}|${r.matched}|${r.open}` }; } catch (e) { return fail(e); }
+}
+
+/** Fehlende Produkte aus dem Shop als Artikel anlegen (Bestand 0) und gleich zuordnen */
+export async function importProductsAction(channel: string): Promise<ShopResult> {
+  const session = await requireSession();
+  const ch = CH(channel);
+  try {
+    const r = await importProducts(ch, { userId: session.uid });
+    revalidatePath("/", "layout"); // Artikel, Lager, „Erste Schritte“ im Menü
+    return { ...done(ch), ok: [r.created, r.variants, r.existing, r.matched, r.open, r.images, r.failed].join("|") };
+  } catch (e) {
+    const m = e instanceof Error ? e.message : "";
+    if (m === "busy" || m === "currency") return { error: m };
+    return fail(e);
+  }
 }
 
 export async function webhooksAction(channel: string): Promise<ShopResult> {

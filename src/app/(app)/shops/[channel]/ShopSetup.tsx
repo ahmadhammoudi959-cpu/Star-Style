@@ -1,6 +1,6 @@
 "use client";
 import { useActionState, useState, useTransition } from "react";
-import { activateAction, loadProductsAction, pushAllAction, saveShopAction, setLocationAction, syncNowAction, testShopAction, webhooksAction, type ShopResult } from "../actions";
+import { activateAction, importProductsAction, loadProductsAction, pushAllAction, saveShopAction, setLocationAction, syncNowAction, testShopAction, webhooksAction, type ShopResult } from "../actions";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon, type IconName } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
@@ -8,6 +8,14 @@ import type { Dict } from "@/i18n/de";
 type ShopData = { channel: string; domain: string; clientId: string; hasSecret: boolean; legacy: boolean; stockBuffer: number; importTestOrders: boolean; locationId: string; locationName: string; active: boolean; webhooksAt: string | null };
 
 const errText = (t: Dict, r?: ShopResult) => r?.error ? ((t.shop.errors as Record<string, string>)[r.error] ?? (r.error === "noPublicUrl" ? t.shop.noPublicUrl : t.shop.errors.other)).replace("{d}", r.detail ?? "") : undefined;
+const fmt = (s: string, v: Record<string, string>) => s.replace(/\{(\w+)\}/g, (_, k: string) => v[k] ?? "");
+
+/** Ergebnis des Produkt-Imports: neu | Varianten | vorhanden | zugeordnet | offen | Fotos | fehlgeschlagen */
+function importText(t: Dict, ok = "") {
+  const [c = "0", v = "0", e = "0", m = "0", o = "0", i = "0", f = "0"] = ok.split("|");
+  return [fmt(t.shop.importDone, { c, v, e, m, o }), Number(f) > 0 ? fmt(t.shop.importFailed, { f }) : "", Number(i) > 0 ? fmt(t.shop.importImages, { i }) : ""]
+    .filter(Boolean).join(" ");
+}
 
 export function ShopForm({ t, s }: { t: Dict; s: ShopData }) {
   const [state, action] = useActionState(saveShopAction, undefined);
@@ -59,6 +67,10 @@ export function ShopControls({ t, s }: { t: Dict; s: ShopData }) {
         </Field>
       )}
       <Btn icon="layers" label={t.shop.loadProducts} disabled={!ready} onClick={() => run(() => loadProductsAction(s.channel), (r) => { const [a, b, c] = (r.ok ?? "").split("|"); return (t.shop.ev.productsLoaded).replace("{t}", a).replace("{m}", b).replace("{o}", c); })} />
+      <div>
+        <Btn icon="download" label={t.shop.importProducts} disabled={!ready} onClick={() => { if (confirm(t.shop.importConfirm)) run(() => importProductsAction(s.channel), (r) => importText(t, r.ok)); }} />
+        <p className="mt-1 px-1 text-xs leading-relaxed text-ink-soft">{t.shop.importHint}</p>
+      </div>
       <div className="rounded-xl bg-brand-50/60 p-3 ring-1 ring-brand-100">
         <label className="flex cursor-pointer items-start gap-2 text-sm font-semibold">
           <input type="checkbox" checked={active} disabled={pending || !ready} onChange={(e) => {

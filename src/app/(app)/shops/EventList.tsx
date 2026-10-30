@@ -9,6 +9,8 @@ export function evText(t: Dict, msg: string) {
   const i = msg.indexOf(":");
   const key = i > 0 ? msg.slice(0, i) : msg, p = i > 0 ? msg.slice(i + 1) : "";
   if (key === "productsLoaded") { const [a, b, c] = p.split("|"); return E.productsLoaded.replace("{t}", a).replace("{m}", b).replace("{o}", c); }
+  if (key === "productsImported") { const [c, v, e, n] = p.split("|"); return E.productsImported.replace("{c}", c).replace("{v}", v).replace("{e}", e).replace("{n}", n); }
+  if (key === "imagesLoaded") { const [ok, f] = p.split("|"); return E.imagesLoaded.replace("{ok}", ok).replace("{f}", f); }
   return E[key] ? E[key].replace("{p}", p) : msg;
 }
 
