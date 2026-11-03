@@ -9,7 +9,7 @@ const de = {
     language: "Sprache", nothingYet: "Noch keine Einträge", confirm: "Bestätigen",
   },
   nav: {
-    scan: "Barcode scannen", scanShort: "Scan", home: "Start", products: "Artikel", receive: "Wareneingang", stock: "Lager", writeOffs: "Verluste",
+    menu: "Menü", scan: "Barcode scannen", scanShort: "Scan", home: "Start", products: "Artikel", receive: "Wareneingang", stock: "Lager", writeOffs: "Verluste",
     receivables: "Offene Posten", customers: "Kunden", suppliers: "Lieferanten", settings: "Einstellungen", sales: "Verkauf", reports: "Berichte", expenses: "Ausgaben", insights: "Hinweise", shops: "Shops", ask: "Frag dein Geschäft",
   },
   setup1: {

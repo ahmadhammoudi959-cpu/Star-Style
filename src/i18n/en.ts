@@ -11,7 +11,7 @@ const en: Dict = {
     language: "Language", nothingYet: "Nothing here yet", confirm: "Confirm",
   },
   nav: {
-    scan: "Scan barcode", scanShort: "Scan", home: "Home", products: "Products", receive: "Goods in", stock: "Stock", writeOffs: "Losses",
+    menu: "Menu", scan: "Scan barcode", scanShort: "Scan", home: "Home", products: "Products", receive: "Goods in", stock: "Stock", writeOffs: "Losses",
     receivables: "Receivables", customers: "Customers", suppliers: "Suppliers", settings: "Settings", sales: "Sales", reports: "Reports", expenses: "Expenses", insights: "Insights", shops: "Shops", ask: "Ask your business",
   },
   setup1: {

@@ -11,7 +11,7 @@ const ar: Dict = {
     language: "اللغة", nothingYet: "ما في شي لسا", confirm: "تأكيد",
   },
   nav: {
-    scan: "سكان باركود", scanShort: "سكان", home: "الرئيسية", products: "المنتجات", receive: "إدخال بضاعة", stock: "المخزون", writeOffs: "التالف",
+    menu: "القائمة", scan: "سكان باركود", scanShort: "سكان", home: "الرئيسية", products: "المنتجات", receive: "إدخال بضاعة", stock: "المخزون", writeOffs: "التالف",
     receivables: "المستحقات", customers: "الزبائن", suppliers: "الموردين", settings: "الإعدادات", sales: "المبيعات", reports: "التقارير", expenses: "المصاريف", insights: "تنبيهات ذكية", shops: "المتاجر", ask: "اسأل عن شغلك",
   },
   setup1: {

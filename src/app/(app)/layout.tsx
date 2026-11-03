@@ -35,9 +35,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const it = items.find((i) => i.href === s.nav);
     if (it && (!s.done || setup.showGuide)) it.step = { n: s.n, next: s.key === setup.next };
   }
-  // Handy unten: Start, Verkauf, Offene Posten, Scanner (hervorgehoben, Mitte), Ausgaben, Lager
+  // Handy unten: Start, Verkauf, Scanner (hervorgehoben, Mitte), Lager, „Menü“ = alle Seiten der Seitenleiste
   const pick = (href: string) => items.find((i) => i.href === href)!;
-  const mobile: NavItem[] = [pick("/"), pick("/sales"), pick("/receivables"), { ...pick("/scan"), label: t.nav.scanShort, highlight: true }, pick("/expenses"), pick("/stock")];
+  const mobile: NavItem[] = [pick("/"), pick("/sales"), { ...pick("/scan"), label: t.nav.scanShort, highlight: true }, pick("/stock")];
+  const menuFooter = (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="min-w-0 truncate text-sm font-semibold text-ink-soft" dir="auto">{session.name}</div>
+      <div className="flex items-center gap-2">
+        <LanguageSwitcher current={locale} />
+        <form action={logout}><button className="btn-ghost group gap-2 px-3"><Icon name="logout" className="h-4 w-4" />{t.common.logout}</button></form>
+      </div>
+    </div>
+  );
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[15.625rem_1fr]">
       {/* Seitenleiste immer genau Bildschirmhöhe: passt das Menü nicht (Laptop), scrollt es innen – der dunkle Hintergrund bleibt überall */}
@@ -72,7 +81,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </header>
         <main className="mx-auto max-w-6xl px-4 pb-28 pt-6 lg:px-8 lg:pb-12">{children}</main>
       </div>
-      <BottomNav items={mobile} />
+      <BottomNav items={mobile} all={items.map((it) => (it.href === "/scan" ? { ...it, highlight: true } : it))} menuLabel={t.nav.menu} closeLabel={t.common.close} footer={menuFooter} />
     </div>
   );
 }
