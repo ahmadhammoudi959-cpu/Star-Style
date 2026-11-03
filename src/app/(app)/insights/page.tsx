@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OpenButton } from "@/components/OpenButton";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
@@ -45,7 +46,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
             </div>
           </div>
           <div className="table-wrap mt-3"><table className="tbl">
-            <thead><tr><th>{t.product.nameDe}</th><th className="text-end">{t.ins.available}</th><th className="text-end">{t.ins.perMonth}</th><th className="text-end">{t.ins.daysLeft}</th><th className="text-end">{t.ins.suggest}</th><th className="text-end">{t.ins.cost}</th></tr></thead>
+            <thead><tr><th>{t.product.nameDe}</th><th className="text-end">{t.ins.available}</th><th className="text-end">{t.ins.perMonth}</th><th className="text-end">{t.ins.daysLeft}</th><th className="text-end">{t.ins.suggest}</th><th className="text-end">{t.ins.cost}</th><th className="w-px"><span className="sr-only">{t.product.open}</span></th></tr></thead>
             <tbody>{g.items.map((r) => (
               <tr key={r.variantId}>
                 <td><Link href={`/stock/${r.variantId}`} className="font-semibold hover:text-brand-700">{r.name}</Link><div className="text-xs text-ink-soft" dir="ltr">{r.sku}</div></td>
@@ -54,6 +55,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
                 <td className="text-end"><span className={`badge ${urgTone[r.urgency]}`}>{r.urgency === "out" ? t.ins.urgency.out : r.daysLeft !== null && r.daysLeft < 21 ? `${r.daysLeft} ${t.ins.days}` : r.belowMin ? t.ins.belowMin : r.daysLeft === null ? t.ins.urgency[r.urgency] : `${r.daysLeft} ${t.ins.days}`}</span></td>
                 <td className="num text-end font-bold">{r.qty}</td>
                 <td className="num text-end">{formatCents(r.costCents, intl)}</td>
+                <td className="text-end"><OpenButton href={`/stock/${r.variantId}`} label={t.product.open} /></td>
               </tr>
             ))}</tbody>
           </table></div>
@@ -62,7 +64,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
 
       {tab === "expiry" && (counts.expiry === 0 ? <Empty text={t.ins.noneExpiry} /> : (
         <section className="card animate-rise overflow-hidden"><div className="table-wrap"><table className="tbl">
-          <thead><tr><th>{t.product.nameDe}</th><th>{t.ins.expiryDate}</th><th className="text-end">{t.ins.stock}</th><th className="text-end">{t.ins.atRisk}</th><th className="text-end">{t.ins.value}</th><th></th></tr></thead>
+          <thead><tr><th>{t.product.nameDe}</th><th>{t.ins.expiryDate}</th><th className="text-end">{t.ins.stock}</th><th className="text-end">{t.ins.atRisk}</th><th className="text-end">{t.ins.value}</th><th></th><th className="w-px"><span className="sr-only">{t.product.open}</span></th></tr></thead>
           <tbody>{ins.expiry.map((r) => (
             <tr key={r.batchId}>
               <td><Link href={`/stock/${r.variantId}`} className="font-semibold hover:text-brand-700">{r.name}</Link></td>
@@ -73,6 +75,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
               <td className="text-end">{r.action === "writeOff"
                 ? <Link href="/write-offs" className={`badge ${actTone[r.action]} hover:underline`}>{t.ins.action[r.action]}</Link>
                 : <span className={`badge ${actTone[r.action]}`}>{t.ins.action[r.action]}</span>}</td>
+              <td className="text-end"><OpenButton href={`/stock/${r.variantId}`} label={t.product.open} /></td>
             </tr>
           ))}</tbody>
         </table></div></section>
@@ -80,13 +83,14 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
 
       {tab === "slow" && (counts.slow === 0 ? <Empty text={t.ins.noneSlow} /> : (
         <section className="card animate-rise overflow-hidden"><div className="table-wrap"><table className="tbl">
-          <thead><tr><th>{t.product.nameDe}</th><th className="text-end">{t.ins.stock}</th><th className="text-end">{t.ins.lockedValue}</th><th className="text-end">{t.ins.sinceReceipt}</th></tr></thead>
+          <thead><tr><th>{t.product.nameDe}</th><th className="text-end">{t.ins.stock}</th><th className="text-end">{t.ins.lockedValue}</th><th className="text-end">{t.ins.sinceReceipt}</th><th className="w-px"><span className="sr-only">{t.product.open}</span></th></tr></thead>
           <tbody>{ins.slow.map((r) => (
             <tr key={r.variantId}>
               <td><Link href={`/stock/${r.variantId}`} className="font-semibold hover:text-brand-700">{r.name}</Link><div className="text-xs text-ink-soft" dir="ltr">{r.sku}</div></td>
               <td className="num text-end">{r.stock}</td>
               <td className="num text-end font-semibold">{formatCents(r.valueCents, intl)}</td>
               <td className="num text-end">{r.daysSinceReceipt === null ? "—" : `${r.daysSinceReceipt} ${t.ins.days}`}</td>
+              <td className="text-end"><OpenButton href={`/stock/${r.variantId}`} label={t.product.open} /></td>
             </tr>
           ))}</tbody>
         </table></div></section>

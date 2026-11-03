@@ -98,6 +98,11 @@ const de = {
     taxMode: "Steuer", empty: "Noch keine Kunden.", number: "Kd.-Nr.", documents: "Belege", ownVatMissing: "Für die Prüfung fehlt die eigene USt-IdNr. in den Einstellungen.",
   },
   taxMode: { DOMESTIC: "Inland", EU_REVERSE_CHARGE: "EU steuerfrei", EU_PENDING_VATID: "EU – Nr. ausstehend", EU_B2C: "EU privat", EXPORT: "Ausfuhr (steuerfrei)" },
+  lists: {
+    pickCustomer: "Kunde wählen oder suchen", searchCustomer: "Name, Ort, USt-IdNr. oder Kundennr. …", allCities: "Alle Orte", all: "Alle",
+    noMatch: "Nichts gefunden – Filter ändern.", pickDoc: "Beleg wählen oder suchen", searchDoc: "Belegnummer oder Kunde …",
+    allCustomers: "Alle Kunden", status: "Status", allStatuses: "Alle", pickExpense: "Ausgabe wählen oder suchen", openInvoice: "Rechnung öffnen",
+  },
   picker: {
     category: "Kategorie wählen", searchLabel: "oder Artikel suchen", all: "Alle Kategorien", browseAll: "Alle Artikel", title: "Artikel auswählen", search: "Suchen nach Name, Art.-Nr., Barcode oder Kategorie …",
     add: "Hinzufügen", inDoc: "Ausgewählt: {n}", done: "Fertig", empty: "Keine Artikel gefunden.", lines: "Positionen",

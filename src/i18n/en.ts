@@ -100,6 +100,11 @@ const en: Dict = {
     taxMode: "Tax", empty: "No customers yet.", number: "Cust. no.", documents: "Documents", ownVatMissing: "Enter your own VAT ID in Settings first.",
   },
   taxMode: { DOMESTIC: "Domestic", EU_REVERSE_CHARGE: "EU tax-free", EU_PENDING_VATID: "EU – VAT ID pending", EU_B2C: "EU private", EXPORT: "Export (tax-free)" },
+  lists: {
+    pickCustomer: "Choose or search a customer", searchCustomer: "Name, city, VAT ID or customer no. …", allCities: "All cities", all: "All",
+    noMatch: "Nothing found – change the filter.", pickDoc: "Choose or search a document", searchDoc: "Document number or customer …",
+    allCustomers: "All customers", status: "Status", allStatuses: "All statuses", pickExpense: "Choose or search an expense", openInvoice: "Open invoice",
+  },
   picker: {
     category: "Choose a category", searchLabel: "or search for a product", all: "All categories", browseAll: "All products", title: "Choose products", search: "Search by name, item no., barcode or category …",
     add: "Add", inDoc: "Added: {n}", done: "Done", empty: "No products found.", lines: "Lines",

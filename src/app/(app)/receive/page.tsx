@@ -8,6 +8,7 @@ import { variantOptions } from "@/lib/queries";
 import { todayIso, formatDate } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
 import { ReceiveForm } from "./ReceiveForm";
+import { OpenButton } from "@/components/OpenButton";
 
 const INITIAL_NOTE = "Anfangsbestand beim Anlegen";
 
@@ -98,10 +99,3 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
   );
 }
 
-function OpenButton({ href, label, className = "px-3 py-1.5 text-xs" }: { href: string; label: string; className?: string }) {
-  return (
-    <Link href={href} className={`btn group gap-1.5 whitespace-nowrap bg-brand-600 text-white shadow-card hover:bg-brand-700 hover:shadow-lift ${className}`}>
-      <Icon name="eye" className="h-4 w-4" />{label}
-    </Link>
-  );
-}

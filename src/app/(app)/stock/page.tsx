@@ -8,6 +8,8 @@ import { formatCents } from "@/lib/money";
 import { daysBetween, formatDate, todayIso } from "@/lib/dates";
 import { CategorySelect } from "@/components/CategorySelect";
 import { AutoSubmitCheckbox } from "@/components/AutoSubmitCheckbox";
+import { OpenButton } from "@/components/OpenButton";
+import { SearchPick } from "@/components/SearchPick";
 
 export default async function StockPage({ searchParams }: { searchParams: Promise<{ q?: string; low?: string; cat?: string }> }) {
   const { q = "", low, cat = "" } = await searchParams;
@@ -28,15 +30,14 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
       <PageHeader title={t.stock.title} subtitle={`${t.stock.value}: ${formatCents(total, intl)}`} />
 
       {/* Filter: Kategorie (filtert sofort), Suche, nur wenig Bestand (filtert sofort) */}
-      <form className="card mb-4 flex flex-col gap-3 p-4 animate-rise md:flex-row md:flex-wrap md:items-end">
+      <form className="card relative z-10 mb-4 flex flex-col gap-3 p-4 animate-rise md:flex-row md:flex-wrap md:items-end">
         {cats.length > 0 && <CategorySelect categories={cats} label={t.picker.category} allLabel={t.picker.all} name="cat" defaultValue={cat} autoSubmit className="md:w-64" />}
-        <label className="block min-w-0 md:max-w-md md:flex-1">
-          <span className="label">{t.picker.searchLabel}</span>
-          <span className="relative block">
-            <Icon name="search" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" />
-            <input name="q" defaultValue={q} placeholder={t.product.searchHint} className="input ps-9" />
-          </span>
-        </label>
+        <div className="min-w-0 md:max-w-md md:flex-1">
+          <SearchPick name="q" defaultValue={q} label={t.picker.searchLabel} placeholder={t.product.searchHint} emptyLabel={t.picker.empty}
+            items={rows.map((r) => ({ label: [r.nameDe, [r.size, r.color].filter(Boolean).join(" · ")].filter(Boolean).join(" – "),
+              sub: [r.barcode ?? r.sku, r.category, `${t.product.stock}: ${r.stockQty}`].filter(Boolean).join(" · "), href: `/stock/${r.id}`, imageId: r.imageId,
+              search: [r.nameDe, r.nameNl, r.sku, r.barcode ?? "", r.size, r.color, r.category].join(" ").toLowerCase() }))} />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <AutoSubmitCheckbox name="low" defaultChecked={lowOnly} label={t.stock.filterLow} />
           <button className="btn-primary group"><Icon name="search" className="h-4 w-4" />{t.common.search.replace("…", "").trim()}</button>
@@ -76,7 +77,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                       <td className="num text-end text-ink-soft">{r.minStock || "—"}</td>
                       <td>{expiry(r) ?? <span className="text-xs text-ink-soft">—</span>}</td>
                       <td className="num text-end">{formatCents(r.valueCents, intl)}</td>
-                      <td className="text-end"><OpenButton id={r.id} label={t.product.open} /></td>
+                      <td className="text-end"><OpenButton href={`/stock/${r.id}`} label={t.product.open} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -99,7 +100,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                   <Item label={t.receive.expiry}>{expiry(r) ?? "—"}</Item>
                   <Item label={t.stock.value}><span className="num">{formatCents(r.valueCents, intl)}</span></Item>
                 </dl>
-                <OpenButton id={r.id} label={t.product.open} className="w-full py-2.5 text-sm" />
+                <OpenButton href={`/stock/${r.id}`} label={t.product.open} className="w-full py-2.5 text-sm" />
               </div>
             ))}
           </div>
@@ -138,11 +139,4 @@ function Item({ label, children }: { label: string; children: React.ReactNode })
   return <div className="min-w-0"><dt className="text-[0.6875rem] text-ink-soft">{label}</dt><dd className="mt-0.5">{children}</dd></div>;
 }
 
-function OpenButton({ id, label, className = "px-3 py-1.5 text-xs" }: { id: string; label: string; className?: string }) {
-  return (
-    <Link href={`/stock/${id}`} className={`btn group gap-1.5 whitespace-nowrap bg-brand-600 text-white shadow-card hover:bg-brand-700 hover:shadow-lift ${className}`}>
-      <Icon name="eye" className="h-4 w-4" />{label}
-    </Link>
-  );
-}
 

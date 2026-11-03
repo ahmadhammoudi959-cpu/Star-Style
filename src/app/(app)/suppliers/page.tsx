@@ -21,6 +21,7 @@ export default async function SuppliersPage() {
             </div>
             <div className="text-sm text-ink-soft">{[s.contact, s.city, s.country].filter(Boolean).join(" · ")}</div>
             {s.email && <div className="text-sm text-ink-soft" dir="ltr">{s.email}</div>}
+            <span className="btn mt-3 w-full gap-1.5 bg-brand-600 py-2 text-xs text-white shadow-card group-hover:bg-brand-700"><Icon name="eye" className="h-4 w-4" />{t.product.open}</span>
           </Link>
         ))}
       </div>

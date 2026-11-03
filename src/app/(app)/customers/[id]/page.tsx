@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { getI18n } from "@/i18n";
+import { OpenButton } from "@/components/OpenButton";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { determineTaxMode } from "@/lib/tax";
@@ -59,6 +60,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
                     <td className="num">{formatDate(String(d.d), intl)}</td>
                     <td><span className="badge bg-brand-50 text-brand-700">{t.sales.status[d.status as keyof typeof t.sales.status]}</span></td>
                     <td className="num text-end">{d.gross != null ? formatCents(Number(d.gross), intl) : ""}</td>
+                    <td className="w-px text-end"><OpenButton href={`/sales/${d.kind === "offer" ? "offers" : "invoices"}/${d.id}`} label={t.product.open} /></td>
                   </tr>
                 ))}</tbody>
               </table></div>

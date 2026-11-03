@@ -100,6 +100,11 @@ const ar: Dict = {
     taxMode: "الضريبة", empty: "ما في زبائن لسا.", number: "رقم الزبون", documents: "المستندات", ownVatMissing: "لازم تحط الرقم الضريبي للشركة بالإعدادات أول.",
   },
   taxMode: { DOMESTIC: "داخل ألمانيا", EU_REVERSE_CHARGE: "أوروبا بدون ضريبة", EU_PENDING_VATID: "أوروبا – الرقم بالانتظار", EU_B2C: "أوروبا – أفراد", EXPORT: "تصدير بدون ضريبة" },
+  lists: {
+    pickCustomer: "اختار الزبون أو دوّر عليه", searchCustomer: "الاسم، المدينة، الرقم الضريبي أو رقم الزبون …", allCities: "كل المدن", all: "الكل",
+    noMatch: "ما في نتائج، غيّر الفلتر.", pickDoc: "اختار المستند أو دوّر عليه", searchDoc: "رقم الفاتورة أو اسم الزبون …",
+    allCustomers: "كل الزبائن", status: "الحالة", allStatuses: "كل الحالات", pickExpense: "اختار المصروف أو دوّر عليه", openInvoice: "عرض الفاتورة",
+  },
   picker: {
     category: "اختار التصنيف", searchLabel: "أو دوّر على منتج", all: "كل التصنيفات", browseAll: "كل المنتجات", title: "اختار المنتجات", search: "دوّر بالاسم أو رقم المنتج أو الباركود أو التصنيف …",
     add: "ضيف", inDoc: "مضاف: {n}", done: "تم", empty: "ما في منتجات هون.", lines: "البنود",

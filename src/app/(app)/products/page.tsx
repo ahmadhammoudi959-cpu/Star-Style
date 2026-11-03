@@ -8,6 +8,8 @@ import { Thumb } from "@/components/Thumb";
 import { formatCents } from "@/lib/money";
 import { productCategories } from "@/lib/queries";
 import { CategorySelect } from "@/components/CategorySelect";
+import { OpenButton } from "@/components/OpenButton";
+import { SearchPick } from "@/components/SearchPick";
 
 type Row = {
   id: string; imageFileId: string | null; sku: string; nameDe: string; nameNl: string; category: string;
@@ -40,15 +42,13 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   return (
     <div>
       <PageHeader title={t.product.title} actions={<Link href="/products/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.product.new}</Link>} />
-      <form className="mb-4 flex flex-col gap-3 animate-rise md:flex-row md:items-end">
+      <form className="relative z-10 mb-4 flex flex-col gap-3 animate-rise md:flex-row md:items-end">
         {cats.length > 0 && <CategorySelect categories={cats} label={t.picker.category} allLabel={t.picker.all} name="cat" defaultValue={cat} autoSubmit className="md:w-64" />}
-        <label className="block min-w-0 md:max-w-md md:flex-1">
-          <span className="label">{t.picker.searchLabel}</span>
-          <span className="relative block">
-            <Icon name="search" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" />
-            <input name="q" defaultValue={q} placeholder={t.product.searchHint} className="input ps-9" />
-          </span>
-        </label>
+        <div className="min-w-0 md:max-w-md md:flex-1">
+          <SearchPick name="q" defaultValue={q} label={t.picker.searchLabel} placeholder={t.product.searchHint} emptyLabel={t.picker.empty}
+            items={rows.map((r) => ({ label: r.nameDe, sub: [r.sku, r.category].filter(Boolean).join(" · "), href: `/products/${r.id}`, imageId: r.imageFileId,
+              search: [r.nameDe, r.nameNl, r.sku, r.category, ...r.barcodes].join(" ").toLowerCase() }))} />
+        </div>
       </form>
       {rows.length === 0 ? (
         <div className="card p-10 text-center text-ink-soft animate-rise">
@@ -89,7 +89,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                     <td className="text-[0.8125rem] text-ink-soft [overflow-wrap:break-word]">{r.category || "—"}</td>
                     <td className="num text-end">{formatCents(r.wholesaleCents, intl)}</td>
                     <td className="num text-end font-semibold"><span className={r.low ? "text-amber-600" : ""}>{r.stock}</span></td>
-                    <td className="text-end"><OpenButton id={r.id} label={t.product.open} /></td>
+                    <td className="text-end"><OpenButton href={`/products/${r.id}`} label={t.product.open} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -116,7 +116,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                   <Item label={t.product.wholesale}><span className="num">{formatCents(r.wholesaleCents, intl)}</span></Item>
                   <Item label={t.product.stock}><span className={`num font-semibold ${r.low ? "text-amber-600" : ""}`}>{r.stock}</span></Item>
                 </dl>
-                <OpenButton id={r.id} label={t.product.open} className="w-full py-2.5 text-sm" />
+                <OpenButton href={`/products/${r.id}`} label={t.product.open} className="w-full py-2.5 text-sm" />
               </div>
             ))}
           </div>
@@ -147,11 +147,3 @@ function Item({ label, children }: { label: string; children: React.ReactNode })
   return <div className="min-w-0"><dt className="text-[0.6875rem] text-ink-soft">{label}</dt><dd className="mt-0.5">{children}</dd></div>;
 }
 
-function OpenButton({ id, label, className = "px-3 py-1.5 text-xs" }: { id: string; label: string; className?: string }) {
-  return (
-    <Link href={`/products/${id}`}
-      className={`btn group gap-1.5 whitespace-nowrap bg-brand-600 text-white shadow-card hover:bg-brand-700 hover:shadow-lift ${className}`}>
-      <Icon name="eye" className="h-4 w-4" />{label}
-    </Link>
-  );
-}

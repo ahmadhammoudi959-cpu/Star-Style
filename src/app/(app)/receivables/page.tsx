@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icon";
 import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { openItems } from "@/lib/receivables";
+import { OpenButton } from "@/components/OpenButton";
 
 export const dynamic = "force-dynamic";
 const LIGHT = { green: "bg-brand-500", yellow: "bg-amber-400", red: "bg-red-500", none: "bg-violet-400" } as const;
@@ -53,8 +54,8 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
       {rows.length === 0 ? (
         <div className="card flex animate-rise items-center gap-3 p-8 text-ink-soft"><Icon name="check" className="h-6 w-6 text-brand-600" />{t.pay.nothingOpen}</div>
       ) : view === "customer" ? (
-        <div className="card animate-rise overflow-hidden"><div className="table-wrap"><table className="tbl">
-          <thead><tr><th></th><th>{t.pay.customer}</th><th className="text-end">{t.pay.openInvoices}</th><th className="text-end">{t.pay.daysOverdue}</th><th className="text-end">{t.pay.overdue}</th><th className="text-end">{t.pay.open}</th><th></th></tr></thead>
+        <div className="card animate-rise overflow-hidden"><div className="table-wrap hidden md:block"><table className="tbl tbl-fit">
+          <thead><tr><th></th><th>{t.pay.customer}</th><th className="text-end">{t.pay.openInvoices}</th><th className="text-end">{t.pay.daysOverdue}</th><th className="text-end">{t.pay.overdue}</th><th className="text-end">{t.pay.open}</th><th className="w-px"><span className="sr-only">{t.product.open}</span></th></tr></thead>
           <tbody>{groups.map((g) => (
             <tr key={g.id}>
               <td className="w-6"><span className={`block h-3 w-3 rounded-full ${LIGHT[g.light]}`} /></td>
@@ -63,13 +64,37 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
               <td className="num text-end">{g.worst || ""}</td>
               <td className="num text-end font-semibold text-red-600">{g.overdue ? formatCents(g.overdue, intl) : ""}</td>
               <td className={`num text-end font-bold ${g.open < 0 ? "text-violet-700" : ""}`}>{formatCents(g.open, intl)}</td>
-              <td className="text-end"><Link href={`/customers/${g.id}/statement`} className="text-xs font-semibold text-brand-700 hover:underline">{t.pay.statement}</Link></td>
+              <td className="text-end">
+                <div className="flex justify-end gap-2">
+                  <Link href={`/customers/${g.id}/statement`} className="btn-ghost group whitespace-nowrap px-3 py-1.5 text-xs"><Icon name="receipt" className="h-4 w-4" />{t.pay.statement}</Link>
+                  <OpenButton href={`/customers/${g.id}`} label={t.product.open} />
+                </div>
+              </td>
             </tr>
           ))}</tbody>
-        </table></div></div>
+        </table></div>
+          <div className="space-y-2 p-3 md:hidden">
+            {groups.map((g) => (
+              <div key={g.id} className="space-y-2 rounded-xl bg-brand-50/40 p-3 ring-1 ring-black/5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 font-bold"><span className={`h-3 w-3 shrink-0 rounded-full ${LIGHT[g.light]}`} />{g.name}</span>
+                  <span className={`num font-bold ${g.open < 0 ? "text-violet-700" : ""}`}>{formatCents(g.open, intl)}</span>
+                </div>
+                <div className="flex flex-wrap gap-x-4 text-xs text-ink-soft">
+                  <span>{t.pay.openInvoices}: <b className="num text-ink">{g.count}</b></span>
+                  {g.overdue > 0 && <span className="font-semibold text-red-600">{t.pay.overdue}: <span className="num">{formatCents(g.overdue, intl)}</span></span>}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Link href={`/customers/${g.id}/statement`} className="btn-ghost group py-2.5 text-sm"><Icon name="receipt" className="h-4 w-4" />{t.pay.statement}</Link>
+                  <OpenButton href={`/customers/${g.id}`} label={t.product.open} className="py-2.5 text-sm" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
-        <div className="card animate-rise overflow-hidden"><div className="table-wrap"><table className="tbl">
-          <thead><tr><th></th><th>{t.pay.invoice}</th><th>{t.pay.customer}</th><th>{t.pay.nextDue}</th><th className="text-end">{t.pay.daysOverdue}</th><th className="text-end">{t.pay.paid}</th><th className="text-end">{t.pay.open}</th><th></th></tr></thead>
+        <div className="card animate-rise overflow-hidden"><div className="table-wrap hidden md:block"><table className="tbl tbl-fit">
+          <thead><tr><th></th><th>{t.pay.invoice}</th><th>{t.pay.customer}</th><th>{t.pay.nextDue}</th><th className="text-end">{t.pay.daysOverdue}</th><th className="text-end">{t.pay.paid}</th><th className="text-end">{t.pay.open}</th><th></th><th className="w-px"><span className="sr-only">{t.product.open}</span></th></tr></thead>
           <tbody>{rows.map((r) => (
             <tr key={r.invoiceId} className={r.light === "red" ? "bg-red-50/50" : ""}>
               <td className="w-6"><span className={`block h-3 w-3 rounded-full ${LIGHT[r.light]}`} title={t.pay.status[r.state.status]} /></td>
@@ -80,9 +105,29 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
               <td className="num text-end text-ink-soft">{formatCents(r.state.paidCents, intl)}</td>
               <td className={`num text-end font-bold ${r.state.openCents < 0 ? "text-violet-700" : ""}`}>{formatCents(r.state.openCents, intl)}</td>
               <td className="text-end">{r.dunningLevel > 0 && <span className="badge bg-amber-100 text-amber-800">{t.pay.dunningLevels[Math.min(r.dunningLevel, 3) as 1 | 2 | 3]}</span>}</td>
+              <td className="text-end"><OpenButton href={`/sales/invoices/${r.invoiceId}`} label={t.lists.openInvoice} /></td>
             </tr>
           ))}</tbody>
-        </table></div></div>
+        </table></div>
+          <div className="space-y-2 p-3 md:hidden">
+            {rows.map((r) => (
+              <div key={r.invoiceId} className={`space-y-2 rounded-xl p-3 ring-1 ring-black/5 ${r.light === "red" ? "bg-red-50/60" : "bg-brand-50/40"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 font-bold"><span className={`h-3 w-3 shrink-0 rounded-full ${LIGHT[r.light]}`} /><bdi dir="ltr">{r.number}</bdi></span>
+                  <span className={`num font-bold ${r.state.openCents < 0 ? "text-violet-700" : ""}`}>{formatCents(r.state.openCents, intl)}</span>
+                </div>
+                <div className="text-sm">{r.customerName}</div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
+                  <span>{t.pay.nextDue}: <span className="num text-ink">{r.state.nextDueDate ? formatDate(r.state.nextDueDate, intl) : "—"}</span></span>
+                  <span>{t.pay.paid}: <span className="num text-ink">{formatCents(r.state.paidCents, intl)}</span></span>
+                  {r.state.daysOverdue > 0 && <span className="font-semibold text-red-600">{t.pay.daysOverdue}: {r.state.daysOverdue}</span>}
+                  {r.dunningLevel > 0 && <span className="badge bg-amber-100 text-amber-800">{t.pay.dunningLevels[Math.min(r.dunningLevel, 3) as 1 | 2 | 3]}</span>}
+                </div>
+                <OpenButton href={`/sales/invoices/${r.invoiceId}`} label={t.lists.openInvoice} className="w-full py-2.5 text-sm" />
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
