@@ -67,6 +67,7 @@ const ar: Dict = {
     },
   },
   receive: {
+    searchHistory: "دوّر برقم الشحنة أو المورّد أو رقم الفاتورة أو المنتج …", openReceipt: "عرض الشحنة",
     title: "إدخال بضاعة", new: "شحنة جديدة", supplier: "المورّد", supplierInvoice: "رقم فاتورة المورّد",
     lines: "البنود", pickProduct: "دوّر على منتج بالاسم أو الرقم أو الباركود أو التصنيف", unitCost: "سعر شراء القطعة", batchNo: "رقم الدفعة",
     expiry: "تاريخ الصلاحية", addLine: "إضافة بند", submit: "تسجيل البضاعة", booked: "تم تسجيل البضاعة",
@@ -74,6 +75,7 @@ const ar: Dict = {
     items: "البنود", value: "القيمة",
   },
   stock: {
+    clear: "امسح الفلتر", noLow: "ما في منتجات كميتها قليلة. لحتى يبيّن المنتج هون، اكتب رقم بخانة «نبّهني إذا قلّت عن» بصفحة المنتج.",
     title: "المخزون", movements: "الحركات", value: "قيمة المخزون بسعر الشراء", low: "تحت الحد الأدنى", filterLow: "بس الكميات القليلة",
     type: { RECEIPT: "إدخال", SALE: "بيع", RETURN: "إرجاع", WRITE_OFF: "تالف", ADJUSTMENT: "جرد", CANCEL: "إلغاء" },
     adjust: "تصحيح بالجرد", counted: "العدد الحقيقي", adjustReason: "السبب", adjusted: "تم تصحيح الكمية",

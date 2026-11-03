@@ -45,6 +45,7 @@ export function ReceiveForm({ t, options, suppliers, today, intl }: {
       {state?.ok && (
         <div className="flex animate-rise items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700 ring-1 ring-brand-100">
           <Icon name="check" className="h-4 w-4" />{t.receive.booked}: <span dir="ltr">{state.ok}</span>
+          {state.id && <Link href={`/receive/${state.id}`} className="ms-auto inline-flex items-center gap-1 underline"><Icon name="eye" className="h-4 w-4" />{t.product.open}</Link>}
         </div>
       )}
       <section className="card grid gap-4 p-5 md:grid-cols-4">

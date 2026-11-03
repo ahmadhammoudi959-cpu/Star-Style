@@ -67,6 +67,7 @@ const en: Dict = {
     },
   },
   receive: {
+    searchHistory: "Search: receipt no., supplier, invoice no. or product …", openReceipt: "View goods receipt",
     title: "Goods in", new: "New delivery", supplier: "Supplier", supplierInvoice: "Supplier invoice / note no.",
     lines: "Lines", pickProduct: "Find product (name, no., barcode, category)", unitCost: "Unit cost (net)", batchNo: "Batch",
     expiry: "Best before", addLine: "Add line", submit: "Book goods in", booked: "Goods booked in",
@@ -74,6 +75,7 @@ const en: Dict = {
     items: "Lines", value: "Value",
   },
   stock: {
+    clear: "Clear filter", noLow: "No product is running low. To see a product here, set “Warn below” on the product.",
     title: "Stock", movements: "Movements", value: "Stock value (cost)", low: "below minimum", filterLow: "Low stock only",
     type: { RECEIPT: "Goods in", SALE: "Sale", RETURN: "Return", WRITE_OFF: "Loss", ADJUSTMENT: "Stocktake", CANCEL: "Cancellation" },
     adjust: "Stocktake correction", counted: "Counted quantity", adjustReason: "Reason", adjusted: "Stock corrected",

@@ -65,6 +65,7 @@ const de = {
     },
   },
   receive: {
+    searchHistory: "Suchen: WE-Nr., Lieferant, Rechnungsnr. oder Artikel …", openReceipt: "Wareneingang ansehen",
     title: "Wareneingang", new: "Neue Lieferung", supplier: "Lieferant", supplierInvoice: "Lieferschein-/Rechnungsnr.",
     lines: "Positionen", pickProduct: "Artikel suchen (Name, Nr., Barcode, Kategorie)", unitCost: "EK netto / Stück", batchNo: "Charge",
     expiry: "Haltbar bis", addLine: "Position hinzufügen", submit: "Wareneingang buchen", booked: "Wareneingang gebucht",
@@ -72,6 +73,7 @@ const de = {
     items: "Positionen", value: "Wert",
   },
   stock: {
+    clear: "Filter löschen", noLow: "Kein Artikel hat wenig Bestand. Damit ein Artikel hier erscheint, beim Artikel einen „Mindestbestand“ eintragen.",
     title: "Lager", movements: "Bewegungen", value: "Lagerwert (EK)", low: "unter Mindestbestand", filterLow: "Nur niedriger Bestand",
     type: { RECEIPT: "Wareneingang", SALE: "Verkauf", RETURN: "Rückgabe", WRITE_OFF: "Verlust", ADJUSTMENT: "Inventur", CANCEL: "Storno" },
     adjust: "Inventur-Korrektur", counted: "Gezählter Bestand", adjustReason: "Grund", adjusted: "Bestand korrigiert",

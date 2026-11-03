@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { receiveGoods, StockError } from "@/lib/stock";
 
-export type ReceiveState = { error?: string; detail?: string; ok?: string } | undefined;
+export type ReceiveState = { error?: string; detail?: string; ok?: string; id?: string } | undefined;
 
 const Line = z.object({
   variantId: z.string().min(1),
@@ -32,7 +32,7 @@ export async function submitReceipt(_: ReceiveState, fd: FormData): Promise<Rece
       lines: d.lines.map((l) => ({ ...l, expiryDate: l.expiryDate || null })),
     }, session.uid);
     revalidatePath("/receive"); revalidatePath("/stock"); revalidatePath("/");
-    return { ok: rec.number };
+    return { ok: rec.number, id: rec.id };
   } catch (e) {
     if (e instanceof StockError) return { error: e.code, detail: e.detail };
     console.error(e);

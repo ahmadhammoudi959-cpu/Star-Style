@@ -3,72 +3,146 @@ import { Thumb } from "@/components/Thumb";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
-import { productCategories, stockRows } from "@/lib/queries";
-import { CategorySelect } from "@/components/CategorySelect";
+import { productCategories, stockRows, type StockRow } from "@/lib/queries";
 import { formatCents } from "@/lib/money";
 import { daysBetween, formatDate, todayIso } from "@/lib/dates";
+import { CategorySelect } from "@/components/CategorySelect";
+import { AutoSubmitCheckbox } from "@/components/AutoSubmitCheckbox";
 
 export default async function StockPage({ searchParams }: { searchParams: Promise<{ q?: string; low?: string; cat?: string }> }) {
   const { q = "", low, cat = "" } = await searchParams;
   const { t, intl } = await getI18n();
-  const [rows, cats] = await Promise.all([stockRows({ q, lowOnly: low === "1", category: cat }), productCategories()]);
+  const lowOnly = low === "1";
+  const [rows, cats] = await Promise.all([stockRows({ q, lowOnly, category: cat }), productCategories()]);
   const total = rows.reduce((s, r) => s + r.valueCents, 0);
   const today = todayIso();
+  const filtered = Boolean(q.trim() || cat || lowOnly);
+  const expiry = (r: StockRow) => {
+    if (!r.nextExpiry) return null;
+    const d = daysBetween(today, r.nextExpiry);
+    return <span className={`badge ${d < 0 ? "bg-red-100 text-red-800" : d <= 60 ? "bg-orange-100 text-orange-800" : "bg-brand-50 text-brand-700"}`}>{formatDate(r.nextExpiry, intl)}</span>;
+  };
+
   return (
     <div>
       <PageHeader title={t.stock.title} subtitle={`${t.stock.value}: ${formatCents(total, intl)}`} />
-      <form className="mb-4 flex flex-col gap-3 animate-rise md:flex-row md:flex-wrap md:items-end">
+
+      {/* Filter: Kategorie (filtert sofort), Suche, nur wenig Bestand (filtert sofort) */}
+      <form className="card mb-4 flex flex-col gap-3 p-4 animate-rise md:flex-row md:flex-wrap md:items-end">
         {cats.length > 0 && <CategorySelect categories={cats} label={t.picker.category} allLabel={t.picker.all} name="cat" defaultValue={cat} autoSubmit className="md:w-64" />}
-        <label className="block w-full min-w-0 md:max-w-md md:flex-1">
+        <label className="block min-w-0 md:max-w-md md:flex-1">
           <span className="label">{t.picker.searchLabel}</span>
           <span className="relative block">
             <Icon name="search" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" />
             <input name="q" defaultValue={q} placeholder={t.product.searchHint} className="input ps-9" />
           </span>
         </label>
-        <label className="flex cursor-pointer items-center gap-2 py-3 text-sm font-semibold">
-          <input type="checkbox" name="low" value="1" defaultChecked={low === "1"} className="h-5 w-5 accent-brand-600" />{t.stock.filterLow}
-        </label>
-        <button className="btn-ghost">{t.common.search.replace("…", "").trim()}</button>
+        <div className="flex flex-wrap items-center gap-2">
+          <AutoSubmitCheckbox name="low" defaultChecked={lowOnly} label={t.stock.filterLow} />
+          <button className="btn-primary group"><Icon name="search" className="h-4 w-4" />{t.common.search.replace("…", "").trim()}</button>
+          {filtered && <Link href="/stock" className="btn-ghost group"><Icon name="x" className="h-4 w-4" />{t.stock.clear}</Link>}
+        </div>
       </form>
-      <div className="card overflow-hidden animate-rise">
-        {rows.length === 0 ? <p className="p-10 text-center text-ink-soft">{t.common.nothingYet}</p> : (
-          <div className="table-wrap">
-            <table className="tbl">
-              <thead><tr>
-                <th>{t.product.nameDe}</th><th className="hidden md:table-cell">{t.product.sku}</th>
-                <th className="text-end">{t.product.stock}</th><th className="text-end">{t.product.reserved}</th>
-                <th className="text-end">{t.product.available}</th><th className="hidden text-end md:table-cell">{t.product.minStock}</th>
-                <th className="hidden md:table-cell">{t.receive.expiry}</th><th className="text-end">{t.stock.value}</th>
-              </tr></thead>
-              <tbody>
-                {rows.map((r) => {
-                  const lowStock = r.minStock > 0 && r.stockQty <= r.minStock;
-                  const d = r.nextExpiry ? daysBetween(today, r.nextExpiry) : null;
-                  const label = [r.nameDe, [r.size, r.color].filter(Boolean).join(" · ")].filter(Boolean);
-                  return (
+
+      {rows.length === 0 ? (
+        <div className="card p-10 text-center text-ink-soft animate-rise">{lowOnly ? t.stock.noLow : filtered ? t.picker.empty : t.common.nothingYet}</div>
+      ) : (
+        <>
+          {/* PC/Laptop: alle Spalten ohne seitliches Scrollen */}
+          <div className="card hidden overflow-hidden animate-rise xl:block">
+            <div className="table-wrap">
+              <table className="tbl tbl-fit">
+                <thead><tr>
+                  <th>{t.product.nameDe}</th>
+                  <th className="w-[7rem]">{t.product.sku}</th>
+                  <th className="w-[7rem]">{t.product.barcode}</th>
+                  <th className="w-px text-end">{t.product.stock}</th>
+                  <th className="w-px text-end">{t.product.reserved}</th>
+                  <th className="w-px text-end">{t.product.available}</th>
+                  <th className="w-[5.5rem] text-end">{t.product.minStock}</th>
+                  <th className="w-px">{t.receive.expiry}</th>
+                  <th className="w-[6.5rem] text-end">{t.stock.value}</th>
+                  <th className="w-px"><span className="sr-only">{t.product.open}</span></th>
+                </tr></thead>
+                <tbody>
+                  {rows.map((r) => (
                     <tr key={r.id}>
-                      <td><div className="flex items-center gap-3"><Thumb id={r.imageId} size={40} /><div><Link href={`/stock/${r.id}`} className="font-semibold hover:text-brand-700">{label[0]}</Link>
-                        {label[1] && <span className="ms-2 text-ink-soft">{label[1]}</span>}</div></div></td>
-                      <td className="num hidden text-ink-soft md:table-cell" dir="ltr">{r.sku}</td>
-                      <td className="num text-end font-semibold">
-                        <span className={lowStock ? "badge bg-amber-100 text-amber-800" : ""}>{r.stockQty}</span>
-                      </td>
-                      <td className="num text-end text-ink-soft">{r.reserved || ""}</td>
-                      <td className="num text-end">{r.stockQty - r.reserved}</td>
-                      <td className="num hidden text-end text-ink-soft md:table-cell">{r.minStock || ""}</td>
-                      <td className="hidden md:table-cell">
-                        {d != null && <span className={`badge ${d < 0 ? "bg-red-100 text-red-800" : d <= 60 ? "bg-orange-100 text-orange-800" : "bg-brand-50 text-brand-700"}`}>{formatDate(r.nextExpiry, intl)}</span>}
-                      </td>
+                      <td><NameCell r={r} /></td>
+                      <td><Code value={r.sku} /></td>
+                      <td>{r.barcode ? <Code value={r.barcode} strong /> : <span className="text-xs text-ink-soft">—</span>}</td>
+                      <td className="num text-end font-semibold"><Qty r={r} /></td>
+                      <td className="num text-end text-ink-soft">{r.reserved || "—"}</td>
+                      <td className="num text-end font-semibold">{r.stockQty - r.reserved}</td>
+                      <td className="num text-end text-ink-soft">{r.minStock || "—"}</td>
+                      <td>{expiry(r) ?? <span className="text-xs text-ink-soft">—</span>}</td>
                       <td className="num text-end">{formatCents(r.valueCents, intl)}</td>
+                      <td className="text-end"><OpenButton id={r.id} label={t.product.open} /></td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Handy/Tablet/kleiner Laptop: eine Karte je Größe/Farbe, alle Angaben sichtbar */}
+          <div className="space-y-2 xl:hidden">
+            {rows.map((r) => (
+              <div key={r.id} className="card space-y-3 p-3 animate-rise">
+                <NameCell r={r} big />
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-xl bg-brand-50/40 p-2.5 text-xs ring-1 ring-black/5 sm:grid-cols-4">
+                  <Item label={t.product.sku}><Code value={r.sku} /></Item>
+                  <Item label={t.product.barcode}>{r.barcode ? <Code value={r.barcode} strong /> : "—"}</Item>
+                  <Item label={t.product.stock}><span className="num text-sm font-bold"><Qty r={r} /></span></Item>
+                  <Item label={t.product.available}><span className="num text-sm font-bold">{r.stockQty - r.reserved}</span></Item>
+                  <Item label={t.product.reserved}><span className="num">{r.reserved || "—"}</span></Item>
+                  <Item label={t.product.minStock}><span className="num">{r.minStock || "—"}</span></Item>
+                  <Item label={t.receive.expiry}>{expiry(r) ?? "—"}</Item>
+                  <Item label={t.stock.value}><span className="num">{formatCents(r.valueCents, intl)}</span></Item>
+                </dl>
+                <OpenButton id={r.id} label={t.product.open} className="w-full py-2.5 text-sm" />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
+
 }
+
+function NameCell({ r, big = false }: { r: StockRow; big?: boolean }) {
+  const variant = [r.size, r.color].filter(Boolean).join(" · ");
+  return (
+    <Link href={`/stock/${r.id}`} className="group flex items-center gap-2.5">
+      <Thumb id={r.imageId} size={big ? 56 : 40} />
+      <span className="min-w-0">
+        <span className="block font-semibold leading-snug [overflow-wrap:anywhere] group-hover:text-brand-700">{r.nameDe}</span>
+        {variant && <span className="badge mt-0.5 bg-brand-50 text-brand-700" dir="auto">{variant}</span>}
+        {r.category && <span className="block text-[0.6875rem] text-ink-soft">{r.category}</span>}
+      </span>
+    </Link>
+  );
+}
+
+function Qty({ r }: { r: StockRow }) {
+  const lowStock = r.minStock > 0 && r.stockQty <= r.minStock;
+  return <span className={r.stockQty < 0 ? "badge bg-red-100 text-red-800" : lowStock ? "badge bg-amber-100 text-amber-800" : ""}>{r.stockQty}</span>;
+}
+
+/** Nummern immer links-nach-rechts; lange Nummern brechen um statt die Tabelle zu verbreitern */
+function Code({ value, strong = false }: { value: string; strong?: boolean }) {
+  return <bdi dir="ltr" className={`block text-xs tabular-nums [overflow-wrap:anywhere] ${strong ? "text-ink" : "text-ink-soft"}`}>{value}</bdi>;
+}
+
+function Item({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="min-w-0"><dt className="text-[0.6875rem] text-ink-soft">{label}</dt><dd className="mt-0.5">{children}</dd></div>;
+}
+
+function OpenButton({ id, label, className = "px-3 py-1.5 text-xs" }: { id: string; label: string; className?: string }) {
+  return (
+    <Link href={`/stock/${id}`} className={`btn group gap-1.5 whitespace-nowrap bg-brand-600 text-white shadow-card hover:bg-brand-700 hover:shadow-lift ${className}`}>
+      <Icon name="eye" className="h-4 w-4" />{label}
+    </Link>
+  );
+}
+

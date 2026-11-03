@@ -48,7 +48,8 @@ export async function stockRows(opts: { q?: string; lowOnly?: boolean; category?
     where v.active and p.active
       and (${q}::text is null or lower(p.name_de) like ${q} or lower(p.name_nl) like ${q} or lower(p.sku) like ${q} or v.barcode like ${q}
            or lower(p.category) like ${q})
-      and (${opts.lowOnly ?? false}::boolean = false or v.stock_qty <= v.min_stock)
+      -- wenig Bestand = wie auf der Startseite: unter dem eigenen Mindestbestand (nur wenn einer eingetragen ist) oder im Minus
+      and (${opts.lowOnly ?? false}::boolean = false or (v.min_stock > 0 and v.stock_qty <= v.min_stock) or v.stock_qty < 0)
       and (${cat}::text is null or p.category = ${cat})
     order by p.name_de, v.size, v.color`);
   return r.rows.map((x) => {
