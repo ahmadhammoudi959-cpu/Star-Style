@@ -10,7 +10,7 @@ import { audit, receiveGoodsTx } from "@/lib/stock";
 import { storeImage } from "@/lib/files";
 import { todayIso } from "@/lib/dates";
 import { deleteProduct, ProductDeleteError } from "@/lib/product-delete";
-import { encodePush, pushProductToShops } from "@/lib/shopify/product-push";
+import { encodePush, pushProductToShops, pushTargets, setCategoryMapping } from "@/lib/shopify/product-push";
 
 export type ProductFormState = { error?: string; field?: string; values?: Record<string, string> } | undefined;
 
@@ -184,10 +184,22 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   }
   revalidatePath("/products");
   revalidatePath("/stock");
-  // In den angehakten Shops anlegen (nur wenn dort noch nicht vorhanden). Fehler dort ändern nichts am Speichern.
+  revalidatePath("/shops", "layout");
+  // In die Shops nur nach Rückfrage (Wunsch Inhaber): „Ja, echter Artikel“ → hochladen, sonst bleibt er unter „Noch nicht im Shop“.
+  // Fehler beim Shop ändern nichts am Speichern.
   let push = "";
-  try { push = encodePush(await pushProductToShops(productId!, session.uid)); }
-  catch (e) { console.error("shopify push", e); }
+  try {
+    if (fd.get("shopPush") === "1") {
+      // im Dialog gewählte Shop-Kategorie für unsere Kategorie merken (gilt für alle Artikel dieser Kategorie)
+      for (const channel of ["BRAND_SHOP", "GENERAL_SHOP"] as const) {
+        const type = String(fd.get(`storeType_${channel}`) ?? "").trim();
+        if (type && d.category) await setCategoryMapping(channel, d.category, type, session.uid);
+      }
+      push = encodePush(await pushProductToShops(productId!, session.uid));
+    } else {
+      push = encodePush((await pushTargets(productId!)).map((channel) => ({ channel, outcome: "notNow" as const })));
+    }
+  } catch (e) { console.error("shopify push", e); }
   redirect(`/products/${productId}?saved=1${push ? `&push=${encodeURIComponent(push)}` : ""}`);
 }
 

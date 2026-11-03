@@ -469,6 +469,11 @@ export const shops = pgTable("shops", {
   lastProductSync: timestamp("last_product_sync", { withTimezone: true }),
   webhooksAt: timestamp("webhooks_at", { withTimezone: true }),
   lastError: text("last_error").notNull().default(""),
+  // Kategorien des Shops (Produkttypen + Titel der automatischen Kollektion „Produkttyp ist gleich …“), zwischengespeichert
+  storeTypes: jsonb("store_types").$type<{ type: string; collection: string | null }[]>().notNull().default([]),
+  storeTypesAt: timestamp("store_types_at", { withTimezone: true }),
+  // unsere Kategorie → Produkttyp im Shop, wenn die Namen nicht gleich sind (vom Nutzer gewählt)
+  categoryMap: jsonb("category_map").$type<Record<string, string>>().notNull().default({}),
   updatedAt: updatedAt(),
 });
 

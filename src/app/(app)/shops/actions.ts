@@ -4,7 +4,10 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { encrypt } from "@/lib/crypto";
-import { normalizeDomain, ShopifyError, type ShopChannel } from "@/lib/shopify/client";
+import { getShop, normalizeDomain, ShopifyError, type ShopChannel } from "@/lib/shopify/client";
+import {
+  bulkPushStatus, getStoreTypes, pushProductToShop, setCategoryMapping, startBulkPush, unlistProduct, type BulkState, type PushResult,
+} from "@/lib/shopify/product-push";
 import { linkVariant, processDirty, pushStock, syncOrders, syncProducts, testConnection, runCycle } from "@/lib/shopify/sync";
 import { registerWebhooks } from "@/lib/shopify/webhooks";
 import { importProducts } from "@/lib/shopify/import";
@@ -15,6 +18,7 @@ const fail = (e: unknown): ShopResult => {
   if (e instanceof ShopifyError) return { error: e.code, detail: e.message.slice(0, 200) };
   const m = e instanceof Error ? e.message : String(e);
   if (m === "noPublicUrl") return { error: "noPublicUrl" };
+  if (m === "noLocation") return { error: "noLocation" };
   console.error(e);
   return { error: "other", detail: m.slice(0, 200) };
 };
@@ -115,4 +119,52 @@ export async function linkAction(channel: string, rowId: string, variantId: stri
   await linkVariant(CH(channel), rowId, variantId);
   revalidatePath(`/shops/${channel}/mapping`);
   return { ok: "saved" };
+}
+
+// ───────────── Artikel hochladen (Liste „Noch nicht im Shop“) ─────────────
+
+const refreshPending = (channel: ShopChannel) => { revalidatePath(`/shops/${channel}`); revalidatePath("/"); revalidatePath("/products"); };
+
+/** „Alle bereiten hochladen“: läuft im Hintergrund, Stand über bulkStatusAction */
+export async function startBulkPushAction(channel: string): Promise<ShopResult & { bulk?: BulkState }> {
+  const session = await requireSession();
+  try { return { ok: "started", bulk: await startBulkPush(CH(channel), session.uid) }; } catch (e) { return fail(e); }
+}
+
+export async function bulkStatusAction(channel: string): Promise<BulkState | null> {
+  await requireSession();
+  const st = bulkPushStatus(CH(channel));
+  if (st && !st.running) refreshPending(CH(channel));
+  return st;
+}
+
+/** Einen Artikel hochladen; Ergebnis wie nach dem Speichern im Artikel */
+export async function pushOneAction(channel: string, productId: string): Promise<{ result: PushResult | null }> {
+  const session = await requireSession();
+  const result = await pushProductToShop(CH(channel), productId, session.uid);
+  refreshPending(CH(channel));
+  return { result };
+}
+
+/** „Nicht für diesen Shop“ – nur das Häkchen entfernen */
+export async function unlistAction(channel: string, productId: string): Promise<ShopResult> {
+  const session = await requireSession();
+  await unlistProduct(CH(channel), productId, session.uid);
+  refreshPending(CH(channel));
+  return { ok: "saved" };
+}
+
+/** Unsere Kategorie → Kategorie des Shops (leer = Zuordnung entfernen) */
+export async function mapCategoryAction(channel: string, category: string, type: string): Promise<ShopResult> {
+  const session = await requireSession();
+  const ok = await setCategoryMapping(CH(channel), category, type || null, session.uid);
+  refreshPending(CH(channel));
+  return ok ? { ok: "saved" } : { error: "other", detail: "category" };
+}
+
+export async function refreshCategoriesAction(channel: string): Promise<ShopResult> {
+  await requireSession();
+  const shop = await getShop(CH(channel));
+  if (!shop?.domain) return { error: "notConfigured" };
+  try { const types = await getStoreTypes(shop, 0, true); refreshPending(CH(channel)); return { ok: String(types.length) }; } catch (e) { return fail(e); }
 }

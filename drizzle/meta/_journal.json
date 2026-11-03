@@ -78,6 +78,13 @@
       "when": 1793720527080,
       "tag": "0010_sku_barcode",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793727105123,
+      "tag": "0011_shop_categories",
+      "breakpoints": true
     }
   ]
 }

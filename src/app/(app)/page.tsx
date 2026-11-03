@@ -10,11 +10,12 @@ import { formatCents } from "@/lib/money";
 import { daysBetween, formatDate, todayIso } from "@/lib/dates";
 import { setupSteps } from "@/lib/onboarding";
 import { fill } from "@/i18n";
+import { pendingSummary } from "@/lib/shopify/product-push";
 
 export default async function Home() {
   const session = await requireSession();
   const { t, intl } = await getI18n();
-  const [stats, al, open, ins, setup] = await Promise.all([dashboardStats(), alerts(), openItems(), loadInsights(), setupSteps()]);
+  const [stats, al, open, ins, setup, pend] = await Promise.all([dashboardStats(), alerts(), openItems(), loadInsights(), setupSteps(), pendingSummary()]);
   const ai = aiConfigured();
   const debts = open.filter((r) => r.state.openCents > 0);
   const rOpen = debts.reduce((s, r) => s + r.state.openCents, 0);
@@ -70,6 +71,24 @@ export default async function Home() {
               );
             })}
           </ol>
+        </section>
+      )}
+
+      {/* Artikel, die in einem angehakten Shop noch fehlen (Wunsch Inhaber: Erinnerung + Hochladen nur nach Rückfrage) */}
+      {pend.length > 0 && (
+        <section className="card animate-rise overflow-hidden ring-2 ring-accent-500/25">
+          <div className="flex items-center gap-3 border-b border-black/5 bg-gradient-to-l from-accent-50 to-white px-5 py-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-50 text-accent-600"><Icon name="upload" className="icon-pop h-5 w-5" /></div>
+            <h2 className="font-bold">{t.home.pendingTitle}</h2>
+          </div>
+          <ul className="divide-y divide-black/5">
+            {pend.map((x) => (
+              <li key={x.channel} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-sm">{fill(t.home.pendingText, { shop: t.shop.names[x.channel], n: x.total, r: x.ready })}</span>
+                <Link href={`/shops/${x.channel}#pending`} className="btn-primary group shrink-0">{t.home.pendingAction}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></Link>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

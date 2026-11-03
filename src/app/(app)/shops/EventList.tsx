@@ -11,6 +11,12 @@ export function evText(t: Dict, msg: string) {
   if (key === "productsLoaded") { const [a, b, c] = p.split("|"); return E.productsLoaded.replace("{t}", a).replace("{m}", b).replace("{o}", c); }
   if (key === "productsImported") { const [c, v, e, n] = p.split("|"); return E.productsImported.replace("{c}", c).replace("{v}", v).replace("{e}", e).replace("{n}", n); }
   if (key === "imagesLoaded") { const [ok, f] = p.split("|"); return E.imagesLoaded.replace("{ok}", ok).replace("{f}", f); }
+  if (key === "bulkPushed") { const [c, l, u, f, s] = p.split("|"); return E.bulkPushed.replace("{c}", c).replace("{l}", l).replace("{u}", u).replace("{f}", f).replace("{s}", s); }
+  if (key === "pushBlocked") {
+    const j = p.indexOf("|");
+    const reason = p.slice(0, j), name = p.slice(j + 1);
+    return E.pushBlocked.replace("{p}", name).replace("{r}", (t.product.pushReasons as Record<string, string>)[reason] ?? reason);
+  }
   return E[key] ? E[key].replace("{p}", p) : msg;
 }
 
@@ -24,8 +30,8 @@ export function EventList({ t, events, showShop }: { t: Dict; events: Ev[]; show
           <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${tone[e.level] ?? "bg-slate-300"}`} />
           <span className="num w-32 shrink-0 text-xs text-ink-soft">{new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Berlin" }).format(e.createdAt)}</span>
           {showShop && <span className="badge bg-slate-100 text-slate-700">{t.shop.names[e.channel as "BRAND_SHOP"]}</span>}
-          {e.ref && <span className="num font-semibold" dir="ltr">{e.ref}</span>}
-          <span className={`min-w-0 flex-1 ${e.level === "error" ? "text-red-700" : e.level === "warn" ? "text-amber-800" : ""}`}>
+          {e.ref && <span className="num min-w-0 font-semibold [overflow-wrap:anywhere]" dir="ltr">{e.ref}</span>}
+          <span className={`min-w-0 flex-1 [overflow-wrap:anywhere] ${e.level === "error" ? "text-red-700" : e.level === "warn" ? "text-amber-800" : ""}`}>
             {evText(t, e.message)}
             {e.invoiceId && <Link href={`/sales/invoices/${e.invoiceId}`} className="ms-2 font-semibold text-brand-700 hover:underline">→</Link>}
           </span>

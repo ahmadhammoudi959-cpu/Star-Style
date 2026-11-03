@@ -1,6 +1,9 @@
 "use client";
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { saveProduct } from "./actions";
+import { ShopPushDialog, type Channel, type PushTarget } from "./ShopPushDialog";
+import { resolveStoreType, storeTypeLabel, type PushBlocker, type StoreType } from "@/lib/shopify/product-push-map";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
 import { parseMoney } from "@/lib/money";
@@ -19,12 +22,24 @@ const fmt = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 export const centsToInput = fmt;
 
 type ShopFlags = { BRAND_SHOP: boolean; GENERAL_SHOP: boolean };
+const CHANNELS: Channel[] = ["BRAND_SHOP", "GENERAL_SHOP"];
 
 export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
   t: Dict; initial: ProductFormData; suppliers: { id: string; name: string }[]; categories: string[];
-  shopStatus?: { connected: ShopFlags; linked: ShopFlags };
+  shopStatus?: {
+    connected: ShopFlags; linked: ShopFlags; linkedVariantIds?: Record<Channel, string[]>;
+    storeTypes?: Record<Channel, StoreType[]>; categoryMap?: Record<Channel, Record<string, string>>;
+  };
 }) {
   const [state, action] = useActionState(saveProduct, undefined);
+  // Rückfrage vor dem Hochladen in die Shops (Wunsch Inhaber): Antwort als kontrolliertes Hidden-Feld (siehe CLAUDE.md)
+  const formRef = useRef<HTMLFormElement>(null);
+  const intentRef = useRef<"" | "1" | "0">("");
+  const [intent, setIntent] = useState<"" | "1" | "0">("");
+  const [ask, setAsk] = useState<{ targets: PushTarget[]; blockers: PushBlocker[]; category: string } | null>(null);
+  const [typeChoice, setTypeChoice] = useState<Record<Channel, string>>({ BRAND_SHOP: "", GENERAL_SHOP: "" });
+  // nach einer Fehlermeldung beim nächsten Speichern wieder fragen
+  useEffect(() => { intentRef.current = ""; setIntent(""); }, [state]);
   const [variants, setVariants] = useState<V[]>(
     (initial.variants.length ? initial.variants : [{ size: "", color: "", barcode: "", minStock: 0 }]).map((v, i) => ({ ...v, key: String(i) })),
   );
@@ -53,12 +68,49 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
     ? typeof known === "string" ? known : state.error === "required" ? `${t.common.required}: ${state.field ?? ""}` : t.common.error
     : undefined;
 
+  /** Beim Absenden: fehlt der Artikel (oder eine Größe/Farbe) in einem angehakten Shop? Dann erst fragen. */
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (intentRef.current) return; // Antwort aus der Rückfrage → normal speichern
+    const category = String(new FormData(e.currentTarget).get("category") ?? "").trim();
+    const blockers = new Set<PushBlocker>();
+    const targets: PushTarget[] = [];
+    for (const c of CHANNELS) {
+      if (!inShop[c] || !shopStatus?.connected[c]) continue;
+      const linkedIds = new Set(shopStatus.linkedVariantIds?.[c] ?? []);
+      const missing = variants.filter((x) => !(x.id && linkedIds.has(x.id)));
+      if (!missing.length) continue;
+      const kind = missing.length === variants.length ? "new" : "add";
+      const types = shopStatus.storeTypes?.[c] ?? [];
+      const type = kind === "new" && category ? resolveStoreType(category, types, shopStatus.categoryMap?.[c] ?? {}) : null;
+      const hit = type ? types.find((x) => x.type === type) : undefined;
+      if (missing.some((x) => !x.barcode.trim())) blockers.add("noBarcode");
+      if (kind === "new" && !category) blockers.add("noCategory");
+      if ((parseMoney(prices.r) ?? 0) <= 0) blockers.add("noPrice");
+      targets.push({ channel: c, kind, n: missing.length, placedIn: hit ? storeTypeLabel(hit) : type, needType: kind === "new" && Boolean(category) && !type && types.length > 0, types });
+    }
+    if (!targets.length) return;
+    e.preventDefault();
+    setAsk({ targets, blockers: [...blockers], category });
+  }
+  function answer(push: boolean) {
+    intentRef.current = push ? "1" : "0";
+    flushSync(() => { setIntent(intentRef.current); setAsk(null); });
+    formRef.current?.requestSubmit();
+  }
+
   const photoLabels = { add: t.product.addPhoto, change: t.product.changePhoto, remove: t.product.removePhoto, processing: t.product.photoProcessing, error: t.product.imageType };
   const upd = (key: string, patch: Partial<V>) => setVariants((vs) => vs.map((v) => (v.key === key ? { ...v, ...patch } : v)));
 
   return (
-    <form action={action} className="space-y-6">
+    <form ref={formRef} action={action} onSubmit={onSubmit} className="space-y-6">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
+      <input type="hidden" name="shopPush" value={intent} />
+      {CHANNELS.map((c) => <input key={c} type="hidden" name={`storeType_${c}`} value={intent === "1" ? typeChoice[c] : ""} />)}
+      {ask && (
+        <ShopPushDialog t={t} targets={ask.targets} blockers={ask.blockers} category={ask.category}
+          typeChoice={typeChoice} onTypeChoice={(c, v) => setTypeChoice((x) => ({ ...x, [c]: v }))}
+          onAnswer={answer} onBack={() => setAsk(null)} />
+      )}
       <input type="hidden" name="variants" value={JSON.stringify(variants.map(({ key, stockQty: _s, imageFileId: _i, ...v }) => ({ ...v, ref: key })))} />
       <ErrorBox message={errorText} />
 

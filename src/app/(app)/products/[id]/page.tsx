@@ -48,8 +48,8 @@ function PushNotes({ t, results }: { t: Dict; results: PushResult[] }) {
   const notes: { text: string; kind: keyof typeof tone }[] = [];
   for (const r of results) {
     const shop = t.shop.names[r.channel];
-    const kind = r.outcome === "created" || r.outcome === "linked" ? "ok" : r.outcome === "failed" ? "bad" : "warn";
-    notes.push({ kind, text: fill(t.product.push[r.outcome], { shop, n: r.missing ?? 0, reason: r.reason ? t.product.pushReasons[r.reason] : "" }) });
+    const kind = r.outcome === "created" || r.outcome === "linked" || r.outcome === "updated" ? "ok" : r.outcome === "failed" ? "bad" : "warn";
+    notes.push({ kind, text: fill(t.product.push[r.outcome], { shop, n: r.n ?? 0, reason: r.reason ? t.product.pushReasons[r.reason] : "" }) });
     if (r.imagesFailed) notes.push({ kind: "warn", text: fill(t.product.push.imagesFailed, { shop }) });
   }
   return (
