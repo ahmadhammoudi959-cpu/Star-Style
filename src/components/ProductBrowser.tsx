@@ -91,7 +91,7 @@ export function ProductBrowser<T extends PickerOption>({ options, onPick, onClos
           {groups.length === 0 ? (
             <p className="py-16 text-center text-sm text-ink-soft">{labels.empty}</p>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
               {groups.map((g) => {
                 const single = g.variants.length === 1 ? g.variants[0] : null;
                 return (
