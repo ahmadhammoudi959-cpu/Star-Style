@@ -18,14 +18,22 @@ export type ProductFormData = {
 const fmt = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 export const centsToInput = fmt;
 
-export function ProductForm({ t, initial, suppliers, categories }: {
+type ShopFlags = { BRAND_SHOP: boolean; GENERAL_SHOP: boolean };
+
+export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
   t: Dict; initial: ProductFormData; suppliers: { id: string; name: string }[]; categories: string[];
+  shopStatus?: { connected: ShopFlags; linked: ShopFlags };
 }) {
   const [state, action] = useActionState(saveProduct, undefined);
   const [variants, setVariants] = useState<V[]>(
     (initial.variants.length ? initial.variants : [{ size: "", color: "", barcode: "", minStock: 0 }]).map((v, i) => ({ ...v, key: String(i) })),
   );
   const [tracksExpiry, setTracksExpiry] = useState(initial.tracksExpiry);
+  const [inShop, setInShop] = useState<ShopFlags>({ BRAND_SHOP: initial.inBrandShop, GENERAL_SHOP: initial.inGeneralShop });
+  // im Shop schon verbunden → „im Shop ✓“; angehakt, Shop eingerichtet, noch nicht verbunden → wird beim Speichern angelegt
+  const shopNote = (c: keyof ShopFlags) =>
+    shopStatus?.linked[c] ? { text: t.product.inShop, tone: "ok" as const }
+      : shopStatus?.connected[c] && inShop[c] ? { text: t.product.willCreate, tone: "info" as const } : undefined;
   const [prices, setPrices] = useState({ p: initial.purchasePrice, w: initial.wholesalePrice, r: initial.retailPrice });
   const margin = useMemo(() => {
     const p = parseMoney(prices.p) ?? 0;
@@ -33,8 +41,9 @@ export function ProductForm({ t, initial, suppliers, categories }: {
     return { w: calc(prices.w), r: calc(prices.r) };
   }, [prices]);
 
+  const known = state?.error ? (t.product as unknown as Record<string, unknown>)[state.error] : undefined;
   const errorText = state?.error
-    ? (t.product as Record<string, string>)[state.error] ?? (state.error === "required" ? `${t.common.required}: ${state.field ?? ""}` : t.common.error)
+    ? typeof known === "string" ? known : state.error === "required" ? `${t.common.required}: ${state.field ?? ""}` : t.common.error
     : undefined;
 
   const photoLabels = { add: t.product.addPhoto, change: t.product.changePhoto, remove: t.product.removePhoto, processing: t.product.photoProcessing, error: t.product.imageType };
@@ -94,8 +103,11 @@ export function ProductForm({ t, initial, suppliers, categories }: {
             {t.product.tracksExpiry}
           </label>
           <span className="text-sm font-semibold text-ink-soft">{t.product.shops}:</span>
-          <Check name="inBrandShop" label={t.product.brandShop} defaultChecked={initial.inBrandShop} />
-          <Check name="inGeneralShop" label={t.product.generalShop} defaultChecked={initial.inGeneralShop} />
+          <Check name="inBrandShop" label={t.product.brandShop} checked={inShop.BRAND_SHOP} onChange={(c) => setInShop((x) => ({ ...x, BRAND_SHOP: c }))} note={shopNote("BRAND_SHOP")} />
+          <Check name="inGeneralShop" label={t.product.generalShop} checked={inShop.GENERAL_SHOP} onChange={(c) => setInShop((x) => ({ ...x, GENERAL_SHOP: c }))} note={shopNote("GENERAL_SHOP")} />
+          {(shopStatus?.connected.BRAND_SHOP || shopStatus?.connected.GENERAL_SHOP) && (
+            <p className="w-full text-xs text-ink-soft">{t.product.shopsHint}</p>
+          )}
         </div>
       </section>
 
@@ -165,11 +177,16 @@ function MoneyInput({ name, value, onChange }: { name: string; value: string; on
   );
 }
 
-function Check({ name, label, defaultChecked }: { name: string; label: string; defaultChecked: boolean }) {
+function Check({ name, label, defaultChecked, checked, onChange, note }: {
+  name: string; label: string; defaultChecked?: boolean; checked?: boolean; onChange?: (checked: boolean) => void;
+  note?: { text: string; tone: "ok" | "info" };
+}) {
   return (
     <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
-      <input type="checkbox" name={name} defaultChecked={defaultChecked} className="h-5 w-5 rounded accent-brand-600" />
+      <input type="checkbox" name={name} {...(checked !== undefined ? { checked, onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange?.(e.target.checked) } : { defaultChecked })}
+        className="h-5 w-5 rounded accent-brand-600" />
       {label}
+      {note && <span className={`badge ring-1 ${note.tone === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-100" : "bg-brand-50 text-brand-700 ring-brand-100"}`}>{note.text}</span>}
     </label>
   );
 }

@@ -10,6 +10,7 @@ import { audit, receiveGoodsTx } from "@/lib/stock";
 import { storeImage } from "@/lib/files";
 import { todayIso } from "@/lib/dates";
 import { deleteProduct, ProductDeleteError } from "@/lib/product-delete";
+import { encodePush, pushProductToShops } from "@/lib/shopify/product-push";
 
 export type ProductFormState = { error?: string; field?: string } | undefined;
 
@@ -171,7 +172,11 @@ export async function saveProduct(_: ProductFormState, fd: FormData): Promise<Pr
   }
   revalidatePath("/products");
   revalidatePath("/stock");
-  redirect(`/products/${productId}?saved=1`);
+  // In den angehakten Shops anlegen (nur wenn dort noch nicht vorhanden). Fehler dort ändern nichts am Speichern.
+  let push = "";
+  try { push = encodePush(await pushProductToShops(productId!, session.uid)); }
+  catch (e) { console.error("shopify push", e); }
+  redirect(`/products/${productId}?saved=1${push ? `&push=${encodeURIComponent(push)}` : ""}`);
 }
 
 /** Test- oder Fehleintrag endgültig löschen (nur wenn nie verkauft, angeboten oder als Verlust gebucht) */
