@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 
 export type VariantOption = {
-  id: string; productId: string; sku: string; nameDe: string; nameNl: string; size: string; color: string;
+  id: string; productId: string; category: string; sku: string; nameDe: string; nameNl: string; size: string; color: string;
   barcode: string | null; tracksExpiry: boolean; purchasePriceCents: number; stockQty: number; avgCostCents: number;
   imageId: string | null;
 };
@@ -11,14 +11,14 @@ export type VariantOption = {
 /** Alle aktiven Varianten für Auswahllisten (Wareneingang, Verluste, später Verkauf). */
 export async function variantOptions(): Promise<VariantOption[]> {
   const r = await db.execute<Record<string, unknown>>(sql`
-    select v.id, v.product_id, p.sku, p.name_de, p.name_nl, v.size, v.color, v.barcode, p.tracks_expiry,
+    select v.id, v.product_id, p.category, p.sku, p.name_de, p.name_nl, v.size, v.color, v.barcode, p.tracks_expiry,
            p.purchase_price_cents, v.stock_qty, v.avg_cost_cents,
            coalesce(v.image_file_id, p.image_file_id) as image_id
     from variants v join products p on p.id = v.product_id
     where v.active and p.active
-    order by p.name_de, v.size, v.color`);
+    order by p.name_de, v.created_at, v.id`);
   return r.rows.map((x) => ({
-    id: String(x.id), productId: String(x.product_id), sku: String(x.sku), nameDe: String(x.name_de), nameNl: String(x.name_nl),
+    id: String(x.id), productId: String(x.product_id), category: String(x.category ?? ""), sku: String(x.sku), nameDe: String(x.name_de), nameNl: String(x.name_nl),
     size: String(x.size), color: String(x.color), barcode: (x.barcode as string) ?? null, tracksExpiry: Boolean(x.tracks_expiry),
     purchasePriceCents: Number(x.purchase_price_cents), stockQty: Number(x.stock_qty), avgCostCents: Number(x.avg_cost_cents), imageId: (x.image_id as string) ?? null,
   }));
@@ -28,8 +28,16 @@ export type StockRow = VariantOption & {
   minStock: number; reserved: number; category: string; nextExpiry: string | null; valueCents: number;
 };
 
-export async function stockRows(opts: { q?: string; lowOnly?: boolean } = {}): Promise<StockRow[]> {
+/** Kategorien mit Anzahl der Artikel – für die Auswahlliste „Kategorie“ */
+export async function productCategories(): Promise<{ name: string; n: number }[]> {
+  const r = await db.execute<{ category: string; n: number }>(sql`
+    select category, count(*)::int as n from products where active and category <> '' group by category order by category`);
+  return r.rows.map((x) => ({ name: x.category, n: Number(x.n) }));
+}
+
+export async function stockRows(opts: { q?: string; lowOnly?: boolean; category?: string } = {}): Promise<StockRow[]> {
   const q = opts.q?.trim() ? `%${opts.q.trim().toLowerCase()}%` : null;
+  const cat = opts.category?.trim() || null;
   const r = await db.execute<Record<string, unknown>>(sql`
     select v.id, v.product_id, p.sku, p.name_de, p.name_nl, v.size, v.color, v.barcode, p.tracks_expiry,
            p.purchase_price_cents, v.stock_qty, v.avg_cost_cents, v.min_stock, p.category,
@@ -38,8 +46,10 @@ export async function stockRows(opts: { q?: string; lowOnly?: boolean } = {}): P
            (select min(b.expiry_date) from batches b where b.variant_id = v.id and b.qty_left > 0) as next_expiry
     from variants v join products p on p.id = v.product_id
     where v.active and p.active
-      and (${q}::text is null or lower(p.name_de) like ${q} or lower(p.name_nl) like ${q} or lower(p.sku) like ${q} or v.barcode like ${q})
+      and (${q}::text is null or lower(p.name_de) like ${q} or lower(p.name_nl) like ${q} or lower(p.sku) like ${q} or v.barcode like ${q}
+           or lower(p.category) like ${q})
       and (${opts.lowOnly ?? false}::boolean = false or v.stock_qty <= v.min_stock)
+      and (${cat}::text is null or p.category = ${cat})
     order by p.name_de, v.size, v.color`);
   return r.rows.map((x) => {
     const stockQty = Number(x.stock_qty);

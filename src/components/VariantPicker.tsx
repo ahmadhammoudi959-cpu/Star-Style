@@ -2,9 +2,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { Thumb } from "./Thumb";
+import { searchOptions } from "@/lib/product-search";
 
 export type PickerOption = {
   id: string; sku: string; nameDe: string; nameNl: string; size: string; color: string; barcode: string | null; stockQty: number; imageId?: string | null;
+  productId?: string; category?: string;
 };
 
 export function optionLabel(o: Pick<PickerOption, "nameDe" | "size" | "color">) {
@@ -12,9 +14,10 @@ export function optionLabel(o: Pick<PickerOption, "nameDe" | "size" | "color">) 
   return extra ? `${o.nameDe} (${extra})` : o.nameDe;
 }
 
-/** Suche nach Name (DE/NL), Artikelnummer oder Barcode. Enter wählt den ersten Treffer. */
-export function VariantPicker({ options, placeholder, onPick, stockLabel }: {
-  options: PickerOption[]; placeholder: string; onPick: (o: PickerOption) => void; stockLabel: string;
+/** Suche nach Name (DE/NL), Art.-Nr., Barcode, Größe/Farbe oder Kategorie. Enter wählt den ersten Treffer.
+ *  Mit `category`: nur Artikel dieser Kategorie – dann zeigt die Liste schon beim Antippen alle (ohne Tippen). */
+export function VariantPicker({ options, placeholder, onPick, stockLabel, category }: {
+  options: PickerOption[]; placeholder: string; onPick: (o: PickerOption) => void; stockLabel: string; category?: string;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -22,13 +25,11 @@ export function VariantPicker({ options, placeholder, onPick, stockLabel }: {
   const ref = useRef<HTMLDivElement>(null);
 
   const results = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return [];
-    const exact = options.filter((o) => o.barcode === s || o.sku.toLowerCase() === s);
-    const rest = options.filter((o) => !exact.includes(o) &&
-      [o.nameDe, o.nameNl, o.sku, o.barcode ?? "", o.size, o.color].some((f) => f.toLowerCase().includes(s)));
-    return [...exact, ...rest].slice(0, 12);
-  }, [q, options]);
+    const pool = category ? options.filter((o) => (o.category ?? "") === category) : options;
+    if (!q.trim()) return category ? pool.slice(0, 100) : [];
+    return searchOptions(pool, q).slice(0, category ? 100 : 12);
+  }, [q, options, category]);
+  useEffect(() => { setHi(0); if (category) setOpen(true); }, [category]);
 
   useEffect(() => {
     const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
@@ -59,7 +60,7 @@ export function VariantPicker({ options, placeholder, onPick, stockLabel }: {
                 <Thumb id={o.imageId} size={40} />
                 <span className="me-auto">
                   <span className="font-semibold">{optionLabel(o)}</span>
-                  <span className="block text-xs text-ink-soft" dir="ltr">{o.sku}{o.barcode ? ` · ${o.barcode}` : ""}</span>
+                  <span className="block text-xs text-ink-soft" dir="ltr">{o.sku}{o.barcode && o.barcode !== o.sku ? ` · ${o.barcode}` : ""}</span>
                 </span>
                 <span className="badge shrink-0 bg-brand-50 text-brand-700">{stockLabel}: {o.stockQty}</span>
               </button>

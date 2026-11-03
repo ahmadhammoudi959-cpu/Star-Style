@@ -35,6 +35,8 @@ const de = {
     passwordHint: "Mindestens 10 Zeichen", alreadyDone: "Die Einrichtung ist bereits abgeschlossen.",
   },
   product: {
+    moreBarcodes: "+{n} weitere",
+    open: "Öffnen", searchHint: "Suchen nach Name, Art.-Nr., Barcode oder Kategorie …", skuHint: "Art.-Nr. = Barcode – wird automatisch aus dem ersten Barcode übernommen.", skuOrBarcode: "Bitte Art.-Nr. oder Barcode eingeben.",
     title: "Artikel", new: "Neuer Artikel", edit: "Artikel bearbeiten", sku: "Artikelnummer",
     nameDe: "Name (Deutsch)", nameNl: "Name (Niederländisch)", descDe: "Beschreibung (Deutsch)", descNl: "Beschreibung (Niederländisch)",
     category: "Kategorie", supplier: "Lieferant", vat: "MwSt.", purchase: "Einkaufspreis netto", wholesale: "Großhandelspreis netto",
@@ -64,7 +66,7 @@ const de = {
   },
   receive: {
     title: "Wareneingang", new: "Neue Lieferung", supplier: "Lieferant", supplierInvoice: "Lieferschein-/Rechnungsnr.",
-    lines: "Positionen", pickProduct: "Artikel suchen (Name, Nr., Barcode)", unitCost: "EK netto / Stück", batchNo: "Charge",
+    lines: "Positionen", pickProduct: "Artikel suchen (Name, Nr., Barcode, Kategorie)", unitCost: "EK netto / Stück", batchNo: "Charge",
     expiry: "Haltbar bis", addLine: "Position hinzufügen", submit: "Wareneingang buchen", booked: "Wareneingang gebucht",
     expiryRequired: "Für diesen Artikel ist ein Haltbarkeitsdatum nötig.", history: "Letzte Wareneingänge", number: "Nr.",
     items: "Positionen", value: "Wert",
@@ -94,6 +96,10 @@ const de = {
     taxMode: "Steuer", empty: "Noch keine Kunden.", number: "Kd.-Nr.", documents: "Belege", ownVatMissing: "Für die Prüfung fehlt die eigene USt-IdNr. in den Einstellungen.",
   },
   taxMode: { DOMESTIC: "Inland", EU_REVERSE_CHARGE: "EU steuerfrei", EU_PENDING_VATID: "EU – Nr. ausstehend", EU_B2C: "EU privat", EXPORT: "Ausfuhr (steuerfrei)" },
+  picker: {
+    category: "Kategorie wählen", searchLabel: "oder Artikel suchen", all: "Alle Kategorien", browseAll: "Alle Artikel", title: "Artikel auswählen", search: "Suchen nach Name, Art.-Nr., Barcode oder Kategorie …",
+    add: "Hinzufügen", inDoc: "Ausgewählt: {n}", done: "Fertig", empty: "Keine Artikel gefunden.", lines: "Positionen",
+  },
   sales: {
     invoice: "Rechnung", offer: "Angebot", title: "Verkauf", newOffer: "Neues Angebot", newInvoice: "Direkt-Rechnung", offers: "Angebote", invoices: "Rechnungen",
     customer: "Kunde", pickCustomer: "Kunde wählen", lines: "Positionen", price: "Einzelpreis netto", lineDiscount: "Rabatt %",
@@ -203,7 +209,7 @@ const de = {
     saved: "Gespeichert", guideTitle: "So bekommst du die Zugangsdaten (einmalig, ca. 10 Minuten)",
     guide: ["Im Shopify-Admin: Einstellungen → Apps → „Apps entwickeln“. Das öffnet das Dev Dashboard. Dort eine neue App anlegen, z. B. „Star Style Lager“.", "In der App-Version diese Zugriffe auswählen: read_products, write_products, read_inventory, write_inventory, read_locations, read_orders, read_publications, write_publications.", "Unter „Geschützte Kundendaten“ Name, E-Mail, Adresse und Telefon freigeben – sonst fehlen die Kundendaten auf der Rechnung.", "Version veröffentlichen und die App im eigenen Shop installieren. Wichtig: App und Shop müssen zur selben Shopify-Organisation gehören.", "In der App unter Einstellungen Client-ID und Client-Geheimnis kopieren und hier eintragen.", "Für den zweiten Shop dasselbe noch einmal."],
     noPublicUrl: "Die öffentliche Adresse des Systems fehlt (APP_URL). Auf Render wird sie automatisch gesetzt.",
-    filter: { open: "Nicht zugeordnet", all: "Alle", errors: "Fehler" }, shopVariant: "Im Shop", ours: "Bei uns", pick: "Artikel suchen und zuordnen …", unlink: "Lösen",
+    filter: { open: "Nicht zugeordnet", all: "Alle", errors: "Fehler" }, shopVariant: "Im Shop", ours: "Bei uns", pick: "Artikel suchen (Name, Nr., Barcode, Kategorie) und zuordnen …", unlink: "Lösen",
     matchedBy: { created: "hier angelegt", barcode: "per Barcode", sku: "per Art.-Nr.", manual: "von Hand", import: "per Import" }, notTracked: "Bestand im Shop nicht verfolgt", pushed: "gemeldet", noVariants: "Noch keine Produkte geladen.",
     ev: { created: "Artikel im Shop angelegt: {p}", createdHidden: "Artikel im Shop angelegt, aber nicht veröffentlicht (Recht fehlt): {p}", createFailed: "Artikel nicht im Shop angelegt: {p}", imagesFailedFor: "Fotos nicht hochgeladen: {p}", linkedExisting: "Mit vorhandenem Shop-Produkt verbunden: {p}", productsImported: "Aus dem Shop übernommen: {c} Artikel ({v} Varianten) · {e} schon vorhanden · {n} ohne Barcode", imagesLoaded: "{ok} Fotos übernommen · {f} nicht geladen", "importFailed:dup": "Nicht angelegt: Art.-Nr. oder Barcode gibt es schon", "importFailed:other": "Nicht angelegt – bitte von Hand anlegen", productsLoaded: "{t} Produkte geladen · {m} zugeordnet · {o} offen", stockErrors: "{p} Bestände konnten nicht gemeldet werden", imported: "Rechnung {p} erstellt", "skip:noTaxEu": "Steuerfreie Bestellung in die EU – bitte USt-IdNr. prüfen und Rechnung von Hand erstellen", "skip:currency": "Bestellung in Fremdwährung – bitte von Hand erstellen", "skip:noLines": "Bestellung ohne Positionen übersprungen", unmapped: "Nicht zugeordnete Produkte – Bestand dafür nicht gebucht", totalMismatch: "Betrag weicht um {p} Cent vom Shop ab – bitte prüfen", taxedExport: "Bestellung ins Nicht-EU-Ausland mit MwSt. – bitte prüfen", partial: "Teil-Erstattung: neue Rechnung {p}", fullRefund: "Komplett erstattet – storniert", cancelledRefunded: "Im Shop storniert und erstattet – Rechnung storniert", cancelledKeepPayment: "Im Shop storniert, Geld noch nicht erstattet – Guthaben beim Kunden", amountOnly: "Erstattung ohne Ware ({p} Cent) – bitte Gutschrift von Hand", checkAmounts: "Erstattung enthält Versand oder Nachlass – Beträge prüfen", writtenOff: "Nicht zurückgekommene Ware als Verlust gebucht", writeOffFailed: "Verlust konnte nicht gebucht werden", registered: "Sofort-Meldungen eingerichtet ({p} neu)", paid: "Zahlung eingegangen", products: "{p}" },
     errors: { busy: "Der Import läuft gerade – bitte kurz warten.", currency: "Der Shop rechnet nicht in Euro – Import nicht möglich.", notConfigured: "Bitte zuerst Shop-Adresse und Zugangsdaten eintragen.", auth: "Zugang abgelehnt – Client-ID, Geheimnis oder Freigaben prüfen.", network: "Shop nicht erreichbar.", graphql: "Shopify meldet einen Fehler: {d}", throttled: "Shopify bremst gerade – bitte gleich nochmal.", noLocation: "Bitte einen Lagerort wählen.", other: "Etwas ist schiefgelaufen: {d}" },

@@ -37,6 +37,8 @@ const en: Dict = {
     passwordHint: "At least 10 characters", alreadyDone: "Setup is already complete.",
   },
   product: {
+    moreBarcodes: "+{n} more",
+    open: "Open", searchHint: "Search by name, item no., barcode or category …", skuHint: "Item no. = barcode – filled in automatically from the first barcode.", skuOrBarcode: "Please enter an item number or a barcode.",
     title: "Products", new: "New product", edit: "Edit product", sku: "Product no.",
     nameDe: "Name (German)", nameNl: "Name (Dutch)", descDe: "Description (German)", descNl: "Description (Dutch)",
     category: "Category", supplier: "Supplier", vat: "VAT", purchase: "Purchase price (net)", wholesale: "Wholesale price (net)",
@@ -66,7 +68,7 @@ const en: Dict = {
   },
   receive: {
     title: "Goods in", new: "New delivery", supplier: "Supplier", supplierInvoice: "Supplier invoice / note no.",
-    lines: "Lines", pickProduct: "Find product (name, no., barcode)", unitCost: "Unit cost (net)", batchNo: "Batch",
+    lines: "Lines", pickProduct: "Find product (name, no., barcode, category)", unitCost: "Unit cost (net)", batchNo: "Batch",
     expiry: "Best before", addLine: "Add line", submit: "Book goods in", booked: "Goods booked in",
     expiryRequired: "This product needs an expiry date.", history: "Recent deliveries", number: "No.",
     items: "Lines", value: "Value",
@@ -96,6 +98,10 @@ const en: Dict = {
     taxMode: "Tax", empty: "No customers yet.", number: "Cust. no.", documents: "Documents", ownVatMissing: "Enter your own VAT ID in Settings first.",
   },
   taxMode: { DOMESTIC: "Domestic", EU_REVERSE_CHARGE: "EU tax-free", EU_PENDING_VATID: "EU – VAT ID pending", EU_B2C: "EU private", EXPORT: "Export (tax-free)" },
+  picker: {
+    category: "Choose a category", searchLabel: "or search for a product", all: "All categories", browseAll: "All products", title: "Choose products", search: "Search by name, item no., barcode or category …",
+    add: "Add", inDoc: "Added: {n}", done: "Done", empty: "No products found.", lines: "Lines",
+  },
   sales: {
     invoice: "Invoice", offer: "Quote", title: "Sales", newOffer: "New quote", newInvoice: "Direct invoice", offers: "Quotes", invoices: "Invoices",
     customer: "Customer", pickCustomer: "Choose customer", lines: "Lines", price: "Unit price (net)", lineDiscount: "Disc. %",
@@ -205,7 +211,7 @@ const en: Dict = {
     saved: "Saved", guideTitle: "How to get the credentials (once, about 10 minutes)",
     guide: ["In the Shopify admin: Settings → Apps → “Develop apps”. This opens the Dev Dashboard. Create a new app, e.g. “Star Style Inventory”.", "In the app version select these scopes: read_products, write_products, read_inventory, write_inventory, read_locations, read_orders, read_publications, write_publications.", "Under “Protected customer data” allow name, email, address and phone – otherwise customer details are missing on the invoice.", "Release the version and install the app on your own shop. Important: app and shop must belong to the same Shopify organization.", "In the app settings copy the Client ID and Client secret and paste them here.", "Do the same for the second shop."],
     noPublicUrl: "The public address of the system is missing (APP_URL). On Render it is set automatically.",
-    filter: { open: "Not matched", all: "All", errors: "Errors" }, shopVariant: "In shop", ours: "Ours", pick: "Search and match a product …", unlink: "Unlink",
+    filter: { open: "Not matched", all: "All", errors: "Errors" }, shopVariant: "In shop", ours: "Ours", pick: "Search (name, no., barcode, category) and match a product …", unlink: "Unlink",
     matchedBy: { created: "created here", barcode: "by barcode", sku: "by SKU", manual: "manually", import: "by import" }, notTracked: "Shop doesn't track stock for this item", pushed: "sent", noVariants: "No products loaded yet.",
     ev: { created: "Product created in the shop: {p}", createdHidden: "Product created but not published (permission missing): {p}", createFailed: "Product not created in the shop: {p}", imagesFailedFor: "Photos not uploaded: {p}", linkedExisting: "Linked to an existing shop product: {p}", productsImported: "Imported from the shop: {c} items ({v} variants) · {e} already there · {n} without barcode", imagesLoaded: "{ok} photos saved · {f} not loaded", "importFailed:dup": "Not created: SKU or barcode already exists", "importFailed:other": "Not created – please add it by hand", productsLoaded: "{t} products loaded · {m} matched · {o} open", stockErrors: "{p} stock levels could not be sent", imported: "Invoice {p} created", "skip:noTaxEu": "Tax-free order to the EU – check the VAT ID and create the invoice manually", "skip:currency": "Order in foreign currency – please create manually", "skip:noLines": "Order without items skipped", unmapped: "Unmatched products – stock not booked for them", totalMismatch: "Amount differs by {p} cents from the shop – please check", taxedExport: "Non-EU order with VAT – please check", partial: "Partial refund: new invoice {p}", fullRefund: "Fully refunded – cancelled", cancelledRefunded: "Cancelled and refunded in the shop – invoice cancelled", cancelledKeepPayment: "Cancelled in the shop, money not refunded yet – customer credit", amountOnly: "Refund without goods ({p} cents) – please issue a credit note manually", checkAmounts: "Refund includes shipping or a discount – check the amounts", writtenOff: "Goods not returned booked as loss", writeOffFailed: "Loss could not be booked", registered: "Instant notifications set up ({p} new)", paid: "Payment received", products: "{p}" },
     errors: { busy: "The import is running – please wait a moment.", currency: "The shop does not use euros – import not possible.", notConfigured: "Please enter the shop address and credentials first.", auth: "Access denied – check client ID, secret and scopes.", network: "Shop not reachable.", graphql: "Shopify reports an error: {d}", throttled: "Shopify is throttling – please try again shortly.", noLocation: "Please choose a location.", other: "Something went wrong: {d}" },

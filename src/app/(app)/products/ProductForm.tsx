@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { saveProduct } from "./actions";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
@@ -28,6 +28,11 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
   const [variants, setVariants] = useState<V[]>(
     (initial.variants.length ? initial.variants : [{ size: "", color: "", barcode: "", minStock: 0 }]).map((v, i) => ({ ...v, key: String(i) })),
   );
+  // Art.-Nr. = Barcode (Wunsch Inhaber): folgt dem ersten Barcode, solange man sie nicht selbst anders schreibt
+  const firstBarcode = variants.find((v) => v.barcode)?.barcode ?? "";
+  const [sku, setSku] = useState(initial.sku);
+  const [skuFollows, setSkuFollows] = useState(() => !initial.sku || initial.sku === (initial.variants.find((v) => v.barcode)?.barcode ?? ""));
+  useEffect(() => { if (skuFollows && firstBarcode) setSku(firstBarcode); }, [skuFollows, firstBarcode]);
   const [tracksExpiry, setTracksExpiry] = useState(initial.tracksExpiry);
   const [inShop, setInShop] = useState<ShopFlags>({ BRAND_SHOP: initial.inBrandShop, GENERAL_SHOP: initial.inGeneralShop });
   // im Shop schon verbunden → „im Shop ✓“; angehakt, Shop eingerichtet, noch nicht verbunden → wird beim Speichern angelegt
@@ -41,6 +46,8 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
     return { w: calc(prices.w), r: calc(prices.r) };
   }, [prices]);
 
+  // nach einer Fehlermeldung: zuletzt eingegebene Texte statt der Ausgangswerte (React setzt das Formular zurück)
+  const v = { ...initial, ...(state?.values ?? {}) } as ProductFormData & Record<string, unknown>;
   const known = state?.error ? (t.product as unknown as Record<string, unknown>)[state.error] : undefined;
   const errorText = state?.error
     ? typeof known === "string" ? known : state.error === "required" ? `${t.common.required}: ${state.field ?? ""}` : t.common.error
@@ -64,23 +71,26 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
       </section>
 
       <section className="card grid gap-4 p-5 md:grid-cols-2 animate-rise">
-        <Field label={t.product.sku}><input name="sku" defaultValue={initial.sku} required className="input" dir="ltr" /></Field>
+        <Field label={t.product.sku} hint={t.product.skuHint}>
+          <input name="sku" value={sku} required={!firstBarcode} className="input num" dir="ltr"
+            onChange={(e) => { const v = e.target.value; setSku(v); setSkuFollows(!v.trim() || v.trim() === firstBarcode); }} />
+        </Field>
         <Field label={t.product.category}>
-          <input name="category" defaultValue={initial.category} list="cats" className="input" />
+          <input name="category" defaultValue={v.category} list="cats" className="input" />
           <datalist id="cats">{categories.map((c) => <option key={c} value={c} />)}</datalist>
         </Field>
-        <Field label={t.product.nameDe}><input name="nameDe" defaultValue={initial.nameDe} required className="input" dir="ltr" lang="de" /></Field>
-        <Field label={t.product.nameNl}><input name="nameNl" defaultValue={initial.nameNl} className="input" dir="ltr" lang="nl" /></Field>
-        <Field label={t.product.descDe}><textarea name="descriptionDe" defaultValue={initial.descriptionDe} rows={3} className="input" dir="ltr" lang="de" /></Field>
-        <Field label={t.product.descNl}><textarea name="descriptionNl" defaultValue={initial.descriptionNl} rows={3} className="input" dir="ltr" lang="nl" /></Field>
+        <Field label={t.product.nameDe}><input name="nameDe" defaultValue={v.nameDe} required className="input" dir="ltr" lang="de" /></Field>
+        <Field label={t.product.nameNl}><input name="nameNl" defaultValue={v.nameNl} className="input" dir="ltr" lang="nl" /></Field>
+        <Field label={t.product.descDe}><textarea name="descriptionDe" defaultValue={v.descriptionDe} rows={3} className="input" dir="ltr" lang="de" /></Field>
+        <Field label={t.product.descNl}><textarea name="descriptionNl" defaultValue={v.descriptionNl} rows={3} className="input" dir="ltr" lang="nl" /></Field>
         <Field label={t.product.supplier}>
-          <select name="supplierId" defaultValue={initial.supplierId} className="input">
+          <select name="supplierId" defaultValue={v.supplierId} className="input">
             <option value="">{t.common.none}</option>
             {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </Field>
         <Field label={t.product.vat}>
-          <select name="vatRateBp" defaultValue={String(initial.vatRateBp)} className="input">
+          <select name="vatRateBp" defaultValue={String(v.vatRateBp)} className="input">
             <option value="1900">19 %</option>
             <option value="700">7 %</option>
           </select>

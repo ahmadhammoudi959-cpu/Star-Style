@@ -37,20 +37,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const mobile = [items[0], items[1], items[2], items[8], items[6]];
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[15.625rem_1fr]">
-      <aside className="sticky top-0 hidden h-screen print:!hidden flex-col justify-between bg-gradient-to-b from-navy-800 to-navy-900 p-4 text-white lg:flex">
+      {/* Seitenleiste immer genau Bildschirmhöhe: passt das Menü nicht (Laptop), scrollt es innen – der dunkle Hintergrund bleibt überall */}
+      <aside className="scroll-slim sticky top-0 hidden h-screen print:!hidden flex-col justify-between gap-4 overflow-y-auto overscroll-contain bg-gradient-to-b from-navy-800 to-navy-900 p-4 text-white lg:flex short:py-3">
         <div>
-          <div className="mb-6 px-2">
+          <div className="mb-6 px-2 short:mb-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/logo-light.png" alt={t.app.name} className="h-auto w-44 transition duration-300 hover:scale-[1.03]" />
+            <img src="/brand/logo-light.png" alt={t.app.name} className="h-auto w-44 transition duration-300 hover:scale-[1.03] short:w-36" />
             <div className="mt-2 h-0.5 w-full rounded-full bg-gradient-to-r from-brand-500 via-white/20 to-accent-500" />
-            <div className="mt-2 text-xs text-white/60">{t.app.tagline}</div>
+            <div className="mt-2 text-xs text-white/60 short:hidden">{t.app.tagline}</div>
           </div>
           <SideNav items={items} soonLabel={t.home.comingSoon} />
         </div>
-        <div className="space-y-2 px-1">
-          <div className="text-xs text-white/70">{session.name}</div>
-          <form action={logout}>
-            <button className="group flex w-full items-center gap-2 rounded-xl px-2 py-2 text-sm text-white/85 hover:bg-white/10"><Icon name="logout" />{t.common.logout}</button>
+        <div className="flex items-center justify-between gap-2 border-t border-white/10 px-1 pt-3">
+          <div className="min-w-0 truncate text-xs text-white/70" dir="auto">{session.name}</div>
+          <form action={logout} className="shrink-0">
+            <button className="group flex items-center gap-2 whitespace-nowrap rounded-xl px-2 py-1.5 text-sm text-white/85 hover:bg-white/10"><Icon name="logout" />{t.common.logout}</button>
           </form>
         </div>
       </aside>

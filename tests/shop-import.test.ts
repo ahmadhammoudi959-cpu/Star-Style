@@ -38,7 +38,8 @@ describe("Shopify-Produkt → Artikel", () => {
       variant({ id: "v2", position: 2, sku: "B", barcode: " 8720701739017 ", price: "19.90", product: p, selectedOptions: [{ name: "Ausführung", value: "Standard" }, { name: "Farbe", value: "Schwarz" }] }),
       variant({ id: "v1", position: 1, sku: "A", barcode: "8720701738997", price: "24.90", product: p, selectedOptions: [{ name: "Ausführung", value: "Magnetisch" }, { name: "Farbe", value: "Schwarz" }], inventoryItem: { unitCost: { amount: "9.50" } } }),
     ].sort((a, b) => a.position - b.position), { taxesIncluded: true });
-    expect(d).toMatchObject({ sku: "werkzeugmatte", retailPriceCents: 2092, purchasePriceCents: 950 });
+    // Art.-Nr. = erster Barcode (Variante mit Position 1)
+    expect(d).toMatchObject({ sku: "8720701738997", retailPriceCents: 2092, purchasePriceCents: 950 });
     expect(d.variants).toEqual([
       { shopVariantId: "v1", size: "Magnetisch", color: "Schwarz", barcode: "8720701738997", priceCents: null },
       { shopVariantId: "v2", size: "Standard", color: "Schwarz", barcode: "8720701739017", priceCents: 1672 },
@@ -142,7 +143,7 @@ run("Produkt-Import aus Shopify (Datenbank, Shopify simuliert)", async () => {
     expect(g!.imageFileId).not.toBeNull();
     expect(g!.variants.map((v) => [v.size, v.color, v.barcode, v.stockQty])).toEqual([["", "", ean(1), 0]]);
 
-    const c = await db.query.products.findFirst({ where: eq(schema.products.sku, `stuhl-${tag}`), with: { variants: true } });
+    const c = await db.query.products.findFirst({ where: eq(schema.products.sku, ean(2)), with: { variants: true } });
     expect(c).toMatchObject({ retailPriceCents: 100000, category: "Werkzeug & Zubehör" });
     expect(c!.variants.map((v) => [v.color, v.barcode, v.retailPriceCents]).sort()).toEqual([["Gold", ean(2), null], ["Schwarz", ean(3), 110000]]);
     expect((await db.select().from(schema.auditLog).where(eq(schema.auditLog.entityId, c!.id))).some((a) => a.action === "import")).toBe(true);

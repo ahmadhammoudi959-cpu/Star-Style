@@ -264,8 +264,11 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
   };
   head();
   d.lines.forEach((l, i) => {
-    const title = priced ? l.description : `${l.sku ? l.sku + " · " : ""}${l.description}`;
-    const sub = priced ? [l.sku, l.ean].filter(Boolean).join(" · ") : l.ean ?? "";
+    // Art.-Nr. = Barcode (Regel seit 03.11.2026): je Position genau eine Nummer – der Barcode der gelieferten Größe/Farbe
+    // (beim Verladen scanbar), ohne Barcode die Art.-Nr.
+    const no = l.ean || l.sku;
+    const title = priced ? l.description : `${no ? no + " · " : ""}${l.description}`;
+    const sub = priced ? no : "";
     const rows = wrap(title, f.r, 9, descW);
     const h = (rows.length + (sub ? 1 : 0)) * 4.4 * MM + 2.6 * MM;
     w.ensure(h, head);
@@ -284,6 +287,16 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
     w.y -= h;
   });
   w.page.drawLine({ start: { x: 20 * MM, y: w.y + 2 * MM }, end: { x: W - 20 * MM, y: w.y + 2 * MM }, thickness: 0.6, color: LINE });
+
+  // Ladeliste: Gesamtmenge zum Gegenprüfen beim Verladen
+  if (!priced) {
+    const total = d.lines.reduce((sum, l) => sum + Math.abs(l.qty), 0);
+    w.ensure(8 * MM);
+    w.y -= 2.5 * MM;
+    w.text(`Gesamtmenge (${d.lines.length} ${d.lines.length === 1 ? "Position" : "Positionen"})`, X.desc, w.y, 9, f.s);
+    w.right(String(total), X.qty + 10 * MM, w.y, 9.5, f.b);
+    w.y -= 6 * MM;
+  }
 
   // Summen
   if (priced) {

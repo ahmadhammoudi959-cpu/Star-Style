@@ -5,7 +5,8 @@ import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
 import { Thumb } from "@/components/Thumb";
 import Link from "next/link";
-import { VariantPicker, optionLabel, type PickerOption } from "@/components/VariantPicker";
+import { optionLabel, type PickerOption } from "@/components/VariantPicker";
+import { ProductPickerBar } from "@/components/ProductPickerBar";
 import { formatCents, parseMoney } from "@/lib/money";
 import type { Dict } from "@/i18n/de";
 
@@ -57,9 +58,11 @@ export function ReceiveForm({ t, options, suppliers, today, intl }: {
         <Field label={t.receive.supplierInvoice}><input name="supplierInvoiceNo" className="input" dir="ltr" /></Field>
       </section>
 
-      <section className="card p-5">
+      <section className="card relative z-10 p-5">
         <h2 className="mb-3 text-lg font-bold">{t.receive.lines}</h2>
-        <VariantPicker options={options} placeholder={t.receive.pickProduct} onPick={add} stockLabel={t.product.stock} />
+        <ProductPickerBar options={options} onPick={add} placeholder={t.receive.pickProduct} stockLabel={t.product.stock} labels={t.picker}
+          priceOf={(o) => formatCents(o.purchasePriceCents, intl)} linesCount={lines.length}
+          qtyInDoc={(id) => lines.reduce((n, l) => n + (l.opt.id === id ? parseInt(l.qty) || 0 : 0), 0)} />
         <Link href="/products/new" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline">
           <Icon name="plus" className="h-4 w-4" />{t.product.new}
         </Link>

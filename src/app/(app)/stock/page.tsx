@@ -3,25 +3,30 @@ import { Thumb } from "@/components/Thumb";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
-import { stockRows } from "@/lib/queries";
+import { productCategories, stockRows } from "@/lib/queries";
+import { CategorySelect } from "@/components/CategorySelect";
 import { formatCents } from "@/lib/money";
 import { daysBetween, formatDate, todayIso } from "@/lib/dates";
 
-export default async function StockPage({ searchParams }: { searchParams: Promise<{ q?: string; low?: string }> }) {
-  const { q = "", low } = await searchParams;
+export default async function StockPage({ searchParams }: { searchParams: Promise<{ q?: string; low?: string; cat?: string }> }) {
+  const { q = "", low, cat = "" } = await searchParams;
   const { t, intl } = await getI18n();
-  const rows = await stockRows({ q, lowOnly: low === "1" });
+  const [rows, cats] = await Promise.all([stockRows({ q, lowOnly: low === "1", category: cat }), productCategories()]);
   const total = rows.reduce((s, r) => s + r.valueCents, 0);
   const today = todayIso();
   return (
     <div>
       <PageHeader title={t.stock.title} subtitle={`${t.stock.value}: ${formatCents(total, intl)}`} />
-      <form className="mb-4 flex flex-wrap items-center gap-3 animate-rise">
-        <label className="relative block w-full max-w-md">
-          <Icon name="search" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" />
-          <input name="q" defaultValue={q} placeholder={t.common.search} className="input ps-9" />
+      <form className="mb-4 flex flex-col gap-3 animate-rise md:flex-row md:flex-wrap md:items-end">
+        {cats.length > 0 && <CategorySelect categories={cats} label={t.picker.category} allLabel={t.picker.all} name="cat" defaultValue={cat} autoSubmit className="md:w-64" />}
+        <label className="block w-full min-w-0 md:max-w-md md:flex-1">
+          <span className="label">{t.picker.searchLabel}</span>
+          <span className="relative block">
+            <Icon name="search" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" />
+            <input name="q" defaultValue={q} placeholder={t.product.searchHint} className="input ps-9" />
+          </span>
         </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+        <label className="flex cursor-pointer items-center gap-2 py-3 text-sm font-semibold">
           <input type="checkbox" name="low" value="1" defaultChecked={low === "1"} className="h-5 w-5 accent-brand-600" />{t.stock.filterLow}
         </label>
         <button className="btn-ghost">{t.common.search.replace("…", "").trim()}</button>

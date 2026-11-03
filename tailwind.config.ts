@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 export default {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
@@ -22,5 +23,11 @@ export default {
       animation: { rise: "rise .35s ease-out both", wiggle: "wiggle .5s ease-in-out" },
     },
   },
-  plugins: [],
+  plugins: [
+    // Niedrige Bildschirme (Laptop ~768 px Höhe): Menü kompakter, damit es ohne Abschneiden passt
+    plugin(({ addVariant }) => {
+      addVariant("short", "@media (max-height: 50rem)");
+      addVariant("tiny", "@media (max-height: 41rem)");
+    }),
+  ],
 } satisfies Config;

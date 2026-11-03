@@ -1,7 +1,8 @@
 "use client";
 import { useTransition } from "react";
 import { linkAction } from "../../actions";
-import { VariantPicker, type PickerOption } from "@/components/VariantPicker";
+import type { PickerOption } from "@/components/VariantPicker";
+import { ProductPickerBar } from "@/components/ProductPickerBar";
 import type { Dict } from "@/i18n/de";
 
 type Row = { id: string; title: string; sku: string; barcode: string; tracked: boolean; variantId: string | null; ourName: string; matchedBy: string; pushError: string; lastPushedQty: number | null };
@@ -25,7 +26,8 @@ export function MappingRow({ t, channel, row, options }: { t: Dict; channel: str
             <button type="button" onClick={() => start(async () => { await linkAction(channel, row.id, null); })} className="text-xs font-semibold text-red-600 hover:underline">{t.shop.unlink}</button>
           </div>
         ) : (
-          <VariantPicker options={options} placeholder={t.shop.pick} stockLabel={t.ins.stock} onPick={(o) => start(async () => { await linkAction(channel, row.id, o.id); })} />
+          <ProductPickerBar options={options} placeholder={t.shop.pick} stockLabel={t.ins.stock} labels={t.picker} compact closeOnPick
+            onPick={(o) => start(async () => { await linkAction(channel, row.id, o.id); })} />
         )}
       </td>
     </tr>

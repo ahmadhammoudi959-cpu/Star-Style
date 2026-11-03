@@ -44,12 +44,20 @@ body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smooth
   .tbl th.text-end { text-align: end; }
   .tbl td { @apply border-b border-black/5 px-3 py-2.5 align-middle; }
   .tbl tbody tr { @apply transition-colors hover:bg-brand-50/40; }
+  /* Tabelle, die ohne seitliches Scrollen auf den Bildschirm passen muss: engere Zellen, Überschriften dürfen umbrechen */
+  .tbl-fit th { @apply whitespace-normal px-2 leading-snug; }
+  .tbl-fit td { @apply px-2; }
   .badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold; }
   .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
   /* Beträge in Arabisch: Minus und € in deutscher Reihenfolge („-400,00 €“), Ausrichtung bleibt RTL */
   [dir="rtl"] .num:not(input) { direction: ltr; unicode-bidi: isolate; text-align: right; }
   [dir="rtl"] .num.text-end:not(input) { text-align: left; }
 }
+
+/* schmale, helle Bildlaufleiste in der dunklen Seitenleiste */
+.scroll-slim { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
+.scroll-slim::-webkit-scrollbar { width: 6px; }
+.scroll-slim::-webkit-scrollbar-thumb { background: rgba(255,255,255,.25); border-radius: 9999px; }
 
 /* Icons: kleine, lebendige Bewegung beim Hover */
 .icon-pop { transition: transform .25s cubic-bezier(.34,1.56,.64,1); }

@@ -12,7 +12,10 @@ import { todayIso } from "@/lib/dates";
 import { deleteProduct, ProductDeleteError } from "@/lib/product-delete";
 import { encodePush, pushProductToShops } from "@/lib/shopify/product-push";
 
-export type ProductFormState = { error?: string; field?: string } | undefined;
+export type ProductFormState = { error?: string; field?: string; values?: Record<string, string> } | undefined;
+
+// Bei einer Fehlermeldung setzt React das Formular zurück – die eingegebenen Texte kommen deshalb mit zurück und bleiben stehen
+const KEEP = ["sku", "nameDe", "nameNl", "descriptionDe", "descriptionNl", "category", "supplierId", "vatRateBp"] as const;
 
 const money = z.string().transform((s, ctx) => {
   const v = parseMoney(s === "" ? "0" : s);
@@ -34,7 +37,7 @@ const VariantSchema = z.object({
 
 const ProductSchema = z.object({
   id: z.string().optional(),
-  sku: z.string().trim().min(1).max(64),
+  sku: z.string().trim().max(64).default(""),
   nameDe: z.string().trim().min(1).max(200),
   nameNl: z.string().trim().max(200).default(""),
   descriptionDe: z.string().trim().max(4000).default(""),
@@ -51,7 +54,12 @@ const ProductSchema = z.object({
   variants: z.string().transform((s) => JSON.parse(s)).pipe(z.array(VariantSchema).min(1)),
 });
 
-export async function saveProduct(_: ProductFormState, fd: FormData): Promise<ProductFormState> {
+export async function saveProduct(prev: ProductFormState, fd: FormData): Promise<ProductFormState> {
+  const r = await saveProductInner(prev, fd);
+  return r?.error ? { ...r, values: Object.fromEntries(KEEP.map((k) => [k, String(fd.get(k) ?? "")])) } : r;
+}
+
+async function saveProductInner(_: ProductFormState, fd: FormData): Promise<ProductFormState> {
   const session = await requireSession();
   const { image: _img, ...fields } = Object.fromEntries(fd);
   const parsed = ProductSchema.safeParse(fields);
@@ -68,6 +76,9 @@ export async function saveProduct(_: ProductFormState, fd: FormData): Promise<Pr
   }
   const barcodes = d.variants.map((v) => v.barcode).filter(Boolean);
   if (new Set(barcodes).size !== barcodes.length) return { error: "barcodeTaken" };
+  // Art.-Nr. = Barcode (Wunsch Inhaber 03.11.2026): leer gelassen → Barcode der ersten Variante mit Barcode
+  const sku = d.sku || barcodes[0] || "";
+  if (!sku) return { error: "skuOrBarcode" };
 
   // Fotos (vorher, außerhalb der Transaktion; Dateien sind unveränderlich)
   let imageFileId: string | null | undefined;
@@ -86,7 +97,7 @@ export async function saveProduct(_: ProductFormState, fd: FormData): Promise<Pr
   }
 
   const values = {
-    sku: d.sku, nameDe: d.nameDe, nameNl: d.nameNl, descriptionDe: d.descriptionDe, descriptionNl: d.descriptionNl,
+    sku, nameDe: d.nameDe, nameNl: d.nameNl, descriptionDe: d.descriptionDe, descriptionNl: d.descriptionNl,
     category: d.category, supplierId: d.supplierId || null, vatRateBp: d.vatRateBp,
     purchasePriceCents: d.purchasePrice, wholesalePriceCents: d.wholesalePrice, retailPriceCents: d.retailPrice,
     tracksExpiry: d.tracksExpiry, inBrandShop: d.inBrandShop, inGeneralShop: d.inGeneralShop,
@@ -97,13 +108,14 @@ export async function saveProduct(_: ProductFormState, fd: FormData): Promise<Pr
   try {
     await db.transaction(async (tx) => {
       // Eindeutigkeit vorab prüfen → verständliche Fehlermeldung
-      const skuOwner = await tx.query.products.findFirst({ where: eq(schema.products.sku, d.sku) });
-      if (skuOwner && skuOwner.id !== d.id) throw new Error("skuTaken");
+      // erst Barcode (Art.-Nr. = Barcode: ist er vergeben, ist das die verständlichere Meldung), dann Art.-Nr.
       if (barcodes.length) {
         const taken = await tx.select({ productId: schema.variants.productId }).from(schema.variants)
           .where(inArray(schema.variants.barcode, barcodes));
         if (taken.some((t) => t.productId !== d.id)) throw new Error("barcodeTaken");
       }
+      const skuOwner = await tx.query.products.findFirst({ where: eq(schema.products.sku, sku) });
+      if (skuOwner && skuOwner.id !== d.id) throw new Error("skuTaken");
 
       if (d.id) {
         const before = await tx.query.products.findFirst({ where: eq(schema.products.id, d.id) });

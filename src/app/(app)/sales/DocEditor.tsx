@@ -4,7 +4,8 @@ import { saveInvoiceAction, saveOfferAction } from "./actions";
 import { ErrorBox, Field } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
 import { Thumb } from "@/components/Thumb";
-import { VariantPicker, optionLabel, type PickerOption } from "@/components/VariantPicker";
+import { optionLabel, type PickerOption } from "@/components/VariantPicker";
+import { ProductPickerBar } from "@/components/ProductPickerBar";
 import { bpToPercent, formatCents, parseMoney, parsePercentToBp } from "@/lib/money";
 import { computeTotals, determineTaxMode, effectiveRateBp } from "@/lib/tax";
 import type { Dict } from "@/i18n/de";
@@ -76,6 +77,9 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
     });
   };
   const upd = (k: string, p: Partial<L>) => setLines((ls) => ls.map((l) => (l.key === k ? { ...l, ...p } : l)));
+  // Positionen finden: Kategorie, Suche oder alle Artikel im Fenster (Wunsch Inhaber 03.11.2026)
+  const priceOf = (o: SaleOption) => formatCents(customer?.priceGroup === "RETAIL" ? o.retailPriceCents : o.wholesalePriceCents, intl);
+  const qtyInDoc = (variantId: string) => lines.reduce((n, l) => n + (l.variantId === variantId ? parseInt(l.qty) || 0 : 0), 0);
   const move = (i: number, d: number) => setLines((ls) => { const c = [...ls]; const [x] = c.splice(i, 1); c.splice(i + d, 0, x); return c; });
 
   const filteredCustomers = cq.trim() ? customers.filter((c) => `${c.name} ${c.city} ${c.number}`.toLowerCase().includes(cq.toLowerCase())) : customers;
@@ -150,7 +154,7 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
         </div>
       </section>
 
-      <section className="card p-5 animate-rise">
+      <section className="card relative z-10 p-5 animate-rise">{/* über den Karten darunter, sonst verdecken sie die Trefferliste */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-bold">{t.sales.lines}</h2>
           <button type="button" className="btn-ghost group px-3 py-2 text-xs"
@@ -158,7 +162,8 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
             <Icon name="plus" className="h-4 w-4" />{t.sales.freeText}
           </button>
         </div>
-        <VariantPicker options={options} placeholder={t.receive.pickProduct} onPick={pick} stockLabel={t.sales.available} />
+        <ProductPickerBar options={options} onPick={pick} placeholder={t.receive.pickProduct} stockLabel={t.sales.available} labels={t.picker}
+          priceOf={priceOf} qtyInDoc={qtyInDoc} linesCount={lines.length} />
         <div className="mt-4 space-y-2">
           {lines.length === 0 && <p className="py-6 text-center text-sm text-ink-soft">{t.sales.noLines}</p>}
           {lines.map((l, i) => {

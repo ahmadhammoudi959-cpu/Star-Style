@@ -76,7 +76,8 @@ export async function runTool(name: string, i: Record<string, unknown>): Promise
           where m.ref_type = 'invoice' and i.issue_date between ${from}::date and ${to}::date group by m.variant_id)
         select p.name_de, p.sku, v.size, v.color, l.qty, l.revenue, coalesce(c.cogs, 0) as cogs, l.revenue - coalesce(c.cogs, 0) as profit
         from l join variants v on v.id = l.variant_id join products p on p.id = v.product_id left join c on c.variant_id = l.variant_id
-        where (${like(i.query)}::text is null or lower(p.name_de) like ${like(i.query)} or lower(p.sku) like ${like(i.query)})
+        where (${like(i.query)}::text is null or lower(p.name_de) like ${like(i.query)} or lower(p.sku) like ${like(i.query)}
+               or lower(p.category) like ${like(i.query)})
         order by ${order} limit ${lim(i.limit)}`);
       return { from, to, products: r.rows.map((x) => ({ product: variantLabel(String(x.name_de), String(x.size), String(x.color)), sku: x.sku, qty: Number(x.qty), netSales: eur(x.revenue), cogs: eur(x.cogs), grossProfit: eur(x.profit) })) };
     }
@@ -115,7 +116,8 @@ export async function runTool(name: string, i: Record<string, unknown>): Promise
           coalesce((select sum(qty) from reservations r where r.variant_id = v.id and r.active and r.expires_at > now()), 0)::int as reserved,
           (select min(expiry_date) from batches b where b.variant_id = v.id and b.qty_left > 0) as next_expiry
         from variants v join products p on p.id = v.product_id
-        where v.active and (lower(p.name_de) like ${q} or lower(p.name_nl) like ${q} or lower(p.sku) like ${q} or coalesce(v.barcode, '') like ${q})
+        where v.active and (lower(p.name_de) like ${q} or lower(p.name_nl) like ${q} or lower(p.sku) like ${q} or coalesce(v.barcode, '') like ${q}
+               or lower(p.category) like ${q})
         order by p.name_de limit 15`);
       return r.rows.map((x) => ({ product: variantLabel(String(x.name_de), String(x.size), String(x.color)), nameNl: x.name_nl, sku: x.sku, barcode: x.barcode, stock: x.stock_qty, reserved: x.reserved, available: Number(x.stock_qty) - Number(x.reserved), minStock: x.min_stock, avgCost: eur(x.avg_cost_cents), wholesalePrice: eur(x.wholesale), retailPrice: eur(x.retail), nextExpiry: x.next_expiry ? String(x.next_expiry).slice(0, 10) : null }));
     }

@@ -55,7 +55,9 @@ export function variantOptions(variants: Pick<PushVariant, "size" | "color">[]):
 }
 
 /** Art.-Nr. im Shop: bei einer Variante die Artikelnummer, sonst Artikelnummer-Größe-Farbe */
-export function variantSku(sku: string, v: Pick<PushVariant, "size" | "color">, single: boolean): string {
+/** SKU im Shop: Art.-Nr. = Barcode (Wunsch Inhaber) → der Barcode der Variante; ohne Barcode Art.-Nr. bzw. Art.-Nr.-Größe-Farbe */
+export function variantSku(sku: string, v: Pick<PushVariant, "size" | "color"> & { barcode?: string | null }, single: boolean): string {
+  if (v.barcode?.trim()) return v.barcode.trim();
   if (single) return sku;
   const part = (s: string) => s.trim().replace(/\s+/g, "-");
   return [sku, part(v.size), part(v.color)].filter(Boolean).join("-").slice(0, 255);

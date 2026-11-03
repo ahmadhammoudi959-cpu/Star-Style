@@ -5,7 +5,8 @@ import { submitWriteOff } from "./actions";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
 import { Thumb } from "@/components/Thumb";
-import { VariantPicker, optionLabel, type PickerOption } from "@/components/VariantPicker";
+import { optionLabel, type PickerOption } from "@/components/VariantPicker";
+import { ProductPickerBar } from "@/components/ProductPickerBar";
 import type { Dict } from "@/i18n/de";
 
 type Line = { key: string; opt: PickerOption; qty: string };
@@ -49,9 +50,12 @@ export function WriteOffForm({ t, options, today }: { t: Dict; options: PickerOp
           <Field label={`${t.writeOff.photo} (${t.common.optional})`}><input type="file" name="photo" accept="image/*,application/pdf" capture="environment" className="input file:me-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-1 file:font-semibold file:text-brand-700" /></Field>
         </div>
       </section>
-      <section className="card p-5">
-        <VariantPicker options={options} placeholder={t.receive.pickProduct} stockLabel={t.product.stock}
-          onPick={(o) => setLines((ls) => ls.some((l) => l.opt.id === o.id) ? ls : [...ls, { key: crypto.randomUUID(), opt: o, qty: "1" }])} />
+      <section className="card relative z-10 p-5">
+        <ProductPickerBar options={options} placeholder={t.receive.pickProduct} stockLabel={t.product.stock} labels={t.picker} linesCount={lines.length}
+          qtyInDoc={(id) => lines.reduce((n, l) => n + (l.opt.id === id ? parseInt(l.qty) || 0 : 0), 0)}
+          onPick={(o) => setLines((ls) => ls.some((l) => l.opt.id === o.id)
+            ? ls.map((l) => (l.opt.id === o.id ? { ...l, qty: String((parseInt(l.qty) || 0) + 1) } : l))
+            : [...ls, { key: crypto.randomUUID(), opt: o, qty: "1" }])} />
         <div className="mt-4 space-y-2">
           {lines.length === 0 && <p className="py-6 text-center text-sm text-ink-soft">{t.common.nothingYet}</p>}
           {lines.map((l) => {

@@ -70,9 +70,11 @@ export function mapShopProduct(variants: ShopImportVariant[], o: { taxesIncluded
     return { shopVariantId: v.id, size, color, barcode: bc && bc.length <= 32 ? bc : null, priceCents: prices[i] === base ? null : prices[i] };
   });
 
-  // Art.-Nr.: bei einer Variante die SKU des Shops (dann klappt auch die Zuordnung per Art.-Nr.), sonst der Shop-Handle
+  // Art.-Nr. = Barcode (Wunsch Inhaber 03.11.2026): erster Barcode der Varianten. Ohne Barcode bei einer Variante die SKU des Shops
+  // (dann klappt auch die Zuordnung per Art.-Nr.), sonst der Shop-Handle.
   const single = variants.length === 1;
-  const sku = clip(single ? (clip(first.sku, 64) || clip(first.barcode, 64) || p.handle) : p.handle, 64) || p.id.split("/").pop()!;
+  const firstBarcode = out.find((v) => v.barcode)?.barcode ?? "";
+  const sku = clip(firstBarcode || (single ? clip(first.sku, 64) || p.handle : p.handle), 64) || p.id.split("/").pop()!;
   const cost = Math.round(Number(first.inventoryItem?.unitCost?.amount ?? 0) * 100);
 
   return {

@@ -8,18 +8,18 @@ export type NavItem = { href: string; label: string; icon: IconName; soon?: bool
 export function SideNav({ items, soonLabel }: { items: NavItem[]; soonLabel: string }) {
   const path = usePathname();
   return (
-    <nav className="space-y-1">
+    <nav className="space-y-1 short:space-y-0.5">
       {items.map((it) => {
         const active = it.href === "/" ? path === "/" : path.startsWith(it.href);
         if (it.soon)
           return (
-            <span key={it.href} title={soonLabel} className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/40">
+            <span key={it.href} title={soonLabel} className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/40 short:py-1.5 tiny:py-1">
               <Icon name={it.icon} />{it.label}
             </span>
           );
         return (
           <Link key={it.href} href={it.href}
-            className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? "border-s-4 border-accent-500 bg-white text-brand-700 shadow-card" : "text-white/80 hover:bg-white/10 hover:text-white"}`}>
+            className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition short:py-1.5 tiny:py-1 ${active ? "border-s-4 border-accent-500 bg-white text-brand-700 shadow-card" : "text-white/80 hover:bg-white/10 hover:text-white"}`}>
             <Icon name={it.icon} />{it.label}
             {it.step && (
               <span title={String(it.step.n)} className={`ms-auto grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${it.step.next ? "bg-accent-500 text-white animate-pulse" : active ? "bg-brand-100 text-brand-700" : "bg-white/15 text-white"}`}>{it.step.n}</span>

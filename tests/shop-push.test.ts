@@ -32,7 +32,7 @@ describe("Artikel → Shopify-Produkt", () => {
     expect(s).not.toHaveProperty("files");
     expect(s.variants).toEqual([{
       optionValues: [{ optionName: "Title", name: "Default Title" }], price: "11.90", barcode: "4006381333931",
-      inventoryItem: { sku: "DP-KAMM", tracked: true, cost: "3.50" },
+      inventoryItem: { sku: "4006381333931", tracked: true, cost: "3.50" }, // SKU im Shop = Barcode
       inventoryQuantities: [{ locationId: "gid://shopify/Location/1", name: "available", quantity: 7 }],
     }]);
   });
@@ -56,7 +56,7 @@ describe("Artikel → Shopify-Produkt", () => {
       { originalSource: "https://shopify-staged/f2", contentType: "IMAGE", alt: "DeltaPro Kamm", filename: "dp-2.webp" },
     ]);
     expect(s.variants[0]).toMatchObject({ optionValues: [{ optionName: "Größe", name: "S" }, { optionName: "Farbe", name: "Schwarz" }], price: "11.90", barcode: "111",
-      inventoryItem: { sku: "DP-KAMM-S-Schwarz" }, inventoryQuantities: [{ quantity: 0 }] });
+      inventoryItem: { sku: "111" }, inventoryQuantities: [{ quantity: 0 }] });
     expect(s.variants[0]).not.toHaveProperty("file");
     expect(s.variants[1]).toMatchObject({ price: "14.28", inventoryItem: { sku: "DP-KAMM-M" }, file: { originalSource: "https://shopify-staged/f2" } });
     expect(s.variants[1]).not.toHaveProperty("barcode");
@@ -67,6 +67,7 @@ describe("Artikel → Shopify-Produkt", () => {
     expect(variantOptions([{ size: "", color: "" }, { size: "", color: "Standard" }, { size: "", color: "Rot" }]).values).toEqual([["Standard"], ["Standard (2)"], ["Rot"]]);
     expect(variantSku("SKU", { size: "250 ml", color: "" }, false)).toBe("SKU-250-ml");
     expect(variantSku("SKU", { size: "250 ml", color: "" }, true)).toBe("SKU");
+    expect(variantSku("SKU", { size: "S", color: "Rot", barcode: " 4006381333931 " }, false)).toBe("4006381333931");
   });
 
   it("angelegte Shop-Varianten werden über die Optionswerte unseren Varianten zugeordnet", () => {
