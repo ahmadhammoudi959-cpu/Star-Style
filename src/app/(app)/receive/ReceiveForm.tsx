@@ -8,10 +8,12 @@ import Link from "next/link";
 import { optionLabel, type PickerOption } from "@/components/VariantPicker";
 import { ProductPickerBar } from "@/components/ProductPickerBar";
 import { formatCents, parseMoney } from "@/lib/money";
+import { WeightInput } from "@/components/WeightInput";
+import { formatWeight, parseWeight, shipmentWeight, weightInputParts, type WeightUnit } from "@/lib/weight";
 import type { Dict } from "@/i18n/de";
 
-type Opt = PickerOption & { tracksExpiry: boolean; purchasePriceCents: number };
-type Line = { key: string; opt: Opt; qty: string; cost: string; batchNo: string; expiryDate: string };
+type Opt = PickerOption & { tracksExpiry: boolean; purchasePriceCents: number; weightGrams: number | null };
+type Line = { key: string; opt: Opt; qty: string; cost: string; batchNo: string; expiryDate: string; weight: string; weightUnit: WeightUnit };
 
 export function ReceiveForm({ t, options, suppliers, today, intl }: {
   t: Dict; options: Opt[]; suppliers: { id: string; name: string }[]; today: string; intl: string;
@@ -24,19 +26,22 @@ export function ReceiveForm({ t, options, suppliers, today, intl }: {
 
   const total = useMemo(() => lines.reduce((s, l) => s + (parseInt(l.qty) || 0) * (parseMoney(l.cost) ?? 0), 0), [lines]);
   const missingExpiry = lines.some((l) => l.opt.tracksExpiry && !l.expiryDate);
-  const invalid = lines.some((l) => !(parseInt(l.qty) > 0) || parseMoney(l.cost) == null);
+  const invalid = lines.some((l) => !(parseInt(l.qty) > 0) || parseMoney(l.cost) == null || parseWeight(l.weight, l.weightUnit) === undefined);
+  // Gesamtgewicht der Lieferung (Positionen ohne Gewicht zählen nicht mit)
+  const weight = useMemo(() => shipmentWeight(lines.map((l) => ({ qty: parseInt(l.qty) || 0, weightGrams: parseWeight(l.weight, l.weightUnit) ?? null }))), [lines]);
 
   const add = (o: PickerOption) => {
     const opt = o as Opt;
-    setLines((ls) => [...ls, { key: crypto.randomUUID(), opt, qty: "1", cost: (opt.purchasePriceCents / 100).toFixed(2).replace(".", ","), batchNo: "", expiryDate: "" }]);
+    setLines((ls) => [...ls, { key: crypto.randomUUID(), opt, qty: "1", cost: (opt.purchasePriceCents / 100).toFixed(2).replace(".", ","), batchNo: "", expiryDate: "", ...weightInputParts(opt.weightGrams) }]);
   };
   const upd = (k: string, p: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === k ? { ...l, ...p } : l)));
 
   const payload = JSON.stringify(lines.map((l) => ({
     variantId: l.opt.id, qty: parseInt(l.qty) || 0, unitCostCents: parseMoney(l.cost) ?? 0, batchNo: l.batchNo, expiryDate: l.expiryDate,
+    weight: l.weight, weightUnit: l.weightUnit,
   })));
 
-  const err = state?.error === "EXPIRY_REQUIRED" ? t.receive.expiryRequired : state?.error ? t.common.error : undefined;
+  const err = state?.error === "EXPIRY_REQUIRED" ? t.receive.expiryRequired : state?.error === "weightInvalid" ? t.product.weightInvalid : state?.error ? t.common.error : undefined;
 
   return (
     <form key={formKey} action={action} className="space-y-5">
@@ -81,7 +86,7 @@ export function ReceiveForm({ t, options, suppliers, today, intl }: {
                   <Icon name="trash" className="h-4 w-4" />
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
                 <Field label={t.common.qty}><input type="number" min={1} value={l.qty} onChange={(e) => upd(l.key, { qty: e.target.value })} className="input num" /></Field>
                 <Field label={t.receive.unitCost}><input inputMode="decimal" dir="ltr" value={l.cost} onChange={(e) => upd(l.key, { cost: e.target.value })}
                   className={`input num ${parseMoney(l.cost) == null ? "border-red-400" : ""}`} /></Field>
@@ -89,6 +94,9 @@ export function ReceiveForm({ t, options, suppliers, today, intl }: {
                 <Field label={t.receive.expiry + (l.opt.tracksExpiry ? " *" : "")}>
                   <input type="date" value={l.expiryDate} min={today} onChange={(e) => upd(l.key, { expiryDate: e.target.value })}
                     className={`input ${l.opt.tracksExpiry && !l.expiryDate ? "border-amber-400 ring-4 ring-amber-100" : ""}`} />
+                </Field>
+                <Field label={t.receive.weight} hint={l.opt.weightGrams ? undefined : t.receive.weightMissing}>
+                  <WeightInput value={l.weight} unit={l.weightUnit} unitLabel={t.product.weightUnit} onChange={(w) => upd(l.key, w)} />
                 </Field>
               </div>
             </div>
@@ -99,6 +107,7 @@ export function ReceiveForm({ t, options, suppliers, today, intl }: {
       <Field label={t.common.note}><textarea name="note" rows={2} className="input" /></Field>
 
       <div className="sticky bottom-20 z-10 flex flex-wrap items-center justify-end gap-4 rounded-2xl bg-white/90 p-3 shadow-lift ring-1 ring-black/5 backdrop-blur lg:bottom-4">
+        {weight.grams > 0 && <div className="text-sm text-ink-soft">{t.receive.totalWeight}: <span className="num font-bold text-ink">{formatWeight(weight.grams)}</span></div>}
         <div className="text-sm text-ink-soft">{t.common.total}: <span className="num text-lg font-bold text-ink">{formatCents(total, intl)}</span></div>
         {missingExpiry && <span className="text-xs font-semibold text-amber-700">{t.receive.expiryRequired}</span>}
         <SubmitButton className={`btn-primary px-8 py-3 ${lines.length === 0 || missingExpiry || invalid ? "pointer-events-none opacity-50" : ""}`}>{t.receive.submit}</SubmitButton>

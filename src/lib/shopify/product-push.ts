@@ -19,7 +19,7 @@ import { gql, getShop, ShopifyError, type Shop, type ShopChannel } from "./clien
 import { CHANNELS, logEvent } from "./sync";
 import { audit } from "../stock";
 import {
-  buildProductSet, matchCreatedVariants, planVariantAdds, pushBlockers, resolveStoreType, shopPriceCents, storeTypesFrom, variantSku,
+  buildProductSet, matchCreatedVariants, planVariantAdds, pushBlockers, resolveStoreType, shopPriceCents, shopWeight, storeTypesFrom, variantSku,
   type CollectionRules, type PushBlocker, type PushImage, type PushProduct, type PushReason, type PushResult, type ShopProductShape, type StoreType,
 } from "./product-push-map";
 
@@ -114,7 +114,7 @@ async function loadProduct(productId: string, buffer: number): Promise<PushProdu
     imageFileId: p.imageFileId,
     variants: vs.map((v) => ({
       id: v.id, size: v.size, color: v.color, barcode: v.barcode, retailPriceCents: v.retailPriceCents,
-      imageFileId: v.imageFileId, available: avail.get(v.id) ?? 0,
+      imageFileId: v.imageFileId, available: avail.get(v.id) ?? 0, weightGrams: v.weightGrams,
     })),
   };
 }
@@ -437,7 +437,7 @@ async function addVariants(shop: Shop, channel: ShopChannel, p: PushProduct, lin
       optionValues: pv.optionValues,
       price: money(shopPriceCents(v.retailPriceCents ?? p.retailPriceCents, p.vatRateBp, info.taxesIncluded)),
       ...(v.barcode ? { barcode: v.barcode } : {}),
-      inventoryItem: { sku: variantSku(p.sku, v, false), tracked: true, ...(p.purchasePriceCents > 0 ? { cost: money(p.purchasePriceCents) } : {}) },
+      inventoryItem: { sku: variantSku(p.sku, v, false), tracked: true, ...(p.purchasePriceCents > 0 ? { cost: money(p.purchasePriceCents) } : {}), ...shopWeight(v.weightGrams) },
       inventoryQuantities: [{ locationId: shop.locationId, availableQuantity: Math.max(0, v.available) }],
       ...(img ? { mediaSrc: [img.resourceUrl] } : {}),
     };

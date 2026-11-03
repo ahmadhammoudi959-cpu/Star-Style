@@ -6,6 +6,7 @@ import { Thumb } from "@/components/Thumb";
 import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { checkDigitOk } from "@/lib/barcode";
+import { formatWeight } from "@/lib/weight";
 import type { ScanResult, ScanVariant } from "@/lib/scan";
 import { scanLookupAction } from "./actions";
 import type { Dict } from "@/i18n/de";
@@ -371,6 +372,7 @@ function ResultCard({ t, intl, r, onAgain }: { t: Dict; intl: string; r: ScanRes
         <Fact label={S.sold90}><span className="num font-bold">{v ? v.sold90 : total.sold90}</span></Fact>
         <Fact label={S.lastSale}>{lastSale ? <span className="num font-semibold">{formatDate(lastSale, intl)}</span> : <span className="text-ink-soft">{S.neverSold}</span>}</Fact>
         {expiry && <Fact label={S.expiry}><span className="num font-semibold">{formatDate(expiry.nextExpiry, intl)}</span> <span className="text-xs text-ink-soft">({fill(S.pieces, { n: expiry.nextExpiryQty })})</span></Fact>}
+        {priceOf.weightGrams ? <Fact label={S.weight}><span className="num font-semibold">{formatWeight(priceOf.weightGrams)}</span></Fact> : null}
         {p.supplier && <Fact label={S.supplier}><span className="font-semibold [overflow-wrap:anywhere]">{p.supplier}</span></Fact>}
       </dl>
 

@@ -11,6 +11,7 @@ import { productDeletable } from "@/lib/product-delete";
 import { DeleteProduct } from "./DeleteProduct";
 import { decodePush, productShopStatus, type PushResult } from "@/lib/shopify/product-push";
 import { fill, type Dict } from "@/i18n";
+import { weightInputParts } from "@/lib/weight";
 
 const toInput = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
@@ -34,7 +35,7 @@ export default async function EditProduct({ params, searchParams }: { params: Pr
         category: p.category, supplierId: p.supplierId ?? "", vatRateBp: p.vatRateBp,
         purchasePrice: toInput(p.purchasePriceCents), wholesalePrice: toInput(p.wholesalePriceCents), retailPrice: toInput(p.retailPriceCents),
         tracksExpiry: p.tracksExpiry, inBrandShop: p.inBrandShop, inGeneralShop: p.inGeneralShop, imageFileId: p.imageFileId,
-        variants: vs.map((v) => ({ id: v.id, size: v.size, color: v.color, barcode: v.barcode ?? "", minStock: v.minStock, stockQty: v.stockQty, imageFileId: v.imageFileId })),
+        variants: vs.map((v) => ({ id: v.id, size: v.size, color: v.color, barcode: v.barcode ?? "", minStock: v.minStock, stockQty: v.stockQty, imageFileId: v.imageFileId, ...weightInputParts(v.weightGrams) })),
       }} />
       {deletable && <DeleteProduct t={t} id={p.id} />}
     </div>

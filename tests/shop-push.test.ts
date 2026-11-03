@@ -91,6 +91,12 @@ describe("Artikel → Shopify-Produkt", () => {
     expect(decodePush(undefined)).toEqual([]);
   });
 
+  it("Gewicht der Packung geht als Gewicht des Lagerartikels mit (Versand nach Gewicht)", () => {
+    const s = buildProductSet(product({ variants: [v({ weightGrams: 150 }), v({ id: "v2", size: "M", barcode: "222", weightGrams: null })] }), opts);
+    expect(s.variants[0].inventoryItem).toMatchObject({ measurement: { weight: { unit: "GRAMS", value: 150 } } });
+    expect(s.variants[1].inventoryItem).not.toHaveProperty("measurement");
+  });
+
   it("Produkttyp des Shops statt Kategorie, wenn angegeben", () => {
     expect(buildProductSet(product({ category: "Kämme" }), { ...opts, productType: "Werkzeug & Zubehör" }).productType).toBe("Werkzeug & Zubehör");
     expect(buildProductSet(product({ category: "" }), opts)).not.toHaveProperty("productType");
@@ -216,6 +222,7 @@ run("Artikel im Shop anlegen (Datenbank, Shopify simuliert)", async () => {
         { title: "Startseite", ruleSet: null }] } } });
       if (query.includes("productVariant(id:")) return Response.json({ data: { productVariant: shopProduct ? { product: shopProduct } : null } });
       if (query.includes("productOptionsCreate")) return Response.json({ data: { productOptionsCreate: { userErrors: [] } } });
+      if (query.includes("inventoryItemUpdate")) return Response.json({ data: { inventoryItemUpdate: { inventoryItem: { id: variables.id }, userErrors: [] } } });
       if (query.includes("productVariantsBulkCreate")) {
         const vs = variables.variants as { barcode?: string; inventoryItem: { sku: string } }[];
         return Response.json({ data: { productVariantsBulkCreate: { userErrors: [], productVariants: vs.map((x, i) => ({
@@ -376,6 +383,27 @@ run("Artikel im Shop anlegen (Datenbank, Shopify simuliert)", async () => {
     expect(links.find((l) => l.variantId === vs[0].id)).toMatchObject({ shopVariantId: sid, matchedBy: "barcode" });
     expect(links.find((l) => l.variantId === vs[1].id)).toMatchObject({ shopVariantId: `gid://shopify/ProductVariant/${tag}n0`, matchedBy: "created", lastPushedQty: 4 });
     expect((await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.entityId, p.id), eq(schema.auditLog.action, "shop_update")))).length).toBe(1);
+  });
+
+  it("Gewicht: neue Variante bekommt es beim Anlegen; geändertes Gewicht wird an verbundene Varianten gemeldet", async () => {
+    vi.stubGlobal("fetch", shopifyMock());
+    const { pushWeights } = await import("../src/lib/shopify/weights");
+    const { p, vs } = await newProduct(`PUSH-${tag}-N`, { sizes: ["S", "M"] });
+    await db.update(schema.variants).set({ weightGrams: 1500 }).where(eq(schema.variants.id, vs[1].id));
+    const sid = `gid://shopify/ProductVariant/${tag}66`;
+    existing = [{ id: sid, sku: "x", barcode: vs[0].barcode!, displayName: "S", inventoryItem: { id: `gid://shopify/InventoryItem/${tag}66`, tracked: true } }];
+    shopProduct = { id: `gid://shopify/Product/${tag}6`, hasOnlyDefaultVariant: false, options: [{ name: "Größe", position: 1, optionValues: [{ name: "S" }] }],
+      variants: { nodes: [{ id: sid, selectedOptions: [{ name: "Größe", value: "S" }] }] } };
+    expect(await pushProductToShops(p.id)).toEqual([{ channel: "GENERAL_SHOP", outcome: "updated", n: 1, imagesFailed: false }]);
+    const bulk = calls.find((c) => c.query?.includes("productVariantsBulkCreate"))!;
+    expect((bulk.variables!.variants as any[])[0].inventoryItem.measurement).toEqual({ weight: { unit: "GRAMS", value: 1500 } });
+    // Gewicht von S nachgetragen → nur an diese verbundene Variante
+    calls = [];
+    await db.update(schema.variants).set({ weightGrams: 250 }).where(eq(schema.variants.id, vs[0].id));
+    expect(await pushWeights([vs[0].id], "GENERAL_SHOP")).toEqual([{ channel: "GENERAL_SHOP", updated: 1, failed: 0 }]);
+    const upd = calls.filter((c) => c.query?.includes("inventoryItemUpdate"));
+    expect(upd.map((c) => c.variables)).toEqual([{ id: `gid://shopify/InventoryItem/${tag}66`, input: { measurement: { weight: { unit: "GRAMS", value: 250 } } } }]);
+    expect(await pushWeights([])).toEqual([]);
   });
 
   it("Shop-Produkt mit nur der Standard-Variante bekommt erst die Option „Farbe“, dann die neue Farbe", async () => {

@@ -39,6 +39,7 @@ const en: Dict = {
     passwordHint: "At least 10 characters", alreadyDone: "Setup is already complete.",
   },
   product: {
+    weight: "Weight (per item)", weightUnit: "Unit", weightInvalid: "Please enter the weight as a number, e.g. 150 g or 1.5 kg.",
     moreBarcodes: "+{n} more",
     open: "Open", searchHint: "Search by name, item no., barcode or category …", skuHint: "Item no. = barcode – filled in automatically from the first barcode.", skuOrBarcode: "Please enter an item number or a barcode.",
     title: "Products", new: "New product", edit: "Edit product", sku: "Product no.",
@@ -87,6 +88,7 @@ const en: Dict = {
     },
   },
   receive: {
+    weight: "Weight per item", weightMissing: "missing – enter it here", totalWeight: "Total weight",
     searchHistory: "Search: receipt no., supplier, invoice no. or product …", openReceipt: "View goods receipt",
     title: "Goods in", new: "New delivery", supplier: "Supplier", supplierInvoice: "Supplier invoice / note no.",
     lines: "Lines", pickProduct: "Find product (name, no., barcode, category)", unitCost: "Unit cost (net)", batchNo: "Batch",
@@ -121,6 +123,7 @@ const en: Dict = {
   },
   taxMode: { DOMESTIC: "Domestic", EU_REVERSE_CHARGE: "EU tax-free", EU_PENDING_VATID: "EU – VAT ID pending", EU_B2C: "EU private", EXPORT: "Export (tax-free)" },
   scan: {
+    weight: "Weight",
     title: "Scan barcode", subtitle: "Scan a box – see stock, prices and sales right away",
     hint: "Point the camera at the barcode on the box", starting: "Starting camera …", looking: "Searching …",
     torchOn: "Light on", torchOff: "Light off", startCamera: "Start camera", again: "Scan next product",
@@ -261,6 +264,7 @@ const en: Dict = {
     noPublicUrl: "The public address of the system is missing (APP_URL). On Render it is set automatically.",
     filter: { open: "Not matched", all: "All", errors: "Errors" }, shopVariant: "In shop", ours: "Ours", pick: "Search (name, no., barcode, category) and match a product …", unlink: "Unlink",
     matchedBy: { created: "created here", barcode: "by barcode", sku: "by SKU", manual: "manually", import: "by import" }, notTracked: "Shop doesn't track stock for this item", pushed: "sent", noVariants: "No products loaded yet.",
+    sendWeights: "Send weights to the shop", sendWeightsHint: "For shipping by weight. Changed weights are sent automatically – this sends all of them again.", weightsStarted: "Weights are being sent in the background – result in the log.",
     pending: {
       showAll: "Show all {n}", title: "Not in the shop yet", none: "Everything is in the shop ✓",
       hint: "Ticked products that are fully or partly missing here. Uploading links via the barcode: existing products are only linked or get the new sizes/colours, new ones are created and visible right away.",
@@ -275,7 +279,7 @@ const en: Dict = {
       ours: "Ours", store: "In the shop", same: "same name ✓", choose: "– choose –", none: "The shop has no categories yet – new products get your category.",
       refresh: "Reload categories", count: "{n} products",
     },
-    ev: { variantsAdded: "Sizes/colours added in the shop: {p}", bulkPushed: "Uploaded all: {c} new · {l} linked · {u} extended · {f} with a problem · {s} skipped", pushBlocked: "Not uploaded: {p} – {r}", created: "Product created in the shop: {p}", createdHidden: "Product created but not published (permission missing): {p}", createFailed: "Product not created in the shop: {p}", imagesFailedFor: "Photos not uploaded: {p}", linkedExisting: "Linked to an existing shop product: {p}", productsImported: "Imported from the shop: {c} items ({v} variants) · {e} already there · {n} without barcode", imagesLoaded: "{ok} photos saved · {f} not loaded", "importFailed:dup": "Not created: SKU or barcode already exists", "importFailed:other": "Not created – please add it by hand", productsLoaded: "{t} products loaded · {m} matched · {o} open", stockErrors: "{p} stock levels could not be sent", imported: "Invoice {p} created", "skip:noTaxEu": "Tax-free order to the EU – check the VAT ID and create the invoice manually", "skip:currency": "Order in foreign currency – please create manually", "skip:noLines": "Order without items skipped", unmapped: "Unmatched products – stock not booked for them", totalMismatch: "Amount differs by {p} cents from the shop – please check", taxedExport: "Non-EU order with VAT – please check", partial: "Partial refund: new invoice {p}", fullRefund: "Fully refunded – cancelled", cancelledRefunded: "Cancelled and refunded in the shop – invoice cancelled", cancelledKeepPayment: "Cancelled in the shop, money not refunded yet – customer credit", amountOnly: "Refund without goods ({p} cents) – please issue a credit note manually", checkAmounts: "Refund includes shipping or a discount – check the amounts", writtenOff: "Goods not returned booked as loss", writeOffFailed: "Loss could not be booked", registered: "Instant notifications set up ({p} new)", paid: "Payment received", products: "{p}" },
+    ev: { weightsPushed: "Weights sent to the shop: {u} · with errors: {f}", variantsAdded: "Sizes/colours added in the shop: {p}", bulkPushed: "Uploaded all: {c} new · {l} linked · {u} extended · {f} with a problem · {s} skipped", pushBlocked: "Not uploaded: {p} – {r}", created: "Product created in the shop: {p}", createdHidden: "Product created but not published (permission missing): {p}", createFailed: "Product not created in the shop: {p}", imagesFailedFor: "Photos not uploaded: {p}", linkedExisting: "Linked to an existing shop product: {p}", productsImported: "Imported from the shop: {c} items ({v} variants) · {e} already there · {n} without barcode", imagesLoaded: "{ok} photos saved · {f} not loaded", "importFailed:dup": "Not created: SKU or barcode already exists", "importFailed:other": "Not created – please add it by hand", productsLoaded: "{t} products loaded · {m} matched · {o} open", stockErrors: "{p} stock levels could not be sent", imported: "Invoice {p} created", "skip:noTaxEu": "Tax-free order to the EU – check the VAT ID and create the invoice manually", "skip:currency": "Order in foreign currency – please create manually", "skip:noLines": "Order without items skipped", unmapped: "Unmatched products – stock not booked for them", totalMismatch: "Amount differs by {p} cents from the shop – please check", taxedExport: "Non-EU order with VAT – please check", partial: "Partial refund: new invoice {p}", fullRefund: "Fully refunded – cancelled", cancelledRefunded: "Cancelled and refunded in the shop – invoice cancelled", cancelledKeepPayment: "Cancelled in the shop, money not refunded yet – customer credit", amountOnly: "Refund without goods ({p} cents) – please issue a credit note manually", checkAmounts: "Refund includes shipping or a discount – check the amounts", writtenOff: "Goods not returned booked as loss", writeOffFailed: "Loss could not be booked", registered: "Instant notifications set up ({p} new)", paid: "Payment received", products: "{p}" },
     errors: { busy: "The import is running – please wait a moment.", currency: "The shop does not use euros – import not possible.", notConfigured: "Please enter the shop address and credentials first.", auth: "Access denied – check client ID, secret and scopes.", network: "Shop not reachable.", graphql: "Shopify reports an error: {d}", throttled: "Shopify is throttling – please try again shortly.", noLocation: "Please choose a location.", other: "Something went wrong: {d}" },
   },
   settings: {

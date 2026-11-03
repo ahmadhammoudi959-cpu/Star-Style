@@ -37,6 +37,7 @@ const de = {
     passwordHint: "Mindestens 10 Zeichen", alreadyDone: "Die Einrichtung ist bereits abgeschlossen.",
   },
   product: {
+    weight: "Gewicht (Packung)", weightUnit: "Einheit", weightInvalid: "Gewicht bitte als Zahl eingeben, z. B. 150 g oder 1,5 kg.",
     moreBarcodes: "+{n} weitere",
     open: "Öffnen", searchHint: "Suchen nach Name, Art.-Nr., Barcode oder Kategorie …", skuHint: "Art.-Nr. = Barcode – wird automatisch aus dem ersten Barcode übernommen.", skuOrBarcode: "Bitte Art.-Nr. oder Barcode eingeben.",
     title: "Artikel", new: "Neuer Artikel", edit: "Artikel bearbeiten", sku: "Artikelnummer",
@@ -85,6 +86,7 @@ const de = {
     },
   },
   receive: {
+    weight: "Gewicht je Stück", weightMissing: "fehlt noch – hier eintragen", totalWeight: "Gesamtgewicht",
     searchHistory: "Suchen: WE-Nr., Lieferant, Rechnungsnr. oder Artikel …", openReceipt: "Wareneingang ansehen",
     title: "Wareneingang", new: "Neue Lieferung", supplier: "Lieferant", supplierInvoice: "Lieferschein-/Rechnungsnr.",
     lines: "Positionen", pickProduct: "Artikel suchen (Name, Nr., Barcode, Kategorie)", unitCost: "EK netto / Stück", batchNo: "Charge",
@@ -119,6 +121,7 @@ const de = {
   },
   taxMode: { DOMESTIC: "Inland", EU_REVERSE_CHARGE: "EU steuerfrei", EU_PENDING_VATID: "EU – Nr. ausstehend", EU_B2C: "EU privat", EXPORT: "Ausfuhr (steuerfrei)" },
   scan: {
+    weight: "Gewicht",
     title: "Barcode scannen", subtitle: "Packung scannen – Bestand, Preise und Verkäufe sofort sehen",
     hint: "Kamera auf den Barcode der Packung halten", starting: "Kamera startet …", looking: "Suche …",
     torchOn: "Licht an", torchOff: "Licht aus", startCamera: "Kamera starten", again: "Nächsten Artikel scannen",
@@ -259,6 +262,7 @@ const de = {
     noPublicUrl: "Die öffentliche Adresse des Systems fehlt (APP_URL). Auf Render wird sie automatisch gesetzt.",
     filter: { open: "Nicht zugeordnet", all: "Alle", errors: "Fehler" }, shopVariant: "Im Shop", ours: "Bei uns", pick: "Artikel suchen (Name, Nr., Barcode, Kategorie) und zuordnen …", unlink: "Lösen",
     matchedBy: { created: "hier angelegt", barcode: "per Barcode", sku: "per Art.-Nr.", manual: "von Hand", import: "per Import" }, notTracked: "Bestand im Shop nicht verfolgt", pushed: "gemeldet", noVariants: "Noch keine Produkte geladen.",
+    sendWeights: "Gewichte an den Shop senden", sendWeightsHint: "Für Versand nach Gewicht. Geänderte Gewichte gehen automatisch – das hier schickt alle noch einmal.", weightsStarted: "Gewichte werden im Hintergrund gesendet – Ergebnis im Protokoll.",
     pending: {
       showAll: "Alle {n} anzeigen", title: "Noch nicht im Shop", none: "Alles im Shop ✓",
       hint: "Angehakte Artikel, die hier ganz oder teilweise fehlen. Hochladen verbindet über den Barcode: Vorhandenes wird nur verbunden bzw. um neue Größen/Farben ergänzt, Neues wird angelegt und ist sofort sichtbar.",
@@ -273,7 +277,7 @@ const de = {
       ours: "Bei uns", store: "Im Shop", same: "gleicher Name ✓", choose: "– wählen –", none: "Der Shop hat noch keine Kategorien – neue Produkte bekommen deine Kategorie.",
       refresh: "Kategorien neu laden", count: "{n} Artikel",
     },
-    ev: { variantsAdded: "Größen/Farben im Shop ergänzt: {p}", bulkPushed: "Alle hochgeladen: {c} neu · {l} verbunden · {u} ergänzt · {f} mit Problem · {s} übersprungen", pushBlocked: "Nicht hochgeladen: {p} – {r}", created: "Artikel im Shop angelegt: {p}", createdHidden: "Artikel im Shop angelegt, aber nicht veröffentlicht (Recht fehlt): {p}", createFailed: "Artikel nicht im Shop angelegt: {p}", imagesFailedFor: "Fotos nicht hochgeladen: {p}", linkedExisting: "Mit vorhandenem Shop-Produkt verbunden: {p}", productsImported: "Aus dem Shop übernommen: {c} Artikel ({v} Varianten) · {e} schon vorhanden · {n} ohne Barcode", imagesLoaded: "{ok} Fotos übernommen · {f} nicht geladen", "importFailed:dup": "Nicht angelegt: Art.-Nr. oder Barcode gibt es schon", "importFailed:other": "Nicht angelegt – bitte von Hand anlegen", productsLoaded: "{t} Produkte geladen · {m} zugeordnet · {o} offen", stockErrors: "{p} Bestände konnten nicht gemeldet werden", imported: "Rechnung {p} erstellt", "skip:noTaxEu": "Steuerfreie Bestellung in die EU – bitte USt-IdNr. prüfen und Rechnung von Hand erstellen", "skip:currency": "Bestellung in Fremdwährung – bitte von Hand erstellen", "skip:noLines": "Bestellung ohne Positionen übersprungen", unmapped: "Nicht zugeordnete Produkte – Bestand dafür nicht gebucht", totalMismatch: "Betrag weicht um {p} Cent vom Shop ab – bitte prüfen", taxedExport: "Bestellung ins Nicht-EU-Ausland mit MwSt. – bitte prüfen", partial: "Teil-Erstattung: neue Rechnung {p}", fullRefund: "Komplett erstattet – storniert", cancelledRefunded: "Im Shop storniert und erstattet – Rechnung storniert", cancelledKeepPayment: "Im Shop storniert, Geld noch nicht erstattet – Guthaben beim Kunden", amountOnly: "Erstattung ohne Ware ({p} Cent) – bitte Gutschrift von Hand", checkAmounts: "Erstattung enthält Versand oder Nachlass – Beträge prüfen", writtenOff: "Nicht zurückgekommene Ware als Verlust gebucht", writeOffFailed: "Verlust konnte nicht gebucht werden", registered: "Sofort-Meldungen eingerichtet ({p} neu)", paid: "Zahlung eingegangen", products: "{p}" },
+    ev: { weightsPushed: "Gewichte an den Shop gemeldet: {u} · mit Fehler: {f}", variantsAdded: "Größen/Farben im Shop ergänzt: {p}", bulkPushed: "Alle hochgeladen: {c} neu · {l} verbunden · {u} ergänzt · {f} mit Problem · {s} übersprungen", pushBlocked: "Nicht hochgeladen: {p} – {r}", created: "Artikel im Shop angelegt: {p}", createdHidden: "Artikel im Shop angelegt, aber nicht veröffentlicht (Recht fehlt): {p}", createFailed: "Artikel nicht im Shop angelegt: {p}", imagesFailedFor: "Fotos nicht hochgeladen: {p}", linkedExisting: "Mit vorhandenem Shop-Produkt verbunden: {p}", productsImported: "Aus dem Shop übernommen: {c} Artikel ({v} Varianten) · {e} schon vorhanden · {n} ohne Barcode", imagesLoaded: "{ok} Fotos übernommen · {f} nicht geladen", "importFailed:dup": "Nicht angelegt: Art.-Nr. oder Barcode gibt es schon", "importFailed:other": "Nicht angelegt – bitte von Hand anlegen", productsLoaded: "{t} Produkte geladen · {m} zugeordnet · {o} offen", stockErrors: "{p} Bestände konnten nicht gemeldet werden", imported: "Rechnung {p} erstellt", "skip:noTaxEu": "Steuerfreie Bestellung in die EU – bitte USt-IdNr. prüfen und Rechnung von Hand erstellen", "skip:currency": "Bestellung in Fremdwährung – bitte von Hand erstellen", "skip:noLines": "Bestellung ohne Positionen übersprungen", unmapped: "Nicht zugeordnete Produkte – Bestand dafür nicht gebucht", totalMismatch: "Betrag weicht um {p} Cent vom Shop ab – bitte prüfen", taxedExport: "Bestellung ins Nicht-EU-Ausland mit MwSt. – bitte prüfen", partial: "Teil-Erstattung: neue Rechnung {p}", fullRefund: "Komplett erstattet – storniert", cancelledRefunded: "Im Shop storniert und erstattet – Rechnung storniert", cancelledKeepPayment: "Im Shop storniert, Geld noch nicht erstattet – Guthaben beim Kunden", amountOnly: "Erstattung ohne Ware ({p} Cent) – bitte Gutschrift von Hand", checkAmounts: "Erstattung enthält Versand oder Nachlass – Beträge prüfen", writtenOff: "Nicht zurückgekommene Ware als Verlust gebucht", writeOffFailed: "Verlust konnte nicht gebucht werden", registered: "Sofort-Meldungen eingerichtet ({p} neu)", paid: "Zahlung eingegangen", products: "{p}" },
     errors: { busy: "Der Import läuft gerade – bitte kurz warten.", currency: "Der Shop rechnet nicht in Euro – Import nicht möglich.", notConfigured: "Bitte zuerst Shop-Adresse und Zugangsdaten eintragen.", auth: "Zugang abgelehnt – Client-ID, Geheimnis oder Freigaben prüfen.", network: "Shop nicht erreichbar.", graphql: "Shopify meldet einen Fehler: {d}", throttled: "Shopify bremst gerade – bitte gleich nochmal.", noLocation: "Bitte einen Lagerort wählen.", other: "Etwas ist schiefgelaufen: {d}" },
   },
   settings: {

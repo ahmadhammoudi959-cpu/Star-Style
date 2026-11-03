@@ -4,10 +4,12 @@
  * Größe/Farbe aus den Produkt-Optionen, der Barcode verbindet Artikel und Shop.
  */
 
+import { shopWeightToGrams } from "../weight";
+
 export type ShopImportVariant = {
   id: string; sku: string | null; barcode: string | null; price: string; position: number;
   selectedOptions: { name: string; value: string }[];
-  inventoryItem: { unitCost: { amount: string } | null } | null;
+  inventoryItem: { unitCost: { amount: string } | null; measurement?: { weight: { unit: string; value: number } | null } | null } | null;
   product: {
     id: string; title: string; handle: string; productType: string; vendor: string; status: string; isGiftCard: boolean;
     options: { name: string; position: number }[];
@@ -16,7 +18,7 @@ export type ShopImportVariant = {
 };
 
 /** priceCents = eigener Preis der Variante (nur wenn er vom Artikelpreis abweicht), gilt für Groß- und Einzelhandel */
-export type DraftVariant = { shopVariantId: string; size: string; color: string; barcode: string | null; priceCents: number | null };
+export type DraftVariant = { shopVariantId: string; size: string; color: string; barcode: string | null; priceCents: number | null; weightGrams: number | null };
 
 export type ProductDraft = {
   shopProductId: string; handle: string; sku: string; nameDe: string; category: string; vendor: string;
@@ -67,7 +69,8 @@ export function mapShopProduct(variants: ShopImportVariant[], o: { taxesIncluded
     for (let k = 2; seen.has(`${size.toLowerCase()}|${color.toLowerCase()}`); k++) size = clip(`${rest.join(" / ").slice(0, 52)} (${k})`, 60);
     seen.add(`${size.toLowerCase()}|${color.toLowerCase()}`);
     const bc = clip(v.barcode, 64);
-    return { shopVariantId: v.id, size, color, barcode: bc && bc.length <= 32 ? bc : null, priceCents: prices[i] === base ? null : prices[i] };
+    return { shopVariantId: v.id, size, color, barcode: bc && bc.length <= 32 ? bc : null, priceCents: prices[i] === base ? null : prices[i],
+      weightGrams: shopWeightToGrams(v.inventoryItem?.measurement?.weight) };
   });
 
   // Art.-Nr. = Barcode (Wunsch Inhaber 03.11.2026): erster Barcode der Varianten. Ohne Barcode bei einer Variante die SKU des Shops

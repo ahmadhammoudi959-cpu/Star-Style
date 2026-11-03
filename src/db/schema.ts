@@ -215,6 +215,7 @@ export const variants = pgTable("variants", {
   wholesalePriceCents: integer("wholesale_price_cents"),
   retailPriceCents: integer("retail_price_cents"),
   minStock: integer("min_stock").notNull().default(0),
+  weightGrams: integer("weight_grams"), // Gewicht einer Packung in Gramm (Versand nach Gewicht im Shop); null = unbekannt
   imageFileId: text("image_file_id"), // eigenes Foto (z. B. Farbe); sonst Foto des Artikels
   stockQty: integer("stock_qty").notNull().default(0), // Cache; Wahrheit = Summe der Bewegungen
   avgCostCents: integer("avg_cost_cents").notNull().default(0), // gleitender Durchschnitts-EK

@@ -1,0 +1,1 @@
+ALTER TABLE "variants" ADD COLUMN "weight_grams" integer;

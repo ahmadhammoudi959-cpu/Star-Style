@@ -8,6 +8,7 @@ import { getShop, normalizeDomain, ShopifyError, type ShopChannel } from "@/lib/
 import {
   bulkPushStatus, getStoreTypes, pushProductToShop, setCategoryMapping, startBulkPush, unlistProduct, type BulkState, type PushResult,
 } from "@/lib/shopify/product-push";
+import { pushWeights } from "@/lib/shopify/weights";
 import { linkVariant, processDirty, pushStock, syncOrders, syncProducts, testConnection, runCycle } from "@/lib/shopify/sync";
 import { registerWebhooks } from "@/lib/shopify/webhooks";
 import { importProducts } from "@/lib/shopify/import";
@@ -167,4 +168,12 @@ export async function refreshCategoriesAction(channel: string): Promise<ShopResu
   const shop = await getShop(CH(channel));
   if (!shop?.domain) return { error: "notConfigured" };
   try { const types = await getStoreTypes(shop, 0, true); refreshPending(CH(channel)); return { ok: String(types.length) }; } catch (e) { return fail(e); }
+}
+
+/** Alle Gewichte (Versand nach Gewicht) noch einmal an diesen Shop – im Hintergrund, Ergebnis im Protokoll */
+export async function pushWeightsAction(channel: string): Promise<ShopResult> {
+  await requireSession();
+  const ch = CH(channel);
+  void pushWeights(undefined, ch).then(() => revalidatePath(`/shops/${ch}`)).catch((e) => console.error("shopify weights", e));
+  return { ok: "started" };
 }

@@ -8,9 +8,14 @@ import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
 import { parseMoney } from "@/lib/money";
 import { PhotoPicker } from "@/components/PhotoPicker";
+import { WeightInput } from "@/components/WeightInput";
+import type { WeightUnit } from "@/lib/weight";
 import type { Dict } from "@/i18n/de";
 
-type V = { key: string; id?: string; size: string; color: string; barcode: string; minStock: number; stockQty?: number; initialQty?: number; initialExpiry?: string; imageFileId?: string | null };
+type V = {
+  key: string; id?: string; size: string; color: string; barcode: string; minStock: number; stockQty?: number; initialQty?: number; initialExpiry?: string;
+  imageFileId?: string | null; weight?: string; weightUnit?: WeightUnit;
+};
 export type ProductFormData = {
   id?: string; sku: string; nameDe: string; nameNl: string; descriptionDe: string; descriptionNl: string; category: string;
   supplierId: string; vatRateBp: number; purchasePrice: string; wholesalePrice: string; retailPrice: string;
@@ -181,19 +186,22 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
             {variants.some((v) => !v.id) && <p className="mt-1 text-xs font-semibold text-brand-700">{t.product.initialHint}</p>}
           </div>
           <button type="button" className="btn-ghost group"
-            onClick={() => setVariants((vs) => [...vs, { key: crypto.randomUUID(), size: "", color: "", barcode: "", minStock: 0 }])}>
+            onClick={() => setVariants((vs) => [...vs, { key: crypto.randomUUID(), size: "", color: "", barcode: "", minStock: 0, weight: "", weightUnit: vs[vs.length - 1]?.weightUnit ?? "g" }])}>
             <Icon name="plus" className="h-4 w-4" />{t.product.addVariant}
           </button>
         </div>
         <div className="space-y-3">
           {variants.map((v) => (
-            <div key={v.key} className="grid animate-rise grid-cols-2 gap-3 rounded-xl bg-brand-50/50 p-3 ring-1 ring-black/5 md:grid-cols-[auto_minmax(0,1fr)_1fr_1.4fr_0.8fr_auto]">
-              <div className="col-span-2 flex items-end md:col-span-1" title={t.product.variantPhoto}>
+            <div key={v.key} className="grid animate-rise grid-cols-2 gap-3 rounded-xl bg-brand-50/50 p-3 ring-1 ring-black/5 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,0.7fr)_auto]">
+              <div className="col-span-2 flex items-end lg:col-span-1" title={t.product.variantPhoto}>
                 <PhotoPicker name={`vimg_${v.key}`} initialId={v.imageFileId} labels={photoLabels} size={44} compact />
               </div>
               <Field label={t.product.size}><input className="input" value={v.size} onChange={(e) => upd(v.key, { size: e.target.value })} /></Field>
               <Field label={t.product.color}><input className="input" value={v.color} onChange={(e) => upd(v.key, { color: e.target.value })} /></Field>
               <Field label={t.product.barcode}><input className="input num" dir="ltr" inputMode="numeric" value={v.barcode} onChange={(e) => upd(v.key, { barcode: e.target.value.trim() })} /></Field>
+              <Field label={t.product.weight}>
+                <WeightInput value={v.weight ?? ""} unit={v.weightUnit ?? "g"} unitLabel={t.product.weightUnit} onChange={(w) => upd(v.key, w)} />
+              </Field>
               <Field label={t.product.minStock}><input className="input num" type="number" min={0} value={v.minStock} onChange={(e) => upd(v.key, { minStock: Math.max(0, Number(e.target.value) || 0) })} /></Field>
               <div className="flex items-end justify-end gap-2">
                 {v.stockQty != null && <span className="badge mb-3 bg-white text-ink-soft ring-1 ring-black/5">{t.product.stock}: {v.stockQty}</span>}
@@ -204,7 +212,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
                 </button>
               </div>
               {!v.id && (
-                <div className="col-span-2 grid grid-cols-2 gap-3 md:col-span-6 md:grid-cols-4">
+                <div className="col-span-2 grid grid-cols-2 gap-3 md:grid-cols-4 lg:col-span-7">
                   <Field label={t.product.initialQty}>
                     <input className="input num border-brand-300 bg-white" type="number" min={0} inputMode="numeric" placeholder="0"
                       value={v.initialQty || ""} onChange={(e) => upd(v.key, { initialQty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />

@@ -9,7 +9,7 @@ import { barcodeCandidates } from "./barcode";
 
 export type ScanVariant = {
   id: string; size: string; color: string; barcode: string | null; imageFileId: string | null;
-  stock: number; reserved: number; available: number; minStock: number;
+  stock: number; reserved: number; available: number; minStock: number; weightGrams: number | null;
   nextExpiry: string | null; nextExpiryQty: number;
   wholesaleCents: number; retailCents: number;
   sold30: number; sold90: number; lastSale: string | null;
@@ -53,7 +53,7 @@ export async function lookupCode(raw: string): Promise<ScanResult> {
 
   // je Größe/Farbe: Bestand, reserviert (offene Angebote), nächstes MHD, Preise, verkauft (Rechnungen abzüglich Stornos)
   const vs = await db.execute<Record<string, unknown>>(sql`
-    select v.id, v.size, v.color, v.barcode, v.image_file_id, v.stock_qty, v.min_stock, v.wholesale_price_cents, v.retail_price_cents,
+    select v.id, v.size, v.color, v.barcode, v.image_file_id, v.stock_qty, v.min_stock, v.wholesale_price_cents, v.retail_price_cents, v.weight_grams,
            coalesce((select sum(r.qty) from reservations r where r.variant_id = v.id and r.active and r.expires_at > now()), 0)::int as reserved,
            e.expiry as next_expiry,
            coalesce((select sum(b.qty_left) from batches b where b.variant_id = v.id and b.qty_left > 0 and b.expiry_date = e.expiry), 0)::int as next_expiry_qty,
@@ -89,6 +89,7 @@ export async function lookupCode(raw: string): Promise<ScanResult> {
       return {
         id: String(v.id), size: String(v.size ?? ""), color: String(v.color ?? ""), barcode: (v.barcode as string | null) ?? null,
         imageFileId: (v.image_file_id as string | null) ?? null, stock, reserved, available: stock - reserved, minStock: Number(v.min_stock),
+        weightGrams: v.weight_grams == null ? null : Number(v.weight_grams),
         nextExpiry: v.next_expiry ? String(v.next_expiry).slice(0, 10) : null, nextExpiryQty: Number(v.next_expiry_qty),
         wholesaleCents: v.wholesale_price_cents != null ? Number(v.wholesale_price_cents) : wholesale,
         retailCents: v.retail_price_cents != null ? Number(v.retail_price_cents) : retail,

@@ -17,7 +17,7 @@ import { storeImageBytes } from "../files";
 
 const VARIANTS_Q = `query($after: String) { productVariants(first: 50, after: $after) {
   pageInfo { hasNextPage endCursor }
-  nodes { id sku barcode price position selectedOptions { name value } inventoryItem { unitCost { amount } }
+  nodes { id sku barcode price position selectedOptions { name value } inventoryItem { unitCost { amount } measurement { weight { unit value } } }
     product { id title handle productType vendor status isGiftCard options { name position }
       featuredMedia { preview { image { url(transform: { maxWidth: 800, maxHeight: 800, preferredContentType: WEBP }) } } } } } } }`;
 
@@ -129,7 +129,7 @@ async function createProduct(d: ProductDraft, channel: ShopChannel, c: { usedSku
   const rows = d.variants.map((v) => {
     const barcode = v.barcode && !c.barcodeOwner.has(v.barcode) && !taken.has(v.barcode) ? v.barcode : null;
     if (barcode) taken.add(barcode);
-    return { shopVariantId: v.shopVariantId, size: v.size, color: v.color, barcode, wholesalePriceCents: v.priceCents, retailPriceCents: v.priceCents };
+    return { shopVariantId: v.shopVariantId, size: v.size, color: v.color, barcode, wholesalePriceCents: v.priceCents, retailPriceCents: v.priceCents, weightGrams: v.weightGrams };
   });
   const r = await db.transaction(async (tx) => {
     const [p] = await tx.insert(schema.products).values(values).returning({ id: schema.products.id });

@@ -16,7 +16,7 @@ export default async function NewProduct({ searchParams }: { searchParams: Promi
       <ProductForm t={t} suppliers={suppliers} categories={categories} shopStatus={shopStatus} initial={{
         sku: "", nameDe: "", nameNl: "", descriptionDe: "", descriptionNl: "", category: "", supplierId: "", vatRateBp: 1900,
         purchasePrice: "", wholesalePrice: "", retailPrice: "", tracksExpiry: false, inBrandShop: false, inGeneralShop: true,
-        variants: code ? [{ size: "", color: "", barcode: code, minStock: 0 }] : [],
+        variants: code ? [{ size: "", color: "", barcode: code, minStock: 0, weight: "", weightUnit: "g" }] : [],
       }} />
     </div>
   );

@@ -6,6 +6,7 @@ import { AFRelationship, PDFDocument, PDFFont, PDFName, PDFPage, rgb, type RGB }
 import fontkit from "@pdf-lib/fontkit";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { formatWeight, shipmentWeight } from "./weight";
 import { formatCents, bpToPercent } from "./money";
 import { addDaysIso, formatDate } from "./dates";
 import { legalNotes } from "./tax";
@@ -26,7 +27,7 @@ type Fonts = { r: TFont; s: TFont; b: TFont };
 type DocKind = "invoice" | "cancellation" | "offer" | "delivery";
 
 type Party = { name: string; street: string; zip: string; city: string; country: string; vatId: string };
-type Line = { position: number; sku: string; ean: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; netCents: number; vatRateBp: number; vatCents?: number };
+type Line = { position: number; sku: string; ean: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; netCents: number; vatRateBp: number; vatCents?: number; weightGrams?: number | null };
 type DocData = {
   kind: DocKind; number: string; date: string; deliveryDate: string | null; dueDate: string | null; validUntil: string | null;
   customerNo: number; customerId: string; buyer: Party; lines: Line[];
@@ -268,7 +269,8 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
     // (beim Verladen scanbar), ohne Barcode die Art.-Nr.
     const no = l.ean || l.sku;
     const title = priced ? l.description : `${no ? no + " · " : ""}${l.description}`;
-    const sub = priced ? no : "";
+    // Ladeliste: Gewicht je Stück und zusammen (Versand)
+    const sub = priced ? no : l.weightGrams ? `Gewicht: je ${formatWeight(l.weightGrams)} · zus. ${formatWeight(l.weightGrams * Math.abs(l.qty))}` : "";
     const rows = wrap(title, f.r, 9, descW);
     const h = (rows.length + (sub ? 1 : 0)) * 4.4 * MM + 2.6 * MM;
     w.ensure(h, head);
@@ -296,6 +298,14 @@ export async function renderPdf(d: DocData, opts: { xml?: string } = {}): Promis
     w.text(`Gesamtmenge (${d.lines.length} ${d.lines.length === 1 ? "Position" : "Positionen"})`, X.desc, w.y, 9, f.s);
     w.right(String(total), X.qty + 10 * MM, w.y, 9.5, f.b);
     w.y -= 6 * MM;
+    // Gesamtgewicht der Sendung (Positionen ohne Gewicht werden genannt)
+    const sw = shipmentWeight(d.lines.map((l) => ({ qty: l.qty, weightGrams: l.weightGrams ?? null })));
+    if (sw.grams > 0) {
+      w.ensure(6 * MM);
+      w.text(`Gesamtgewicht${sw.missing ? ` (ohne ${sw.missing} ${sw.missing === 1 ? "Position" : "Positionen"} ohne Gewicht)` : ""}`, X.desc, w.y, 9, f.s);
+      w.right(`ca. ${formatWeight(sw.grams)}`, X.qty + 10 * MM, w.y, 9.5, f.b);
+      w.y -= 6 * MM;
+    }
   }
 
   // Summen
@@ -395,13 +405,13 @@ function setFacturXMetadata(doc: PDFDocument, title: string, author: string) {
 async function linesWithProducts(lines: { position: number; variantId: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; netCents?: number; vatRateBp: number; vatCents?: number }[]) {
   const out: Line[] = [];
   for (const l of lines.sort((a, b) => a.position - b.position)) {
-    let sku = "", ean: string | null = null;
+    let sku = "", ean: string | null = null, weightGrams: number | null = null;
     if (l.variantId) {
       const v = await db.query.variants.findFirst({ where: eq(schema.variants.id, l.variantId), with: { product: true } });
-      sku = v?.product.sku ?? ""; ean = v?.barcode ?? null;
+      sku = v?.product.sku ?? ""; ean = v?.barcode ?? null; weightGrams = v?.weightGrams ?? null;
     }
     const raw = l.qty * l.unitPriceCents;
-    out.push({ position: l.position, sku, ean, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, netCents: l.netCents ?? raw - Math.round((raw * l.discountBp) / 10000), vatRateBp: l.vatRateBp, vatCents: l.vatCents });
+    out.push({ position: l.position, sku, ean, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, netCents: l.netCents ?? raw - Math.round((raw * l.discountBp) / 10000), vatRateBp: l.vatRateBp, vatCents: l.vatCents, weightGrams });
   }
   return out;
 }

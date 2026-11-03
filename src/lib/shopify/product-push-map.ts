@@ -10,6 +10,7 @@ export type PushVariant = {
   id: string; size: string; color: string; barcode: string | null;
   retailPriceCents: number | null; // eigener Preis der Variante, sonst Artikelpreis
   imageFileId: string | null; available: number;
+  weightGrams?: number | null; // Versand nach Gewicht im Shop
 };
 
 export type PushProduct = {
@@ -23,6 +24,10 @@ export type PushImage = { resourceUrl: string; filename: string };
 export const SIZE_OPTION = "Größe";
 export const COLOR_OPTION = "Farbe";
 const PLACEHOLDER = "Standard";
+
+/** Gewicht für Shopify (am Lagerartikel der Variante) */
+export const shopWeight = (grams: number | null | undefined) =>
+  grams && grams > 0 ? { measurement: { weight: { unit: "GRAMS", value: grams } } } : {};
 
 /** Netto-Cent → Shop-Preis-Cent (Shops mit Bruttopreisen: inkl. MwSt.) */
 export function shopPriceCents(netCents: number, vatRateBp: number, taxesIncluded: boolean): number {
@@ -93,6 +98,7 @@ export function buildProductSet(p: PushProduct, o: { taxesIncluded: boolean; loc
       inventoryItem: {
         sku: variantSku(p.sku, v, single), tracked: true,
         ...(p.purchasePriceCents > 0 ? { cost: money(p.purchasePriceCents) } : {}),
+        ...shopWeight(v.weightGrams),
       },
       inventoryQuantities: [{ locationId: o.locationId, name: "available", quantity: Math.max(0, v.available) }],
       ...(v.imageFileId && o.images.has(v.imageFileId) && v.imageFileId !== p.imageFileId ? { file: file(v.imageFileId) } : {}),

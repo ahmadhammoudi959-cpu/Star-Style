@@ -11,6 +11,8 @@ import { storeImage } from "@/lib/files";
 import { todayIso } from "@/lib/dates";
 import { deleteProduct, ProductDeleteError } from "@/lib/product-delete";
 import { encodePush, pushProductToShops, pushTargets, setCategoryMapping } from "@/lib/shopify/product-push";
+import { pushWeightsLater } from "@/lib/shopify/weights";
+import { parseWeight } from "@/lib/weight";
 
 export type ProductFormState = { error?: string; field?: string; values?: Record<string, string> } | undefined;
 
@@ -30,6 +32,9 @@ const VariantSchema = z.object({
   color: z.string().trim().max(60).default(""),
   barcode: z.string().trim().max(32).default(""),
   minStock: z.coerce.number().int().min(0).default(0),
+  // Gewicht einer Packung: Text + Einheit („150“ g, „1,5“ kg, „250 g“)
+  weight: z.string().trim().max(20).default(""),
+  weightUnit: z.enum(["g", "kg"]).default("g"),
   // Anfangsbestand nur für neue Varianten: wird als Wareneingang gebucht (Bestand nie direkt setzen)
   initialQty: z.coerce.number().int().min(0).max(1_000_000).default(0),
   initialExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal("")).default(""),
@@ -76,6 +81,8 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   }
   const barcodes = d.variants.map((v) => v.barcode).filter(Boolean);
   if (new Set(barcodes).size !== barcodes.length) return { error: "barcodeTaken" };
+  const weights = d.variants.map((v) => parseWeight(v.weight, v.weightUnit));
+  if (weights.some((w) => w === undefined)) return { error: "weightInvalid" };
   // Art.-Nr. = Barcode (Wunsch Inhaber 03.11.2026): leer gelassen → Barcode der ersten Variante mit Barcode
   const sku = d.sku || barcodes[0] || "";
   if (!sku) return { error: "skuOrBarcode" };
@@ -105,6 +112,7 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   };
 
   let productId = d.id;
+  const weightChanged: string[] = []; // an die Shops melden
   try {
     await db.transaction(async (tx) => {
       // Eindeutigkeit vorab prüfen → verständliche Fehlermeldung
@@ -132,11 +140,18 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
       // Barcodes dieses Artikels zuerst leeren, damit Tausch zwischen Varianten möglich ist
       await tx.update(schema.variants).set({ barcode: null }).where(eq(schema.variants.productId, productId!));
       const opening: { variantId: string; qty: number; expiryDate: string | null }[] = [];
-      for (const v of d.variants) {
+      const oldWeights = new Map((await tx.select({ id: schema.variants.id, w: schema.variants.weightGrams }).from(schema.variants)
+        .where(eq(schema.variants.productId, productId!))).map((r) => [r.id, r.w]));
+      for (const [vi, v] of d.variants.entries()) {
+        const weightGrams = weights[vi] ?? null;
         const vals = {
-          size: v.size, color: v.color, barcode: v.barcode || null, minStock: v.minStock, active: true,
+          size: v.size, color: v.color, barcode: v.barcode || null, minStock: v.minStock, active: true, weightGrams,
           ...(variantImages.has(v.ref) ? { imageFileId: variantImages.get(v.ref) ?? null } : {}),
         };
+        if (v.id && oldWeights.has(v.id) && (oldWeights.get(v.id) ?? null) !== weightGrams) {
+          await audit(tx, { entity: "variant", entityId: v.id, action: "weight", before: { weightGrams: oldWeights.get(v.id) ?? null }, after: { weightGrams }, userId: session.uid });
+          if (weightGrams) weightChanged.push(v.id);
+        }
         if (v.id) await tx.update(schema.variants).set(vals).where(and(eq(schema.variants.id, v.id), eq(schema.variants.productId, productId!)));
         else {
           // evtl. früher deaktivierte Variante mit gleicher Größe/Farbe reaktivieren
@@ -200,6 +215,8 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
       push = encodePush((await pushTargets(productId!)).map((channel) => ({ channel, outcome: "notNow" as const })));
     }
   } catch (e) { console.error("shopify push", e); }
+  // geändertes Gewicht der schon verbundenen Größen/Farben im Hintergrund an die Shops (Versand nach Gewicht)
+  pushWeightsLater(weightChanged);
   redirect(`/products/${productId}?saved=1${push ? `&push=${encodeURIComponent(push)}` : ""}`);
 }
 

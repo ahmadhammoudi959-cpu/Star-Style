@@ -28,7 +28,7 @@ describe("Shopify-Produkt → Artikel", () => {
       sku: "8721399642054", nameDe: "DeltaPro Kamm Lucas", category: "Werkzeug & Zubehör", vendor: "DeltaPro", vatRateBp: 1900,
       purchasePriceCents: 0, retailPriceCents: 412, imageUrl: "https://cdn.shopify.com/s/files/kamm.webp",
     });
-    expect(d.variants).toEqual([{ shopVariantId: "gid://shopify/ProductVariant/1", size: "", color: "", barcode: "8721399642054", priceCents: null }]);
+    expect(d.variants).toEqual([{ shopVariantId: "gid://shopify/ProductVariant/1", size: "", color: "", barcode: "8721399642054", priceCents: null, weightGrams: null }]);
   });
 
   it("Farbe → Farbe, übrige Optionen → Größe; abweichender Preis wird Variantenpreis; Art.-Nr. = Handle", () => {
@@ -36,13 +36,14 @@ describe("Shopify-Produkt → Artikel", () => {
       options: [{ name: "Farbe", position: 2 }, { name: "Ausführung", position: 1 }] });
     const d = mapShopProduct([
       variant({ id: "v2", position: 2, sku: "B", barcode: " 8720701739017 ", price: "19.90", product: p, selectedOptions: [{ name: "Ausführung", value: "Standard" }, { name: "Farbe", value: "Schwarz" }] }),
-      variant({ id: "v1", position: 1, sku: "A", barcode: "8720701738997", price: "24.90", product: p, selectedOptions: [{ name: "Ausführung", value: "Magnetisch" }, { name: "Farbe", value: "Schwarz" }], inventoryItem: { unitCost: { amount: "9.50" } } }),
+      variant({ id: "v1", position: 1, sku: "A", barcode: "8720701738997", price: "24.90", product: p, selectedOptions: [{ name: "Ausführung", value: "Magnetisch" }, { name: "Farbe", value: "Schwarz" }],
+        inventoryItem: { unitCost: { amount: "9.50" }, measurement: { weight: { unit: "KILOGRAMS", value: 1.25 } } } }),
     ].sort((a, b) => a.position - b.position), { taxesIncluded: true });
     // Art.-Nr. = erster Barcode (Variante mit Position 1)
     expect(d).toMatchObject({ sku: "8720701738997", retailPriceCents: 2092, purchasePriceCents: 950 });
     expect(d.variants).toEqual([
-      { shopVariantId: "v1", size: "Magnetisch", color: "Schwarz", barcode: "8720701738997", priceCents: null },
-      { shopVariantId: "v2", size: "Standard", color: "Schwarz", barcode: "8720701739017", priceCents: 1672 },
+      { shopVariantId: "v1", size: "Magnetisch", color: "Schwarz", barcode: "8720701738997", priceCents: null, weightGrams: 1250 }, // Gewicht aus dem Shop
+      { shopVariantId: "v2", size: "Standard", color: "Schwarz", barcode: "8720701739017", priceCents: 1672, weightGrams: null },
     ]);
   });
 

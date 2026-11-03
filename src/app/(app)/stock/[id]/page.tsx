@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { Thumb } from "@/components/Thumb";
 import { formatCents } from "@/lib/money";
+import { formatWeight } from "@/lib/weight";
 import { daysBetween, formatDate, todayIso } from "@/lib/dates";
 import { variantLabel } from "@/lib/queries";
 import { AdjustForm } from "./AdjustForm";
@@ -49,6 +50,7 @@ export default async function VariantStock({ params }: { params: Promise<{ id: s
             {v.product.category && <span className="badge bg-black/5 text-ink-soft">{v.product.category}</span>}
             <span className="badge bg-white text-ink ring-1 ring-black/10">{t.product.sku}: <bdi dir="ltr" className="tabular-nums">{v.product.sku}</bdi></span>
             {v.barcode && <span className="badge bg-white text-ink ring-1 ring-black/10">{t.product.barcode}: <bdi dir="ltr" className="tabular-nums">{v.barcode}</bdi></span>}
+            {v.weightGrams ? <span className="badge bg-white text-ink ring-1 ring-black/10">{t.product.weight}: <bdi dir="ltr" className="tabular-nums">{formatWeight(v.weightGrams)}</bdi></span> : null}
           </div>
         </div>
       </section>

@@ -3,6 +3,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { receiveGoods, StockError } from "@/lib/stock";
+import { parseWeight } from "@/lib/weight";
+import { setVariantWeights } from "@/lib/variants";
 
 export type ReceiveState = { error?: string; detail?: string; ok?: string; id?: string } | undefined;
 
@@ -12,6 +14,9 @@ const Line = z.object({
   unitCostCents: z.coerce.number().int().min(0),
   batchNo: z.string().trim().max(60).default(""),
   expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal("")).default(""),
+  // Gewicht einer Packung – vorbelegt, fehlendes kann hier nachgetragen werden
+  weight: z.string().trim().max(20).default(""),
+  weightUnit: z.enum(["g", "kg"]).default("g"),
 });
 const Input = z.object({
   supplierId: z.string().default(""),
@@ -26,11 +31,15 @@ export async function submitReceipt(_: ReceiveState, fd: FormData): Promise<Rece
   const parsed = Input.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: "required" };
   const d = parsed.data;
+  const weights = d.lines.map((l) => parseWeight(l.weight, l.weightUnit));
+  if (weights.some((w) => w === undefined)) return { error: "weightInvalid" };
   try {
     const rec = await receiveGoods({
       supplierId: d.supplierId || null, date: d.date, supplierInvoiceNo: d.supplierInvoiceNo, note: d.note,
-      lines: d.lines.map((l) => ({ ...l, expiryDate: l.expiryDate || null })),
+      lines: d.lines.map(({ weight: _w, weightUnit: _u, ...l }) => ({ ...l, expiryDate: l.expiryDate || null })),
     }, session.uid);
+    // eingetragene/geänderte Gewichte an der Größe/Farbe speichern (mit Protokoll, dann an die Shops)
+    await setVariantWeights(d.lines.flatMap((l, i) => (weights[i] ? [{ variantId: l.variantId, grams: weights[i]! }] : [])), session.uid);
     revalidatePath("/receive"); revalidatePath("/stock"); revalidatePath("/");
     return { ok: rec.number, id: rec.id };
   } catch (e) {

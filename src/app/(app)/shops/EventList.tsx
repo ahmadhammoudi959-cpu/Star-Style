@@ -11,6 +11,7 @@ export function evText(t: Dict, msg: string) {
   if (key === "productsLoaded") { const [a, b, c] = p.split("|"); return E.productsLoaded.replace("{t}", a).replace("{m}", b).replace("{o}", c); }
   if (key === "productsImported") { const [c, v, e, n] = p.split("|"); return E.productsImported.replace("{c}", c).replace("{v}", v).replace("{e}", e).replace("{n}", n); }
   if (key === "imagesLoaded") { const [ok, f] = p.split("|"); return E.imagesLoaded.replace("{ok}", ok).replace("{f}", f); }
+  if (key === "weightsPushed") { const [u, f, err] = p.split("|"); return E.weightsPushed.replace("{u}", u).replace("{f}", f) + (err ? ` – ${err}` : ""); }
   if (key === "bulkPushed") { const [c, l, u, f, s] = p.split("|"); return E.bulkPushed.replace("{c}", c).replace("{l}", l).replace("{u}", u).replace("{f}", f).replace("{s}", s); }
   if (key === "pushBlocked") {
     const j = p.indexOf("|");
