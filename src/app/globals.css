@@ -71,6 +71,10 @@ body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smooth
 .stagger > *:nth-child(5) { animation-delay: .2s; }
 .stagger > *:nth-child(6) { animation-delay: .25s; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* Barcode-Scanner: Laserlinie fährt im Rahmen auf und ab */
+@keyframes scan-line { 0%, 100% { top: 10%; } 50% { top: 88%; } }
+.scan-line { top: 10%; animation: scan-line 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .scan-line { animation: none; top: 50%; } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

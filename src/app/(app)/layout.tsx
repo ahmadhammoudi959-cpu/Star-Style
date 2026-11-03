@@ -19,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/products", label: t.nav.products, icon: "box" },
     { href: "/receive", label: t.nav.receive, icon: "truck" },
     { href: "/stock", label: t.nav.stock, icon: "layers" },
+    { href: "/scan", label: t.nav.scan, icon: "scan" },
     { href: "/write-offs", label: t.nav.writeOffs, icon: "alert" },
     { href: "/expenses", label: t.nav.expenses, icon: "receipt" },
     { href: "/reports", label: t.nav.reports, icon: "chart" },
@@ -34,7 +35,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const it = items.find((i) => i.href === s.nav);
     if (it && (!s.done || setup.showGuide)) it.step = { n: s.n, next: s.key === setup.next };
   }
-  const mobile = [items[0], items[1], items[2], items[8], items[6]];
+  // Handy unten: Start, Verkauf, Offene Posten, Scanner (hervorgehoben, Mitte), Ausgaben, Lager
+  const pick = (href: string) => items.find((i) => i.href === href)!;
+  const mobile: NavItem[] = [pick("/"), pick("/sales"), pick("/receivables"), { ...pick("/scan"), label: t.nav.scanShort, highlight: true }, pick("/expenses"), pick("/stock")];
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[15.625rem_1fr]">
       {/* Seitenleiste immer genau Bildschirmhöhe: passt das Menü nicht (Laptop), scrollt es innen – der dunkle Hintergrund bleibt überall */}

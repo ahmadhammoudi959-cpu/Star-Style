@@ -25,6 +25,7 @@ export default async function Home() {
   const today = todayIso();
 
   const actions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean }[] = [
+    { href: "/scan", label: t.home.scan, hint: t.home.scanHint, icon: "scan", tone: "from-teal-500 to-emerald-700" },
     { href: "/sales/invoices/new", label: t.home.sell, hint: t.home.sellHint, icon: "cart", tone: "from-brand-500 to-brand-700" },
     { href: "/receive", label: t.home.receive, hint: t.home.receiveHint, icon: "truck", tone: "from-sky-500 to-sky-700" },
     { href: "/expenses/new", label: t.home.expense, hint: t.home.expenseHint, icon: "receipt", tone: "from-rose-500 to-pink-700" },
@@ -92,7 +93,7 @@ export default async function Home() {
         </section>
       )}
 
-      <div className="stagger grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="stagger grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {actions.map((a) => {
           const inner = (
             <>

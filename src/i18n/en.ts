@@ -11,7 +11,7 @@ const en: Dict = {
     language: "Language", nothingYet: "Nothing here yet", confirm: "Confirm",
   },
   nav: {
-    home: "Home", products: "Products", receive: "Goods in", stock: "Stock", writeOffs: "Losses",
+    scan: "Scan barcode", scanShort: "Scan", home: "Home", products: "Products", receive: "Goods in", stock: "Stock", writeOffs: "Losses",
     receivables: "Receivables", customers: "Customers", suppliers: "Suppliers", settings: "Settings", sales: "Sales", reports: "Reports", expenses: "Expenses", insights: "Insights", shops: "Shops", ask: "Ask your business",
   },
   setup1: {
@@ -26,6 +26,7 @@ const en: Dict = {
     reports: "Reports", reportsHint: "Sales & profit",
     stockValue: "Stock value", lowStock: "Low stock", expiring: "Expiring soon", articles: "products",
     alerts: "Alerts", noAlerts: "All good – no alerts.", comingSoon: "Coming in stage 2",
+    scan: "Scan barcode", scanHint: "Stock & price instantly",
     pendingTitle: "Not in the shop yet", pendingText: "{shop}: {n} products are still missing there ({r} ready) – upload them?", pendingAction: "Review and upload",
   },
   login: {
@@ -119,6 +120,27 @@ const en: Dict = {
     taxMode: "Tax", empty: "No customers yet.", number: "Cust. no.", documents: "Documents", ownVatMissing: "Enter your own VAT ID in Settings first.",
   },
   taxMode: { DOMESTIC: "Domestic", EU_REVERSE_CHARGE: "EU tax-free", EU_PENDING_VATID: "EU – VAT ID pending", EU_B2C: "EU private", EXPORT: "Export (tax-free)" },
+  scan: {
+    title: "Scan barcode", subtitle: "Scan a box – see stock, prices and sales right away",
+    hint: "Point the camera at the barcode on the box", starting: "Starting camera …", looking: "Searching …",
+    torchOn: "Light on", torchOff: "Light off", startCamera: "Start camera", again: "Scan next product",
+    manual: "Type the number (barcode or SKU)", manualPlaceholder: "e.g. 4006381333931", find: "Search",
+    errors: {
+      denied: "The browser may not use the camera. Please allow the camera in the browser settings (lock next to the address) and start again – or type the number.",
+      noCamera: "No camera found – please type the number.", insecure: "The camera only works over a secure connection (https).",
+      other: "The camera could not start – please try again or type the number.", lookup: "No connection to the server – please try again.",
+    },
+    notFoundTitle: "Not found", notFound: "This barcode isn't registered yet:", newProduct: "New product with this barcode", searchName: "Search by name",
+    inStock: "In the warehouse", inStockAll: "In the warehouse (all sizes/colours)", state: { ok: "in stock", low: "low", out: "empty" },
+    available: "Available", reserved: "reserved (quotes)", minStock: "Minimum stock", variants: "All sizes/colours", totalStock: "total {n}",
+    wholesale: "Wholesale price (net)", retail: "Retail price (net)", withVat: "incl. VAT",
+    sold30: "Sold (30 days)", sold90: "Sold (90 days)", lastSale: "Last sold", neverSold: "never",
+    expiry: "Next expiry", pieces: "{n} pcs", supplier: "Supplier", inactive: "inactive",
+    online: "Online shops", listed: "in shop ✓", notListed: "not in shop", shown: "visible to customers: {n}",
+    openStock: "View stock", openProduct: "Open product", recent: "Recently scanned",
+    homeIcon: "As its own icon on the phone",
+    homeIconHint: "Open this page in the browser → Share or menu → “Add to Home Screen”. The “Star Scan” icon then opens the scanner directly (log in once the first time).",
+  },
   lists: {
     pickCustomer: "Choose or search a customer", searchCustomer: "Name, city, VAT ID or customer no. …", allCities: "All cities", all: "All",
     noMatch: "Nothing found – change the filter.", pickDoc: "Choose or search a document", searchDoc: "Document number or customer …",

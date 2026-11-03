@@ -9,7 +9,7 @@ const de = {
     language: "Sprache", nothingYet: "Noch keine Einträge", confirm: "Bestätigen",
   },
   nav: {
-    home: "Start", products: "Artikel", receive: "Wareneingang", stock: "Lager", writeOffs: "Verluste",
+    scan: "Barcode scannen", scanShort: "Scan", home: "Start", products: "Artikel", receive: "Wareneingang", stock: "Lager", writeOffs: "Verluste",
     receivables: "Offene Posten", customers: "Kunden", suppliers: "Lieferanten", settings: "Einstellungen", sales: "Verkauf", reports: "Berichte", expenses: "Ausgaben", insights: "Hinweise", shops: "Shops", ask: "Frag dein Geschäft",
   },
   setup1: {
@@ -24,6 +24,7 @@ const de = {
     reports: "Berichte", reportsHint: "Umsatz & Gewinn",
     stockValue: "Lagerwert", lowStock: "Niedriger Bestand", expiring: "Läuft bald ab", articles: "Artikel",
     alerts: "Hinweise", noAlerts: "Alles in Ordnung – keine Hinweise.", comingSoon: "Folgt in Stufe 2",
+    scan: "Barcode scannen", scanHint: "Bestand & Preis sofort",
     pendingTitle: "Noch nicht im Shop", pendingText: "{shop}: {n} Artikel fehlen dort noch ({r} sofort bereit) – hochladen?", pendingAction: "Ansehen und hochladen",
   },
   login: {
@@ -117,6 +118,27 @@ const de = {
     taxMode: "Steuer", empty: "Noch keine Kunden.", number: "Kd.-Nr.", documents: "Belege", ownVatMissing: "Für die Prüfung fehlt die eigene USt-IdNr. in den Einstellungen.",
   },
   taxMode: { DOMESTIC: "Inland", EU_REVERSE_CHARGE: "EU steuerfrei", EU_PENDING_VATID: "EU – Nr. ausstehend", EU_B2C: "EU privat", EXPORT: "Ausfuhr (steuerfrei)" },
+  scan: {
+    title: "Barcode scannen", subtitle: "Packung scannen – Bestand, Preise und Verkäufe sofort sehen",
+    hint: "Kamera auf den Barcode der Packung halten", starting: "Kamera startet …", looking: "Suche …",
+    torchOn: "Licht an", torchOff: "Licht aus", startCamera: "Kamera starten", again: "Nächsten Artikel scannen",
+    manual: "Nummer eintippen (Barcode oder Art.-Nr.)", manualPlaceholder: "z. B. 4006381333931", find: "Suchen",
+    errors: {
+      denied: "Der Browser darf die Kamera nicht benutzen. Bitte in den Browser-Einstellungen (Schloss neben der Adresse) die Kamera erlauben und neu starten – oder die Nummer eintippen.",
+      noCamera: "Keine Kamera gefunden – bitte die Nummer eintippen.", insecure: "Die Kamera geht nur über eine sichere Verbindung (https).",
+      other: "Die Kamera ließ sich nicht starten – bitte nochmal versuchen oder die Nummer eintippen.", lookup: "Keine Verbindung zum Server – bitte nochmal versuchen.",
+    },
+    notFoundTitle: "Nicht gefunden", notFound: "Diesen Barcode gibt es bei uns noch nicht:", newProduct: "Neuer Artikel mit diesem Barcode", searchName: "Nach Namen suchen",
+    inStock: "Im Lager", inStockAll: "Im Lager (alle Größen/Farben)", state: { ok: "vorhanden", low: "wenig", out: "leer" },
+    available: "Verfügbar", reserved: "reserviert (Angebote)", minStock: "Mindestbestand", variants: "Alle Größen/Farben", totalStock: "zusammen {n}",
+    wholesale: "Großhandelspreis (netto)", retail: "Einzelhandelspreis (netto)", withVat: "mit MwSt.",
+    sold30: "Verkauft (30 Tage)", sold90: "Verkauft (90 Tage)", lastSale: "Zuletzt verkauft", neverSold: "noch nie",
+    expiry: "Nächstes MHD", pieces: "{n} Stück", supplier: "Lieferant", inactive: "inaktiv",
+    online: "Online-Shops", listed: "im Shop ✓", notListed: "nicht im Shop", shown: "für Kunden sichtbar: {n}",
+    openStock: "Lager ansehen", openProduct: "Artikel öffnen", recent: "Zuletzt gescannt",
+    homeIcon: "Als eigenes Symbol auf dem Handy",
+    homeIconHint: "Diese Seite im Browser öffnen → Teilen bzw. Menü → „Zum Startbildschirm hinzufügen“. Dann öffnet das Symbol „Star Scan“ direkt den Scanner (beim ersten Mal einmal anmelden).",
+  },
   lists: {
     pickCustomer: "Kunde wählen oder suchen", searchCustomer: "Name, Ort, USt-IdNr. oder Kundennr. …", allCities: "Alle Orte", all: "Alle",
     noMatch: "Nichts gefunden – Filter ändern.", pickDoc: "Beleg wählen oder suchen", searchDoc: "Belegnummer oder Kunde …",
