@@ -12,14 +12,15 @@ import { OpenButton } from "@/components/OpenButton";
 import { SearchPick } from "@/components/SearchPick";
 import { pendingSummary } from "@/lib/shopify/product-push";
 import { fill } from "@/i18n";
+import { LIST_STEP, listLimit, ShowMore } from "@/components/ShowMore";
 
 type Row = {
   id: string; imageFileId: string | null; sku: string; nameDe: string; nameNl: string; category: string;
   wholesaleCents: number; active: boolean; variants: number; stock: number; low: boolean; barcodes: string[];
 };
 
-export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; cat?: string }> }) {
-  const { q = "", cat = "" } = await searchParams;
+export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; cat?: string; n?: string }> }) {
+  const { q = "", cat = "", n } = await searchParams;
   const { t, intl } = await getI18n();
   const like = q.trim() ? `%${q.trim().toLowerCase()}%` : null;
   const category = cat.trim() || null;
@@ -40,6 +41,11 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     category: String(r.category), wholesaleCents: Number(r.wholesale_price_cents), active: Boolean(r.active), variants: Number(r.variants),
     stock: Number(r.stock), low: Boolean(r.low), barcodes: (r.barcodes as string[] | null) ?? [],
   }));
+
+  // nur die ersten Zeilen zeigen, „Weitere anzeigen“ holt mehr (sonst lädt die Seite bei vielen Artikeln sehr lange)
+  const limit = listLimit(n);
+  const shown = rows.slice(0, limit);
+  const moreHref = `/products?${new URLSearchParams({ ...(q.trim() ? { q } : {}), ...(cat ? { cat } : {}), n: String(limit + LIST_STEP) })}`;
 
   return (
     <div>
@@ -83,7 +89,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 <th className="w-px"><span className="sr-only">{t.product.open}</span></th>
               </tr></thead>
               <tbody>
-                {rows.map((r) => (
+                {shown.map((r) => (
                   <tr key={r.id} className={r.active ? "" : "opacity-50"}>
                     <td><Code value={r.sku} /></td>
                     <td><Barcodes list={r.barcodes} t={t} /></td>
@@ -110,7 +116,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
 
           {/* Handy/Tablet: kompakte Karte pro Artikel (Wunsch Inhaber 04.11.2026: nebeneinander statt untereinander), alle Angaben sichtbar */}
           <div className="grid gap-2 sm:grid-cols-2 lg:hidden">
-            {rows.map((r) => (
+            {shown.map((r) => (
               <div key={r.id} className={`card p-3 animate-rise ${r.active ? "" : "opacity-50"}`}>
                 <div className="flex items-start gap-2.5">
                   <Link href={`/products/${r.id}`} className="shrink-0"><Thumb id={r.imageFileId} size={44} /></Link>
@@ -124,15 +130,18 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                   </div>
                   <OpenButton href={`/products/${r.id}`} label={t.product.open} className="shrink-0 px-2.5 py-1.5 text-xs" />
                 </div>
-                <dl className="mt-2 grid grid-cols-4 gap-x-2 gap-y-1.5 rounded-xl bg-brand-50/40 px-2.5 py-2 text-xs ring-1 ring-black/5">
-                  <Item label={t.product.sku} wide><Code value={r.sku} /></Item>
-                  <Item label={t.product.barcode} wide><Barcodes list={r.barcodes} t={t} /></Item>
-                  <Item label={t.product.wholesale} wide><span className="num font-semibold">{formatCents(r.wholesaleCents, intl)}</span></Item>
-                  <Item label={t.product.stock} wide><span className={`num font-semibold ${r.low ? "text-amber-600" : ""}`}>{r.stock}</span></Item>
+                {/* kleine Tabelle: jede Überschrift genau über ihrem Wert (Wunsch Inhaber 04.11.2026), dünne Linien dazwischen */}
+                <dl className="mt-2 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-black/[0.07] text-xs ring-1 ring-black/[0.07]">
+                  <Item label={t.product.sku}><Code value={r.sku} /></Item>
+                  <Item label={t.product.barcode}><Barcodes list={r.barcodes} t={t} /></Item>
+                  <Item label={t.product.wholesale}><span className="num font-semibold">{formatCents(r.wholesaleCents, intl)}</span></Item>
+                  <Item label={t.product.stock}><span className={`num font-semibold ${r.low ? "text-amber-600" : ""}`}>{r.stock}</span></Item>
                 </dl>
               </div>
             ))}
           </div>
+          <ShowMore shown={shown.length} total={rows.length} href={moreHref} more={fill(t.lists.showMore, { n: Math.min(LIST_STEP, rows.length - shown.length) })}
+            showing={fill(t.lists.showing, { s: shown.length, t: rows.length })} />
         </>
       )}
     </div>
@@ -156,7 +165,11 @@ function Barcodes({ list, t }: { list: string[]; t: Dict }) {
   );
 }
 
-function Item({ label, children, wide = false }: { label: string; children: React.ReactNode; wide?: boolean }) {
-  return <div className={`min-w-0 ${wide ? "col-span-2" : ""}`}><dt className="truncate text-[0.6875rem] text-ink-soft" title={label}>{label}</dt><dd className="mt-0.5">{children}</dd></div>;
+function Item({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 bg-white px-1.5 py-1.5 text-center">
+      <dt className="text-[0.6875rem] leading-tight text-ink-soft">{label}</dt><dd className="mt-0.5">{children}</dd>
+    </div>
+  );
 }
 

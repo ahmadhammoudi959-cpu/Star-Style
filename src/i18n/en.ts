@@ -195,6 +195,7 @@ const en: Dict = {
     homeIconHint: "Open this page in the browser → Share or menu → “Add to Home Screen”. The “Star Scan” icon then opens the scanner directly (log in once the first time).",
   },
   lists: {
+    showMore: "Show {n} more", showing: "Showing {s} of {t}", loading: "Loading…",
     pickCustomer: "Choose or search a customer", searchCustomer: "Name, city, VAT ID or customer no. …", allCities: "All cities", all: "All",
     noMatch: "Nothing found – change the filter.", pickDoc: "Choose or search a document", searchDoc: "Document number or customer …",
     allCustomers: "All customers", status: "Status", allStatuses: "All statuses", pickExpense: "Choose or search an expense", openInvoice: "Open invoice",

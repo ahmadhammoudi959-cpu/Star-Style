@@ -193,6 +193,7 @@ const de = {
     homeIconHint: "Diese Seite im Browser öffnen → Teilen bzw. Menü → „Zum Startbildschirm hinzufügen“. Dann öffnet das Symbol „Star Scan“ direkt den Scanner (beim ersten Mal einmal anmelden).",
   },
   lists: {
+    showMore: "Weitere {n} anzeigen", showing: "{s} von {t} angezeigt", loading: "Lädt …",
     pickCustomer: "Kunde wählen oder suchen", searchCustomer: "Name, Ort, USt-IdNr. oder Kundennr. …", allCities: "Alle Orte", all: "Alle",
     noMatch: "Nichts gefunden – Filter ändern.", pickDoc: "Beleg wählen oder suchen", searchDoc: "Belegnummer oder Kunde …",
     allCustomers: "Alle Kunden", status: "Status", allStatuses: "Alle", pickExpense: "Ausgabe wählen oder suchen", openInvoice: "Rechnung öffnen",

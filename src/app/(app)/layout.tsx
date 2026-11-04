@@ -5,6 +5,8 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Icon } from "@/components/Icon";
 import { logout } from "@/app/actions-auth";
 import { setupSteps } from "@/lib/onboarding";
+import { Suspense } from "react";
+import { NavProgress } from "@/components/NavProgress";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   );
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[15.625rem_1fr]">
+      <Suspense fallback={null}><NavProgress /></Suspense>
       {/* Seitenleiste immer genau Bildschirmhöhe: passt das Menü nicht (Laptop), scrollt es innen – der dunkle Hintergrund bleibt überall */}
       <aside className="scroll-slim sticky top-0 hidden h-screen print:!hidden flex-col justify-between gap-4 overflow-y-auto overscroll-contain bg-gradient-to-b from-navy-800 to-navy-900 p-4 text-white lg:flex short:py-3">
         <div>

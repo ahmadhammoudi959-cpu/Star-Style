@@ -97,3 +97,12 @@ body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smooth
 /* Waagerechte Leiste zum Wischen (Handy): ohne sichtbaren Balken, rastet je Kachel ein */
 .swipe-row { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .swipe-row::-webkit-scrollbar { display: none; }
+
+/* Laden (Wunsch Inhaber 04.11.2026): Logo atmet, Balken in den Logofarben läuft durch; oben ein dünner Balken bei jedem Seitenwechsel */
+@keyframes ss-slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(330%); } }
+@keyframes ss-breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.04); opacity: .82; } }
+@keyframes ss-glow { 0%, 100% { opacity: .45; transform: scale(.95); } 50% { opacity: .9; transform: scale(1.05); } }
+.ss-slide { animation: ss-slide 1.15s cubic-bezier(.45,.05,.35,1) infinite; }
+[dir="rtl"] .ss-slide { animation-direction: reverse; }
+.ss-breathe { animation: ss-breathe 1.8s ease-in-out infinite; }
+.ss-glow { animation: ss-glow 1.8s ease-in-out infinite; }

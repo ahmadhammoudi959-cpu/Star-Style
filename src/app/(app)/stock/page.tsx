@@ -10,15 +10,21 @@ import { CategorySelect } from "@/components/CategorySelect";
 import { AutoSubmitCheckbox } from "@/components/AutoSubmitCheckbox";
 import { OpenButton } from "@/components/OpenButton";
 import { SearchPick } from "@/components/SearchPick";
+import { fill } from "@/i18n";
+import { LIST_STEP, listLimit, ShowMore } from "@/components/ShowMore";
 
-export default async function StockPage({ searchParams }: { searchParams: Promise<{ q?: string; low?: string; cat?: string }> }) {
-  const { q = "", low, cat = "" } = await searchParams;
+export default async function StockPage({ searchParams }: { searchParams: Promise<{ q?: string; low?: string; cat?: string; n?: string }> }) {
+  const { q = "", low, cat = "", n } = await searchParams;
   const { t, intl } = await getI18n();
   const lowOnly = low === "1";
   const [rows, cats] = await Promise.all([stockRows({ q, lowOnly, category: cat }), productCategories()]);
   const total = rows.reduce((s, r) => s + r.valueCents, 0);
   const today = todayIso();
   const filtered = Boolean(q.trim() || cat || lowOnly);
+  // nur die ersten Zeilen zeigen, „Weitere anzeigen“ holt mehr (sonst lädt die Seite bei vielen Artikeln sehr lange)
+  const limit = listLimit(n);
+  const shown = rows.slice(0, limit);
+  const moreHref = `/stock?${new URLSearchParams({ ...(q.trim() ? { q } : {}), ...(cat ? { cat } : {}), ...(lowOnly ? { low: "1" } : {}), n: String(limit + LIST_STEP) })}`;
   const expiry = (r: StockRow) => {
     if (!r.nextExpiry) return null;
     const d = daysBetween(today, r.nextExpiry);
@@ -54,9 +60,9 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
             <div className="table-wrap">
               <table className="tbl tbl-fit">
                 <thead><tr>
-                  <th>{t.product.nameDe}</th>
                   <th className="w-[7rem]">{t.product.sku}</th>
                   <th className="w-[7rem]">{t.product.barcode}</th>
+                  <th>{t.product.nameDe}</th>
                   <th className="w-px text-end">{t.product.stock}</th>
                   <th className="w-px text-end">{t.product.reserved}</th>
                   <th className="w-px text-end">{t.product.available}</th>
@@ -66,11 +72,11 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                   <th className="w-px"><span className="sr-only">{t.product.open}</span></th>
                 </tr></thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {shown.map((r) => (
                     <tr key={r.id}>
-                      <td><NameCell r={r} /></td>
                       <td><Code value={r.sku} /></td>
                       <td>{r.barcode ? <Code value={r.barcode} strong /> : <span className="text-xs text-ink-soft">—</span>}</td>
+                      <td><NameCell r={r} /></td>
                       <td className="num text-end font-semibold"><Qty r={r} /></td>
                       <td className="num text-end text-ink-soft">{r.reserved || "—"}</td>
                       <td className="num text-end font-semibold">{r.stockQty - r.reserved}</td>
@@ -87,25 +93,28 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
 
           {/* Handy/Tablet/kleiner Laptop: kompakte Karte je Größe/Farbe (Zahlen nebeneinander), alle Angaben sichtbar */}
           <div className="grid gap-2 md:grid-cols-2 xl:hidden">
-            {rows.map((r) => (
+            {shown.map((r) => (
               <div key={r.id} className="card p-3 animate-rise">
                 <div className="flex items-start justify-between gap-2">
                   <NameCell r={r} />
                   <OpenButton href={`/stock/${r.id}`} label={t.product.open} className="shrink-0 px-2.5 py-1.5 text-xs" />
                 </div>
-                <dl className="mt-2 grid grid-cols-4 gap-x-2 gap-y-1.5 rounded-xl bg-brand-50/40 px-2.5 py-2 text-xs ring-1 ring-black/5">
-                  <Item label={t.product.stock}><span className="num text-sm font-bold"><Qty r={r} /></span></Item>
-                  <Item label={t.product.available}><span className="num text-sm font-bold">{r.stockQty - r.reserved}</span></Item>
-                  <Item label={t.product.reserved}><span className="num">{r.reserved || "—"}</span></Item>
-                  <Item label={t.product.minStock}><span className="num">{r.minStock || "—"}</span></Item>
+                {/* kleine Tabelle: jede Überschrift genau über ihrem Wert (Wunsch Inhaber 04.11.2026), dünne Linien dazwischen */}
+                <dl className="mt-2 grid grid-cols-4 gap-px overflow-hidden rounded-xl bg-black/[0.07] text-xs ring-1 ring-black/[0.07]">
                   <Item label={t.product.sku} wide><Code value={r.sku} /></Item>
                   <Item label={t.product.barcode} wide>{r.barcode ? <Code value={r.barcode} strong /> : "—"}</Item>
+                  <Item label={t.product.stock}><span className="num text-sm font-bold"><Qty r={r} /></span></Item>
+                  <Item label={t.product.reserved}><span className="num">{r.reserved || "—"}</span></Item>
+                  <Item label={t.product.available}><span className="num text-sm font-bold">{r.stockQty - r.reserved}</span></Item>
+                  <Item label={t.product.minStock}><span className="num">{r.minStock || "—"}</span></Item>
                   <Item label={t.receive.expiry} wide>{expiry(r) ?? "—"}</Item>
                   <Item label={t.stock.value} wide><span className="num">{formatCents(r.valueCents, intl)}</span></Item>
                 </dl>
               </div>
             ))}
           </div>
+          <ShowMore shown={shown.length} total={rows.length} href={moreHref} more={fill(t.lists.showMore, { n: Math.min(LIST_STEP, rows.length - shown.length) })}
+            showing={fill(t.lists.showing, { s: shown.length, t: rows.length })} />
         </>
       )}
     </div>
@@ -138,7 +147,11 @@ function Code({ value, strong = false }: { value: string; strong?: boolean }) {
 }
 
 function Item({ label, children, wide = false }: { label: string; children: React.ReactNode; wide?: boolean }) {
-  return <div className={`min-w-0 ${wide ? "col-span-2" : ""}`}><dt className="text-[0.6875rem] leading-tight text-ink-soft">{label}</dt><dd className="mt-0.5">{children}</dd></div>;
+  return (
+    <div className={`min-w-0 bg-white px-1.5 py-1.5 text-center ${wide ? "col-span-2" : ""}`}>
+      <dt className="text-[0.6875rem] leading-tight text-ink-soft">{label}</dt><dd className="mt-0.5">{children}</dd>
+    </div>
+  );
 }
 
 
