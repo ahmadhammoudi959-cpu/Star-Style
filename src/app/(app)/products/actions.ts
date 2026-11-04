@@ -12,6 +12,11 @@ import { todayIso } from "@/lib/dates";
 import { deleteProduct, ProductDeleteError } from "@/lib/product-delete";
 import { encodePush, pushProductToShops, pushTargets, setCategoryMapping } from "@/lib/shopify/product-push";
 import { pushWeightsLater } from "@/lib/shopify/weights";
+import { adoptShopGallery, saveGalleryTx, syncGallery, syncGalleryLater, type AdoptResult, type GallerySync } from "@/lib/shopify/gallery";
+import { parseGalleryInput } from "@/lib/shopify/gallery-map";
+import { syncProductTypesLater } from "@/lib/shopify/collections";
+import type { ShopChannel } from "@/lib/shopify/client";
+import { canonicalCategory } from "@/lib/categories";
 import { parseWeight } from "@/lib/weight";
 
 export type ProductFormState = { error?: string; field?: string; values?: Record<string, string> } | undefined;
@@ -113,8 +118,12 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
 
   let productId = d.id;
   const weightChanged: string[] = []; // an die Shops melden
+  const galleryChanged: ShopChannel[] = []; // eigene Shop-Fotos geändert → im Hintergrund an verbundene Shops
+  let categoryChanged = false; // → im Shop den Produkttyp verbundener Produkte anpassen
   try {
     await db.transaction(async (tx) => {
+      // Kategorie so schreiben, wie sie im Verzeichnis steht (Groß/klein); neue kommen ins Verzeichnis (Seite „Kategorien“)
+      values.category = await canonicalCategory(tx, d.category);
       // Eindeutigkeit vorab prüfen → verständliche Fehlermeldung
       // erst Barcode (Art.-Nr. = Barcode: ist er vergeben, ist das die verständlichere Meldung), dann Art.-Nr.
       if (barcodes.length) {
@@ -130,6 +139,7 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
         if (!before) throw new Error("notFound");
         await tx.update(schema.products).set(values).where(eq(schema.products.id, d.id));
         await audit(tx, { entity: "product", entityId: d.id, action: "update", before, after: values, userId: session.uid });
+        categoryChanged = before.category !== values.category;
       } else {
         const [p] = await tx.insert(schema.products).values(values).returning({ id: schema.products.id });
         productId = p.id;
@@ -181,6 +191,12 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
         await tx.update(schema.variants).set({ active: false, barcode: null }).where(inArray(schema.variants.id, drop));
       }
 
+      // Eigene Fotos je Shop (Galerie). Fehlt das Feld (Shop nicht angehakt), bleibt die Galerie unverändert.
+      for (const channel of ["BRAND_SHOP", "GENERAL_SHOP"] as const) {
+        const ids = parseGalleryInput(fd.get(`gallery_${channel}`));
+        if (ids && await saveGalleryTx(tx, productId!, channel, ids, session.uid)) galleryChanged.push(channel);
+      }
+
       // Vorhandene Ware gleich mitbuchen – als normaler Wareneingang (Charge, EK, Nummer, Protokoll)
       if (opening.length) {
         await receiveGoodsTx(tx, {
@@ -217,7 +233,41 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   } catch (e) { console.error("shopify push", e); }
   // geändertes Gewicht der schon verbundenen Größen/Farben im Hintergrund an die Shops (Versand nach Gewicht)
   pushWeightsLater(weightChanged);
+  // Kategorie geändert → verbundene Shop-Produkte wandern in die passende Kollektion; geänderte Shop-Fotos abgleichen
+  if (categoryChanged) syncProductTypesLater([productId!]);
+  syncGalleryLater(productId!, galleryChanged);
   redirect(`/products/${productId}?saved=1${push ? `&push=${encodeURIComponent(push)}` : ""}`);
+}
+
+/** Ein Foto für die Shop-Galerie sofort speichern (im Browser schon verkleinert) → ID für das Formular */
+export async function uploadShopPhoto(fd: FormData): Promise<{ id?: string; error?: string }> {
+  await requireSession();
+  try {
+    const id = await storeImage(fd.get("file") as File | null);
+    return id ? { id } : { error: "imageType" };
+  } catch (e) {
+    return { error: e instanceof Error && e.message === "fileTooLarge" ? "fileTooLarge" : "imageType" };
+  }
+}
+
+const isChannel = (c: unknown): c is ShopChannel => c === "BRAND_SHOP" || c === "GENERAL_SHOP";
+
+/** „Fotos aus dem Shop holen“: vorhandene Fotos eines verbundenen Artikels als Galerie übernehmen */
+export async function adoptShopPhotos(productId: string, channel: string): Promise<AdoptResult> {
+  const session = await requireSession();
+  if (!isChannel(channel) || typeof productId !== "string") return { ok: false, error: "failed" };
+  const r = await adoptShopGallery(productId, channel, session.uid);
+  if (r.ok) revalidatePath(`/products/${productId}`);
+  return r;
+}
+
+/** „Erneut senden“, wenn Fotos nicht in den Shop gekommen sind */
+export async function resendShopPhotos(productId: string, channel: string): Promise<GallerySync> {
+  await requireSession();
+  if (!isChannel(channel) || typeof productId !== "string") return { status: "failed" };
+  const r = await syncGallery(productId, channel);
+  revalidatePath(`/products/${productId}`);
+  return r;
 }
 
 /** Test- oder Fehleintrag endgültig löschen (nur wenn nie verkauft, angeboten oder als Verlust gebucht) */

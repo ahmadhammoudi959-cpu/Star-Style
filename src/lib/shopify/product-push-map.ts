@@ -5,6 +5,7 @@
  * jede Variante bekommt Barcode, Art.-Nr. und den verfügbaren Bestand am Lagerort des Shops. Verbunden wird über den Barcode.
  */
 import { COLOR } from "./product-map";
+import { productFiles } from "./gallery-map";
 
 export type PushVariant = {
   id: string; size: string; color: string; barcode: string | null;
@@ -16,6 +17,8 @@ export type PushVariant = {
 export type PushProduct = {
   id: string; sku: string; nameDe: string; descriptionDe: string; category: string; vendor: string;
   vatRateBp: number; retailPriceCents: number; purchasePriceCents: number; imageFileId: string | null;
+  /** eigene Fotos für diesen Shop (Galerie, erstes = Titelbild) – leer = Lagerfoto */
+  gallery?: string[];
   variants: PushVariant[];
 };
 
@@ -73,9 +76,8 @@ export function variantSku(sku: string, v: Pick<PushVariant, "size" | "color"> &
 export function buildProductSet(p: PushProduct, o: { taxesIncluded: boolean; locationId: string; images: Map<string, PushImage>; productType?: string }) {
   const opts = variantOptions(p.variants);
   const single = p.variants.length === 1;
-  // Fotos: Artikelfoto zuerst (Titelbild), dann eigene Fotos der Varianten – jedes nur einmal
-  const fileIds = [p.imageFileId, ...p.variants.map((v) => v.imageFileId)].filter((f): f is string => Boolean(f && o.images.has(f)));
-  const unique = [...new Set(fileIds)];
+  // Fotos: Galerie dieses Shops (sonst Lagerfoto) zuerst – das erste ist das Titelbild –, dann eigene Fotos der Varianten; jedes nur einmal
+  const unique = productFiles(p.gallery ?? [], p.imageFileId, p.variants.map((v) => v.imageFileId)).filter((f) => o.images.has(f));
   const file = (id: string) => ({ originalSource: o.images.get(id)!.resourceUrl, contentType: "IMAGE", alt: p.nameDe, filename: o.images.get(id)!.filename });
   const optionValues = (k: number) => opts.names.map((n, i) => ({ optionName: n, name: opts.values[k][i] }));
 

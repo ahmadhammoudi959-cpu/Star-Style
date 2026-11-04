@@ -3,7 +3,8 @@ import "server-only";
  * Artikel endgültig löschen – nur für Test- oder Fehleinträge (Wunsch Inhaber).
  * Erlaubt nur, solange der Artikel nie in Angebot, Rechnung oder Verlust stand und kein Shop dafür Bestand zeigt
  * (verbunden mit laufendem Abgleich oder schon Bestand gemeldet).
- * Löscht mit: Varianten, Chargen, Lagerbewegungen, Wareneingangszeilen (leer gewordene Wareneingänge ganz), Reservierungen, Fotos.
+ * Löscht mit: Varianten, Chargen, Lagerbewegungen, Wareneingangszeilen (leer gewordene Wareneingänge ganz), Reservierungen,
+ * Fotos (auch die eigenen Shop-Fotos der Galerie).
  * Der Vorher-Stand bleibt im audit_log.
  */
 import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
@@ -58,13 +59,16 @@ export async function deleteProduct(id: string, userId?: string) {
           .map((r) => r.number);
       }
     }
-    // Varianten, Chargen und Reservierungen per Kaskade; Shop-Zuordnungen (nur pausierte Shops) werden gelöst
+    // eigene Shop-Fotos (Galerie) merken – die Zeilen gehen per Kaskade mit
+    const gallery = (await tx.select({ f: schema.shopMedia.fileId }).from(schema.shopMedia).where(eq(schema.shopMedia.productId, id))).map((r) => r.f);
+    // Varianten, Chargen, Reservierungen und Galerie per Kaskade; Shop-Zuordnungen (nur pausierte Shops) werden gelöst
     await tx.delete(schema.products).where(eq(schema.products.id, id));
 
     // Fotos löschen, die sonst niemand benutzt
-    const files = [...new Set([p.imageFileId, ...p.variants.map((v) => v.imageFileId)].filter((f): f is string => Boolean(f)))];
+    const files = [...new Set([p.imageFileId, ...p.variants.map((v) => v.imageFileId), ...gallery].filter((f): f is string => Boolean(f)))];
     for (const f of files) {
-      const still = await tx.execute(sql`select 1 from products where image_file_id = ${f} union all select 1 from variants where image_file_id = ${f} limit 1`);
+      const still = await tx.execute(sql`select 1 from products where image_file_id = ${f} union all select 1 from variants where image_file_id = ${f}
+        union all select 1 from shop_media where file_id = ${f} limit 1`);
       if (!still.rows.length) await tx.delete(schema.storedFiles).where(eq(schema.storedFiles.id, f));
     }
 

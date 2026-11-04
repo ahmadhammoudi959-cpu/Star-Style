@@ -185,7 +185,10 @@ export function CategoryMap({ t, channel, rows, types }: {
           <h2 className="flex items-center gap-2 font-bold"><Icon name="tag" className="icon-pop h-5 w-5 text-brand-600" />{C.title}</h2>
           <p className="max-w-2xl text-sm text-ink-soft">{C.hint}</p>
         </div>
-        <button type="button" disabled={pending} onClick={refresh} className="btn-ghost group shrink-0 text-sm"><Icon name="history" className="h-4 w-4" />{C.refresh}</button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Link href="/categories" className="btn-ghost group text-sm"><Icon name="tag" className="h-4 w-4" />{t.nav.categories}</Link>
+          <button type="button" disabled={pending} onClick={refresh} className="btn-ghost group text-sm"><Icon name="history" className="h-4 w-4" />{C.refresh}</button>
+        </div>
       </div>
       {msg && <p className="mb-3 animate-rise rounded-xl bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800">{msg}</p>}
       {types.length === 0 ? <p className="text-sm text-ink-soft">{C.none}</p> : rows.length === 0 ? null : (

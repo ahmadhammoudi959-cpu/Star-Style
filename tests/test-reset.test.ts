@@ -65,6 +65,14 @@ run("Testdaten löschen (Datenbank)", async () => {
     ] });
     await bookWriteOff({ date: "2026-10-30", reason: "DAMAGE", lines: [{ variantId: test.v.id, qty: 1 }] });
     await db.insert(schema.customers).values({ name: `Kunde ${tag}` });
+    // eigene Shop-Fotos: die des Testartikels gehen mit, die des Shop-Artikels bleiben
+    const [gf, kf] = await db.insert(schema.storedFiles).values([
+      { name: "g", mime: "image/png", size: 1, sha256: "x", data: Buffer.from([1]) }, { name: "k", mime: "image/png", size: 1, sha256: "x", data: Buffer.from([2]) },
+    ]).returning();
+    await db.insert(schema.shopMedia).values([
+      { productId: test.p.id, channel: "GENERAL_SHOP", fileId: gf.id, position: 0 },
+      { productId: shop.p.id, channel: "GENERAL_SHOP", fileId: kf.id, position: 0, mediaId: "gid://shopify/MediaImage/1" },
+    ]);
 
     const before = await resetStatus();
     expect(before.block).toBe(null);
@@ -75,6 +83,8 @@ run("Testdaten löschen (Datenbank)", async () => {
     await resetTestData(before.fingerprint, "u-test");
 
     expect(await db.query.products.findFirst({ where: eq(schema.products.id, test.p.id) })).toBe(undefined);
+    expect(await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, gf.id) })).toBe(undefined);
+    expect((await db.select().from(schema.shopMedia).where(eq(schema.shopMedia.fileId, kf.id))).length).toBe(1);
     for (const k of [shop, real]) expect((await db.query.variants.findFirst({ where: eq(schema.variants.id, k.v.id) }))?.stockQty).toBe(0);
     expect((await db.select().from(schema.shopVariants).where(eq(schema.shopVariants.variantId, shop.v.id))).length).toBe(1);
     expect((await db.select().from(schema.suppliers).where(eq(schema.suppliers.id, testSup.id))).length).toBe(0);

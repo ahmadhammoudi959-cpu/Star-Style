@@ -3,6 +3,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { saveProduct } from "./actions";
 import { ShopPushDialog, type Channel, type PushTarget } from "./ShopPushDialog";
+import { galleryItem, ShopGallery, type GItem } from "./ShopGallery";
 import { resolveStoreType, storeTypeLabel, type PushBlocker, type StoreType } from "@/lib/shopify/product-push-map";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
@@ -21,6 +22,8 @@ export type ProductFormData = {
   supplierId: string; vatRateBp: number; purchasePrice: string; wholesalePrice: string; retailPrice: string;
   tracksExpiry: boolean; inBrandShop: boolean; inGeneralShop: boolean; imageFileId?: string | null;
   variants: Omit<V, "key">[];
+  /** eigene Fotos je Shop (Galerie) */
+  galleries?: Record<Channel, { fileId: string; mediaId: string; error: string }[]>;
 };
 
 const fmt = (c: number) => (c / 100).toFixed(2).replace(".", ",");
@@ -45,6 +48,11 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
   const [typeChoice, setTypeChoice] = useState<Record<Channel, string>>({ BRAND_SHOP: "", GENERAL_SHOP: "" });
   // nach einer Fehlermeldung beim nächsten Speichern wieder fragen
   useEffect(() => { intentRef.current = ""; setIntent(""); }, [state]);
+  // eigene Fotos je Shop (Galerie) – bleiben auch nach einer Fehlermeldung stehen (Zustand, nicht Formularfeld)
+  const [galleries, setGalleries] = useState<Record<Channel, GItem[]>>(() => ({
+    BRAND_SHOP: (initial.galleries?.BRAND_SHOP ?? []).map(galleryItem), GENERAL_SHOP: (initial.galleries?.GENERAL_SHOP ?? []).map(galleryItem),
+  }));
+  const [waitUpload, setWaitUpload] = useState(false);
   const [variants, setVariants] = useState<V[]>(
     (initial.variants.length ? initial.variants : [{ size: "", color: "", barcode: "", minStock: 0 }]).map((v, i) => ({ ...v, key: String(i) })),
   );
@@ -75,6 +83,9 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
 
   /** Beim Absenden: fehlt der Artikel (oder eine Größe/Farbe) in einem angehakten Shop? Dann erst fragen. */
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    // Fotos für den Shop werden noch hochgeladen → erst warten, sonst fehlen sie
+    if (CHANNELS.some((c) => inShop[c] && galleries[c].some((g) => !g.fileId))) { e.preventDefault(); setWaitUpload(true); return; }
+    setWaitUpload(false);
     if (intentRef.current) return; // Antwort aus der Rückfrage → normal speichern
     const category = String(new FormData(e.currentTarget).get("category") ?? "").trim();
     const blockers = new Set<PushBlocker>();
@@ -117,7 +128,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
           onAnswer={answer} onBack={() => setAsk(null)} />
       )}
       <input type="hidden" name="variants" value={JSON.stringify(variants.map(({ key, stockQty: _s, imageFileId: _i, ...v }) => ({ ...v, ref: key })))} />
-      <ErrorBox message={errorText} />
+      <ErrorBox message={errorText ?? (waitUpload ? t.product.gallery.waitUpload : undefined)} />
 
       <section className="card flex flex-col gap-4 p-5 animate-rise sm:flex-row sm:items-center">
         <PhotoPicker name="image" initialId={initial.imageFileId} labels={photoLabels} size={132} />
@@ -177,6 +188,16 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
           )}
         </div>
       </section>
+
+      {/* eigene Fotos je angehaktem Shop (Wunsch Inhaber: im Lager ein Foto, im Shop mehrere) */}
+      {CHANNELS.filter((c) => inShop[c]).map((c) => {
+        const o: Channel = c === "BRAND_SHOP" ? "GENERAL_SHOP" : "BRAND_SHOP";
+        return (
+          <ShopGallery key={c} t={t} channel={c} items={galleries[c]} linked={Boolean(shopStatus?.linked[c])} productId={initial.id}
+            stockImageId={initial.imageFileId} other={inShop[o] ? { name: t.shop.names[o], items: galleries[o] } : undefined}
+            onChange={(f) => setGalleries((g) => ({ ...g, [c]: f(g[c]) }))} />
+        );
+      })}
 
       <section className="card p-5 animate-rise">
         <div className="mb-3 flex items-center justify-between">

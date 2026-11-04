@@ -1,6 +1,6 @@
 // Star Style – Datenmodell
 // Geldbeträge immer in Cent (integer). Prozentsätze in Basispunkten (1900 = 19,00 %).
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   pgTable, pgEnum, text, integer, boolean, timestamp, jsonb, customType,
   uniqueIndex, index, serial, date,
@@ -209,6 +209,15 @@ export const vatChecks = pgTable("vat_checks", {
 });
 
 // ───────────────────────── Artikel & Lager ─────────────────────────
+/** Kategorien (Wunsch Inhaber 04.11.2026: eigene Seite, im Shop als automatische Kollektion „Produkttyp ist gleich …“).
+ *  Artikel verweisen per Name (products.category). shop_collections = Kollektionen, die WIR angelegt haben (nur die dürfen wir löschen). */
+export const categories = pgTable("categories", {
+  id: id(),
+  name: text("name").notNull(),
+  shopCollections: jsonb("shop_collections").$type<Partial<Record<"BRAND_SHOP" | "GENERAL_SHOP", string>>>().notNull().default({}),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("categories_name_lower").on(sql`lower(${t.name})`)]);
+
 export const products = pgTable("products", {
   id: id(),
   sku: text("sku").notNull().unique(),
@@ -520,6 +529,23 @@ export const shopVariants = pgTable("shop_variants", {
   pushError: text("push_error").notNull().default(""),
   seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("shop_variant_unique").on(t.channel, t.shopVariantId), index("shop_variant_ours").on(t.variantId)]);
+
+/**
+ * Fotos fürs Shop-Schaufenster (Wunsch Inhaber 04.11.2026): im Lager nur ein Foto (products.image_file_id),
+ * im Shop eine eigene Galerie je Kanal. media_id = Shopify-Medium, das wir hochgeladen bzw. übernommen haben (leer = noch nicht im Shop).
+ * removed = im Formular entfernt, im Shop noch zu löschen (danach verschwindet die Zeile).
+ */
+export const shopMedia = pgTable("shop_media", {
+  id: id(),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  channel: channel("channel").notNull(),
+  fileId: text("file_id").notNull().references(() => storedFiles.id),
+  position: integer("position").notNull(),
+  mediaId: text("media_id").notNull().default(""),
+  removed: boolean("removed").notNull().default(false),
+  error: text("error").notNull().default(""),
+  createdAt: createdAt(),
+}, (t) => [index("shop_media_product").on(t.productId, t.channel, t.position)]);
 
 /** Protokoll für den Nutzer: Importe, Bestandsabgleich, Fehler */
 export const shopEvents = pgTable("shop_events", {

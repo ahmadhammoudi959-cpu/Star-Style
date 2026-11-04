@@ -88,7 +88,8 @@ export const RESET_STATEMENTS: string[] = [
      union select photo_file_id from write_offs where photo_file_id is not null
      union select file_id from expenses where file_id is not null
      union select image_file_id from products where image_file_id is not null and id in (select id from _reset_products)
-     union select image_file_id from variants where image_file_id is not null and product_id in (select id from _reset_products)`,
+     union select image_file_id from variants where image_file_id is not null and product_id in (select id from _reset_products)
+     union select file_id from shop_media where product_id in (select id from _reset_products)`,
   // kein Shop läuft (geprüft); beim Einschalten gleicht der Abgleich ohnehin alle Bestände ab
   `delete from stock_dirty`,
   `delete from payments`,
@@ -102,7 +103,7 @@ export const RESET_STATEMENTS: string[] = [
   `update variants set stock_qty = 0, avg_cost_cents = 0 where stock_qty <> 0 or avg_cost_cents <> 0`,
   `delete from customers`, // + USt-IdNr.-Prüfungen
   `select setval(pg_get_serial_sequence('customers', 'number'), 1, false)`,
-  `delete from products where id in (select id from _reset_products)`, // + Varianten
+  `delete from products where id in (select id from _reset_products)`, // + Varianten, Shop-Galerie
   `delete from suppliers where id in (select id from _reset_suppliers)`,
   `delete from number_sequences`,
   // Shop-Bestellungen erst ab dem nächsten Einschalten des Abgleichs übernehmen (vorher lief der Verkauf ohne uns)
@@ -110,6 +111,7 @@ export const RESET_STATEMENTS: string[] = [
   `delete from stored_files f where f.id in (select id from _reset_files)
      and not exists (select 1 from products where image_file_id = f.id)
      and not exists (select 1 from variants where image_file_id = f.id)
+     and not exists (select 1 from shop_media where file_id = f.id)
      and not exists (select 1 from company_settings where logo_file_id = f.id)
      and not exists (select 1 from advisor_exports where file_id = f.id)`,
 ];

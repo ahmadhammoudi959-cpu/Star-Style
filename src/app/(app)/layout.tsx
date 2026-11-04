@@ -17,6 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/receivables", label: t.nav.receivables, icon: "euro" },
     { href: "/customers", label: t.nav.customers, icon: "users" },
     { href: "/products", label: t.nav.products, icon: "box" },
+    { href: "/categories", label: t.nav.categories, icon: "tag" },
     { href: "/receive", label: t.nav.receive, icon: "truck" },
     { href: "/stock", label: t.nav.stock, icon: "layers" },
     { href: "/scan", label: t.nav.scan, icon: "scan" },

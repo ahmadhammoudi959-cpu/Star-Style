@@ -22,6 +22,9 @@ import {
   buildProductSet, matchCreatedVariants, planVariantAdds, pushBlockers, resolveStoreType, shopPriceCents, shopWeight, storeTypesFrom, variantSku,
   type CollectionRules, type PushBlocker, type PushImage, type PushProduct, type PushReason, type PushResult, type ShopProductShape, type StoreType,
 } from "./product-push-map";
+import { configured, isAccessDenied, publishToOnlineStore, uploadImages, withFreshToken, withProductLock } from "./admin";
+import { mapCreatedMedia, productFiles } from "./gallery-map";
+import { syncGalleryLater } from "./gallery";
 
 export { decodePush, encodePush, type PushResult, type StoreType } from "./product-push-map";
 
@@ -30,11 +33,7 @@ class PushError extends Error {
 }
 
 const flagCol = (channel: ShopChannel) => (channel === "BRAND_SHOP" ? "inBrandShop" : "inGeneralShop") as "inBrandShop" | "inGeneralShop";
-const configured = (s: Shop | undefined): s is Shop => Boolean(s?.domain && (s.clientSecretEnc || s.staticTokenEnc));
 const money = (cents: number) => (cents / 100).toFixed(2);
-
-// Ein Artikel je Shop nie gleichzeitig zweimal hochladen (z. B. Speichern und „Alle hochladen“)
-const busy = new Set<string>();
 
 /** Nach dem Speichern, wenn der Nutzer „hochladen“ bestätigt hat: ein Ergebnis je angehaktem, eingerichtetem Shop, in dem noch etwas fehlt. */
 export async function pushProductToShops(productId: string, userId?: string): Promise<PushResult[]> {
@@ -67,38 +66,25 @@ export async function pushProductToShop(channel: ShopChannel, productId: string,
   if (!p || !p[flagCol(channel)]) return null;
   const shop = await getShop(channel);
   if (!configured(shop)) return null;
-  const key = `${channel}:${productId}`;
-  if (busy.has(key)) return null;
-  busy.add(key);
-  try {
-    return await pushToShop(shop, channel, productId, userId);
-  } catch (e) {
-    const known = e instanceof PushError;
-    const reason: PushReason = known ? e.reason : isAccessDenied(e) ? "noWriteAccess" : "other";
-    if (!known) console.error("shopify push", channel, productId, e);
-    await logEvent(channel, known ? "warn" : "error", "products",
-      known ? `pushBlocked:${reason}|${p.nameDe}` : `createFailed:${p.nameDe} – ${(e as Error).message}`.slice(0, 1000), p.sku);
-    return { channel, outcome: "failed", reason };
-  } finally {
-    busy.delete(key);
-  }
+  // nie zweimal gleichzeitig (Speichern, „Alle hochladen“, Galerie) – der zweite Vorgang wartet und findet dann alles erledigt
+  const r = await withProductLock(`${channel}:${productId}`, async (): Promise<PushResult | null> => {
+    try {
+      return await pushToShop(shop, channel, productId, userId);
+    } catch (e) {
+      const known = e instanceof PushError;
+      const reason: PushReason = known ? e.reason : isAccessDenied(e) ? "noWriteAccess" : "other";
+      if (!known) console.error("shopify push", channel, productId, e);
+      await logEvent(channel, known ? "warn" : "error", "products",
+        known ? `pushBlocked:${reason}|${p.nameDe}` : `createFailed:${p.nameDe} – ${(e as Error).message}`.slice(0, 1000), p.sku);
+      return { channel, outcome: "failed", reason };
+    }
+  });
+  // war das Produkt schon im Shop (verbunden/ergänzt): eigene Shop-Fotos jetzt im Hintergrund dazu
+  if (r?.outcome === "linked" || r?.outcome === "updated") syncGalleryLater(productId, [channel]);
+  return r;
 }
 
-const isAccessDenied = (e: unknown) => e instanceof ShopifyError && /access denied|write_products/i.test(e.message);
-
-/** Fehlt ein Recht, kann der zwischengespeicherte Token noch aus der Zeit vor der Freigabe stammen → einmal neu holen. */
-async function withFreshToken<T>(shop: Shop, run: () => Promise<T>): Promise<T> {
-  try {
-    return await run();
-  } catch (e) {
-    if (!(e instanceof ShopifyError) || !/access denied/i.test(e.message) || shop.staticTokenEnc) throw e;
-    shop.tokenEnc = ""; shop.tokenExpiresAt = null;
-    await db.update(schema.shops).set({ tokenEnc: "", tokenExpiresAt: null }).where(eq(schema.shops.channel, shop.channel));
-    return run();
-  }
-}
-
-async function loadProduct(productId: string, buffer: number): Promise<PushProduct | null> {
+async function loadProduct(productId: string, buffer: number, channel: ShopChannel): Promise<PushProduct | null> {
   const p = await db.query.products.findFirst({ where: eq(schema.products.id, productId), with: { supplier: true } });
   if (!p) return null;
   const vs = await db.select().from(schema.variants)
@@ -108,10 +94,14 @@ async function loadProduct(productId: string, buffer: number): Promise<PushProdu
   const avail = new Map((await db.execute<{ id: string; available: number }>(sql`
     select v.id, greatest(0, v.stock_qty - coalesce((select sum(r.qty) from reservations r where r.variant_id = v.id and r.active and r.expires_at > now()), 0) - ${buffer})::int as available
     from variants v where v.product_id = ${productId} and v.active`)).rows.map((r) => [r.id, Number(r.available)]));
+  // eigene Fotos für diesen Shop (Galerie) – sonst das Lagerfoto
+  const gallery = (await db.select({ f: schema.shopMedia.fileId }).from(schema.shopMedia)
+    .where(and(eq(schema.shopMedia.productId, productId), eq(schema.shopMedia.channel, channel), eq(schema.shopMedia.removed, false)))
+    .orderBy(asc(schema.shopMedia.position), asc(schema.shopMedia.createdAt))).map((r) => r.f);
   return {
     id: p.id, sku: p.sku, nameDe: p.nameDe, descriptionDe: p.descriptionDe, category: p.category, vendor: p.supplier?.name ?? "",
     vatRateBp: p.vatRateBp, retailPriceCents: p.retailPriceCents, purchasePriceCents: p.purchasePriceCents,
-    imageFileId: p.imageFileId,
+    imageFileId: p.imageFileId, gallery: [...new Set(gallery)],
     variants: vs.map((v) => ({
       id: v.id, size: v.size, color: v.color, barcode: v.barcode, retailPriceCents: v.retailPriceCents,
       imageFileId: v.imageFileId, available: avail.get(v.id) ?? 0, weightGrams: v.weightGrams,
@@ -130,7 +120,7 @@ async function shopInfo(shop: Shop) {
 }
 
 async function pushToShop(shop: Shop, channel: ShopChannel, productId: string, userId?: string): Promise<PushResult | null> {
-  const p = await loadProduct(productId, shop.stockBuffer);
+  const p = await loadProduct(productId, shop.stockBuffer, channel);
   if (!p) return null;
   const ids = p.variants.map((v) => v.id);
   let linked = await linkedMap(channel, ids);
@@ -333,9 +323,10 @@ async function createProduct(shop: Shop, channel: ShopChannel, p: PushProduct, p
   const info = await shopInfo(shop);
   if (info.currencyCode !== "EUR") throw new PushError("currency");
 
-  // Fotos hochladen – geht das schief, wird das Produkt trotzdem angelegt
+  // Fotos hochladen (Galerie dieses Shops, sonst Lagerfoto, dann Variantenfotos) – geht das schief, wird das Produkt trotzdem angelegt
   let images = new Map<string, PushImage>(), imagesFailed = false;
-  try { images = await withFreshToken(shop, () => uploadImages(shop, p, [p.imageFileId, ...p.variants.map((v) => v.imageFileId)])); }
+  const wanted = productFiles(p.gallery ?? [], p.imageFileId, p.variants.map((v) => v.imageFileId));
+  try { images = await withFreshToken(shop, () => uploadImages(shop, p.sku, wanted)); }
   catch (e) { imagesFailed = true; console.error("shopify push images", p.id, e); }
 
   const input = buildProductSet(p, { taxesIncluded: info.taxesIncluded, locationId: shop.locationId, images, productType });
@@ -344,6 +335,7 @@ async function createProduct(shop: Shop, channel: ShopChannel, p: PushProduct, p
     throw new ShopifyError("userErrors", d.productSet.userErrors.map((e) => e.message).join("; ").slice(0, 500) || "productSet");
   }
   const created = d.productSet.product;
+  let galleryCheck = false;
 
   // Varianten zuordnen (Bestand wurde beim Anlegen gesetzt → als gemeldet merken)
   const map = matchCreatedVariants(p.variants, created.variants.nodes);
@@ -361,14 +353,25 @@ async function createProduct(shop: Shop, channel: ShopChannel, p: PushProduct, p
         .onConflictDoUpdate({ target: [schema.shopVariants.channel, schema.shopVariants.shopVariantId], set: row });
     }
     await audit(tx, { entity: "product", entityId: p.id, action: "shop_create", after: { channel, shopProductId: created.id, handle: created.handle, productType, variants: Object.fromEntries(map) }, userId });
+    // Galerie: Medium je Foto merken (Reihenfolge wie übergeben) – später löschen/umsortieren nur diese
+    if (p.gallery?.length) {
+      const sent = (input.files ?? []).map((f) => [...images.entries()].find(([, img]) => img.resourceUrl === f.originalSource)?.[0] ?? "");
+      const m = mapCreatedMedia(sent, created.media?.nodes.map((n) => n.id) ?? [], p.gallery);
+      for (const [fileId, mediaId] of m.map) {
+        await tx.update(schema.shopMedia).set({ mediaId, error: "" }).where(and(eq(schema.shopMedia.productId, p.id), eq(schema.shopMedia.channel, channel),
+          eq(schema.shopMedia.fileId, fileId), eq(schema.shopMedia.removed, false)));
+      }
+      if (!m.exact) galleryCheck = true;
+    }
   });
 
   // Im Online Store veröffentlichen
   let visible = false;
-  try { visible = await withFreshToken(shop, () => publish(shop, created.id)); }
+  try { visible = await withFreshToken(shop, () => publishToOnlineStore(shop, created.id)); }
   catch (e) { console.error("shopify push publish", p.id, e); }
   await logEvent(channel, visible ? "info" : "warn", "products", `${visible ? "created" : "createdHidden"}:${p.nameDe}`, p.sku);
   if (imagesFailed) await logEvent(channel, "warn", "products", `imagesFailedFor:${p.nameDe}`, p.sku);
+  if (galleryCheck) await logEvent(channel, "warn", "products", `galleryCheck:${p.nameDe}`, p.sku);
   return { channel, outcome: visible ? "created" : "createdHidden", imagesFailed };
 }
 
@@ -422,7 +425,7 @@ async function addVariants(shop: Shop, channel: ShopChannel, p: PushProduct, lin
   let images = new Map<string, PushImage>(), imagesFailed = false;
   const fileIds = [...new Set(missing.map((v) => v.imageFileId).filter((x): x is string => Boolean(x) && x !== p.imageFileId))];
   if (fileIds.length) {
-    try { images = await withFreshToken(shop, () => uploadImages(shop, p, fileIds)); }
+    try { images = await withFreshToken(shop, () => uploadImages(shop, p.sku, fileIds)); }
     catch (e) { imagesFailed = true; console.error("shopify push images", p.id, e); }
   }
 
@@ -520,64 +523,16 @@ async function linkExisting(shop: Shop, channel: ShopChannel, p: PushProduct): P
   return { linked, elsewhere };
 }
 
-// ───────────────────────── Fotos ─────────────────────────
-
-const STAGED_M = `mutation($input: [StagedUploadInput!]!) { stagedUploadsCreate(input: $input) {
-  stagedTargets { url resourceUrl parameters { name value } } userErrors { field message } } }`;
-const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
-const slug = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "foto";
-
-async function uploadImages(shop: Shop, p: PushProduct, fileIds: (string | null)[]): Promise<Map<string, PushImage>> {
-  const ids = [...new Set(fileIds.filter((x): x is string => Boolean(x)))];
-  const out = new Map<string, PushImage>();
-  if (!ids.length) return out;
-  const files = (await db.select().from(schema.storedFiles).where(inArray(schema.storedFiles.id, ids))).filter((f) => EXT[f.mime]);
-  if (!files.length) return out;
-  const names = files.map((f, i) => `${slug(p.sku)}-${i + 1}.${EXT[f.mime]}`);
-  const d = await gql<{ stagedUploadsCreate: { stagedTargets: { url: string; resourceUrl: string; parameters: { name: string; value: string }[] }[]; userErrors: { message: string }[] } }>(
-    shop, STAGED_M, { input: files.map((f, i) => ({ resource: "IMAGE", filename: names[i], mimeType: f.mime, httpMethod: "POST", fileSize: String(f.size) })) });
-  if (d.stagedUploadsCreate.userErrors.length) throw new ShopifyError("userErrors", d.stagedUploadsCreate.userErrors.map((e) => e.message).join("; "));
-  for (const [i, t] of d.stagedUploadsCreate.stagedTargets.entries()) {
-    const f = files[i];
-    const form = new FormData();
-    for (const prm of t.parameters) form.append(prm.name, prm.value);
-    form.append("file", new Blob([new Uint8Array(f.data)], { type: f.mime }), names[i]);
-    const res = await fetch(t.url, { method: "POST", body: form, signal: AbortSignal.timeout(60_000) });
-    if (!res.ok) throw new Error(`upload HTTP ${res.status}`);
-    out.set(f.id, { resourceUrl: t.resourceUrl, filename: names[i] });
-  }
-  return out;
-}
-
-// ───────────────────────── productSet und Veröffentlichen ─────────────────────────
+// ───────────────────────── productSet ─────────────────────────
 
 const PRODUCT_SET_M = `mutation($input: ProductSetInput!) { productSet(synchronous: true, input: $input) {
-  product { id handle variants(first: 250) { nodes { id sku barcode displayName selectedOptions { name value } inventoryItem { id tracked } } } }
+  product { id handle variants(first: 250) { nodes { id sku barcode displayName selectedOptions { name value } inventoryItem { id tracked } } }
+    media(first: 250) { nodes { id } } }
   userErrors { field message code } } }`;
 type ProductSetData = { productSet: {
-  product: { id: string; handle: string; variants: { nodes: (FoundVariant & { selectedOptions: { name: string; value: string }[] })[] } } | null;
+  product: { id: string; handle: string; variants: { nodes: (FoundVariant & { selectedOptions: { name: string; value: string }[] })[] }; media?: { nodes: { id: string }[] } } | null;
   userErrors: { field: string[] | null; message: string; code: string | null }[];
 } };
-
-// Veröffentlichung „Online Store“ je Shop (ändert sich praktisch nie)
-const publicationIds = new Map<string, string>();
-
-async function publish(shop: Shop, productId: string): Promise<boolean> {
-  const key = `${shop.channel}:${shop.domain}`;
-  let pub = publicationIds.get(key);
-  if (!pub) {
-    const d = await gql<{ publications: { nodes: { id: string; catalog: { title: string } | null }[] } }>(shop,
-      `{ publications(first: 50, catalogType: APP) { nodes { id catalog { title } } } }`);
-    pub = d.publications.nodes.find((n) => /online store/i.test(n.catalog?.title ?? ""))?.id;
-    if (!pub) return false;
-    publicationIds.set(key, pub);
-  }
-  const r = await gql<{ publishablePublish: { userErrors: { message: string }[] } }>(shop,
-    `mutation($id: ID!, $input: [PublicationInput!]!) { publishablePublish(id: $id, input: $input) { userErrors { field message } } }`,
-    { id: productId, input: [{ publicationId: pub }] });
-  if (r.publishablePublish.userErrors.length) throw new ShopifyError("userErrors", r.publishablePublish.userErrors.map((e) => e.message).join("; "));
-  return true;
-}
 
 // ───────────────────────── Anzeige im Artikel-Formular ─────────────────────────
 
