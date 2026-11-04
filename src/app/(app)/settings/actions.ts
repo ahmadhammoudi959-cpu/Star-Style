@@ -62,7 +62,7 @@ export async function saveAccountsAction(_: SettingsState, fd: FormData): Promis
   return { ok: true };
 }
 
-/** Testdaten löschen – einmalig vor dem echten Start (nur solange kein Echtbetrieb, siehe lib/test-reset.ts) */
+/** „System zurücksetzen und Echtbetrieb starten“ – einmalig (alle Artikel bleiben; danach Echtbetrieb, siehe lib/test-reset.ts) */
 export async function resetTestDataAction(_: SettingsState, fd: FormData): Promise<SettingsState> {
   const session = await requireSession();
   if (fd.get("confirm") !== "on") return { error: "needConfirm" };

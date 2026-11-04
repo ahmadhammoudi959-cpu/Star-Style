@@ -1,0 +1,1 @@
+ALTER TABLE "company_settings" ADD COLUMN "live_since" timestamp with time zone;

@@ -6,13 +6,21 @@ import { Icon } from "@/components/Icon";
 import { logout } from "@/app/actions-auth";
 import { setupSteps } from "@/lib/onboarding";
 import { Suspense } from "react";
+import Link from "next/link";
 import { NavProgress } from "@/components/NavProgress";
+import { liveStatus } from "@/lib/test-reset";
+import { formatDate } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
-  const { t, locale } = await getI18n();
+  const { t, locale, intl } = await getI18n();
+  // Zeichen „Testbetrieb“ / „Echtbetrieb seit …“ (Wunsch Inhaber 04.11.2026): ab dem Zurücksetzen sind alle Daten echt
+  const live = await liveStatus();
+  const liveText = live.live ? (live.since ? t.reset.badgeLive.replace("{date}", formatDate(live.since.toISOString(), intl)) : t.reset.badgeLiveShort) : t.reset.badgeTest;
+  const liveHref = live.live ? "/settings#live" : "/settings#reset";
+  const liveTip = live.live ? liveText : t.reset.badgeTestHint;
   const items: NavItem[] = [
     { href: "/", label: t.nav.home, icon: "home" },
     { href: "/sales", label: t.nav.sales, icon: "cart" },
@@ -61,6 +69,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <img src="/brand/logo-light.png" alt={t.app.name} className="h-auto w-44 transition duration-300 hover:scale-[1.03] short:w-36" />
             <div className="mt-2 h-0.5 w-full rounded-full bg-gradient-to-r from-brand-500 via-white/20 to-accent-500" />
             <div className="mt-2 text-xs text-white/60 short:hidden">{t.app.tagline}</div>
+            <Link href={liveHref} title={liveTip} data-live={live.live ? "1" : "0"}
+              className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.6875rem] font-bold ring-1 transition hover:scale-[1.03] ${live.live ? "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30" : "bg-amber-300/15 text-amber-200 ring-amber-300/40"}`}>
+              <span className={`h-2 w-2 shrink-0 rounded-full ${live.live ? "bg-emerald-400" : "animate-pulse bg-amber-400"}`} />{liveText}
+            </Link>
           </div>
           <SideNav items={items} soonLabel={t.home.comingSoon} />
         </div>
@@ -76,6 +88,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-2 font-bold lg:hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/logo.png" alt={t.app.name} className="h-8 w-auto" />
+            <Link href={liveHref} title={liveTip}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.625rem] font-bold ring-1 ${live.live ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-amber-200"}`}>
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${live.live ? "bg-emerald-500" : "animate-pulse bg-amber-500"}`} />{live.live ? t.reset.badgeLiveShort : t.reset.badgeTest}
+            </Link>
           </div>
           <div className="hidden lg:block" />
           <div className="flex items-center gap-2">

@@ -39,7 +39,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     <div>
       <PageHeader title={t.settings.title} />
       {reset === "1" && <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200"><Icon name="check" className="h-4 w-4 shrink-0" />{t.reset.done}</div>}
-      {(reset === "resetLive" || reset === "resetEmpty" || reset === "resetSyncOn") && (
+      {(reset === "resetLive" || reset === "resetSyncOn") && (
         <div role="alert" className="mb-4 animate-rise rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">{t.reset[reset]}</div>
       )}
       <SettingsForm t={t} s={plain} />
@@ -51,7 +51,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </div>
         <span className={`badge ${ai ? "bg-violet-100 text-violet-800" : "bg-slate-100 text-slate-700"}`}>{ai ? t.ai.on : t.ai.off}</span>
       </section>
-      {rs.block !== "live" && !rs.empty && <ResetTestData t={t} p={rs.preview} fingerprint={rs.fingerprint} syncOn={rs.block === "syncOn"} />}
+      {/* vor dem Echtbetrieb: „System zurücksetzen und Echtbetrieb starten“; danach nur noch der Hinweis, seit wann alles echt ist */}
+      {rs.block !== "live" && <ResetTestData t={t} p={rs.preview} fingerprint={rs.fingerprint} syncOn={rs.block === "syncOn"} empty={rs.empty} />}
+      {rs.block === "live" && rs.liveSince && (
+        <section id="live" className="card mt-5 flex animate-rise items-start gap-3 p-5 ring-1 ring-emerald-100">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Icon name="check" className="icon-pop h-5 w-5" /></span>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold">{t.reset.liveTitle}</h2>
+            <p className="text-sm text-ink-soft">{t.reset.liveCard.replace("{date}", formatDateTime(rs.liveSince.toISOString(), intl))}</p>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

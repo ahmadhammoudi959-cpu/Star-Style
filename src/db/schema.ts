@@ -96,6 +96,8 @@ export const companySettings = pgTable("company_settings", {
   offerValidityDays: integer("offer_validity_days").notNull().default(14),
   invoiceFooter: text("invoice_footer").notNull().default(""),
   showGuide: boolean("show_guide").notNull().default(false), // „Erste Schritte“ auch nach Abschluss anzeigen (z. B. zum Einarbeiten)
+  // Echtbetrieb seit (Wunsch Inhaber 04.11.2026): gesetzt von „System zurücksetzen“; ab dann gibt es kein Zurücksetzen mehr
+  liveSince: timestamp("live_since", { withTimezone: true }),
   // Steuerberater / DATEV
   datevConsultant: integer("datev_consultant"),
   datevClient: integer("datev_client"),
