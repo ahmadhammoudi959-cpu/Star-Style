@@ -94,9 +94,9 @@ async function loadProduct(productId: string, buffer: number, channel: ShopChann
   const avail = new Map((await db.execute<{ id: string; available: number }>(sql`
     select v.id, greatest(0, v.stock_qty - coalesce((select sum(r.qty) from reservations r where r.variant_id = v.id and r.active and r.expires_at > now()), 0) - ${buffer})::int as available
     from variants v where v.product_id = ${productId} and v.active`)).rows.map((r) => [r.id, Number(r.available)]));
-  // eigene Fotos für diesen Shop (Galerie) – sonst das Lagerfoto
+  // eigene Fotos für diesen Shop (Galerie, ohne die „nur aus dem Shop“ genommenen) – sonst das Lagerfoto
   const gallery = (await db.select({ f: schema.shopMedia.fileId }).from(schema.shopMedia)
-    .where(and(eq(schema.shopMedia.productId, productId), eq(schema.shopMedia.channel, channel), eq(schema.shopMedia.removed, false)))
+    .where(and(eq(schema.shopMedia.productId, productId), eq(schema.shopMedia.channel, channel), eq(schema.shopMedia.removed, false), eq(schema.shopMedia.hidden, false)))
     .orderBy(asc(schema.shopMedia.position), asc(schema.shopMedia.createdAt))).map((r) => r.f);
   return {
     id: p.id, sku: p.sku, nameDe: p.nameDe, descriptionDe: p.descriptionDe, category: p.category, vendor: p.supplier?.name ?? "",
@@ -359,7 +359,7 @@ async function createProduct(shop: Shop, channel: ShopChannel, p: PushProduct, p
       const m = mapCreatedMedia(sent, created.media?.nodes.map((n) => n.id) ?? [], p.gallery);
       for (const [fileId, mediaId] of m.map) {
         await tx.update(schema.shopMedia).set({ mediaId, error: "" }).where(and(eq(schema.shopMedia.productId, p.id), eq(schema.shopMedia.channel, channel),
-          eq(schema.shopMedia.fileId, fileId), eq(schema.shopMedia.removed, false)));
+          eq(schema.shopMedia.fileId, fileId), eq(schema.shopMedia.removed, false), eq(schema.shopMedia.hidden, false)));
       }
       if (!m.exact) galleryCheck = true;
     }

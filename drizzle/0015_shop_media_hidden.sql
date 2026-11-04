@@ -1,0 +1,1 @@
+ALTER TABLE "shop_media" ADD COLUMN "hidden" boolean DEFAULT false NOT NULL;

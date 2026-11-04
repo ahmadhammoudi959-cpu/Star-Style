@@ -106,6 +106,13 @@
       "when": 1793794034794,
       "tag": "0014_categories_shop_media",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793801790798,
+      "tag": "0015_shop_media_hidden",
+      "breakpoints": true
     }
   ]
 }

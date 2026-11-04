@@ -73,6 +73,17 @@ const de = {
       newOnSave: "Neue Fotos und die Reihenfolge gehen beim Speichern in den Shop.",
       notLinked: "Diese Fotos kommen beim Hochladen in den Shop (statt des Lagerfotos).",
       linkedEmpty: "Noch keine eigenen Fotos: im Shop bleiben die Fotos, die schon dort sind. „Fotos aus dem Shop holen“ übernimmt sie hierher – dann hier sortieren und ergänzen.",
+      // Entfernen eines Fotos, das im Shop ist (Wunsch Inhaber 04.11.2026)
+      offBadge: "nicht im Shop", backToShop: "Wieder in den Shop", removing: "wird im Shop gelöscht", removeFailed: "im Shop nicht gelöscht – Fehler",
+      askTitle: "Wo soll das Foto gelöscht werden?", askIntro: "Das Foto ist im System und im Shop „{shop}“.",
+      delBoth: "Im System und im Shop löschen", delBothHint: "Beim Speichern an beiden Stellen gelöscht.",
+      delSystem: "Nur im System löschen", delSystemHint: "Bleibt im Shop „{shop}“ wie es ist (rückt nach hinten) – das System ändert es dort nicht mehr.",
+      delStore: "Nur im Shop löschen", delStoreHint: "Bleibt hier im System (grau) und kann jederzeit mit einem Klick wieder in den Shop.",
+      askSafe: "Im Shop wird nur gelöscht, wenn du es so wählst.",
+      pendTitle: "Beim Speichern:", pendBoth: "{n} im System und im Shop gelöscht", pendSystem: "{n} nur im System gelöscht (bleiben im Shop)",
+      pendStore: "{n} nur im Shop gelöscht (bleiben hier)", pendBack: "{n} wieder in den Shop", pendRemoved: "{n} hier entfernt", undo: "Rückgängig",
+      statusHidden: "{n} nur im System – nicht im Shop", statusRemoving: "{n} werden im Shop gelöscht … (neu laden zeigt den Stand)",
+      statusRemoveFailed: "{n} im Shop nicht gelöscht – Details im Shop-Protokoll",
     },
     push: {
       created: "{shop}: im Shop angelegt und sichtbar ✓",

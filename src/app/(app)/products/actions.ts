@@ -192,9 +192,10 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
       }
 
       // Eigene Fotos je Shop (Galerie). Fehlt das Feld (Shop nicht angehakt), bleibt die Galerie unverändert.
+      // Im Shop gelöscht wird nur, was beim Entfernen ausdrücklich so gewählt wurde (Wunsch Inhaber 04.11.2026).
       for (const channel of ["BRAND_SHOP", "GENERAL_SHOP"] as const) {
-        const ids = parseGalleryInput(fd.get(`gallery_${channel}`));
-        if (ids && await saveGalleryTx(tx, productId!, channel, ids, session.uid)) galleryChanged.push(channel);
+        const input = parseGalleryInput(fd.get(`gallery_${channel}`));
+        if (input && await saveGalleryTx(tx, productId!, channel, input, session.uid)) galleryChanged.push(channel);
       }
 
       // Vorhandene Ware gleich mitbuchen – als normaler Wareneingang (Charge, EK, Nummer, Protokoll)

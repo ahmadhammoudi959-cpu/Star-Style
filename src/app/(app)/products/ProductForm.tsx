@@ -23,7 +23,7 @@ export type ProductFormData = {
   tracksExpiry: boolean; inBrandShop: boolean; inGeneralShop: boolean; imageFileId?: string | null;
   variants: Omit<V, "key">[];
   /** eigene Fotos je Shop (Galerie) */
-  galleries?: Record<Channel, { fileId: string; mediaId: string; error: string }[]>;
+  galleries?: Record<Channel, { fileId: string; mediaId: string; error: string; hidden: boolean }[]>;
 };
 
 const fmt = (c: number) => (c / 100).toFixed(2).replace(".", ",");
@@ -84,7 +84,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
   /** Beim Absenden: fehlt der Artikel (oder eine Größe/Farbe) in einem angehakten Shop? Dann erst fragen. */
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     // Fotos für den Shop werden noch hochgeladen → erst warten, sonst fehlen sie
-    if (CHANNELS.some((c) => inShop[c] && galleries[c].some((g) => !g.fileId))) { e.preventDefault(); setWaitUpload(true); return; }
+    if (CHANNELS.some((c) => inShop[c] && galleries[c].some((g) => !g.fileId && !g.gone))) { e.preventDefault(); setWaitUpload(true); return; }
     setWaitUpload(false);
     if (intentRef.current) return; // Antwort aus der Rückfrage → normal speichern
     const category = String(new FormData(e.currentTarget).get("category") ?? "").trim();

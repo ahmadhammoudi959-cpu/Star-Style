@@ -6,34 +6,62 @@ import {
   categoryStoreState, cleanCategoryName, collectionInput, menuDepth, menuGroups, menuHas, menuToInput, menuWithCollection, menuWithout, type MenuItem,
 } from "../src/lib/shopify/category-map";
 
-const row = (id: string, fileId: string, position: number, mediaId = "", removed = false): GalleryRow => ({ id, fileId, position, mediaId, removed });
+const row = (id: string, fileId: string, position: number, mediaId = "", removed = false, hidden = false): GalleryRow => ({ id, fileId, position, mediaId, removed, hidden });
 const U = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const inp = (files: string[], o: { hidden?: string[]; drop?: string[] } = {}) => ({ files, hidden: o.hidden ?? [], drop: o.drop ?? [] });
 
 describe("Shop-Galerie", () => {
-  it("Formular → Datenbank: bleiben, neu, entfernt (mit Medium → Löschmarke, ohne → weg)", () => {
+  it("Formular → Datenbank: bleiben, neu, entfernt", () => {
     const rows = [row("r1", "a", 0, "m1"), row("r2", "b", 1), row("r3", "c", 2, "m3"), row("rx", "x", 0, "mx", true)];
-    const d = diffGallery(rows, ["c", "d", "a"]);
-    expect(d.keep).toEqual([{ id: "r3", position: 0 }, { id: "r1", position: 2 }]);
-    expect(d.add).toEqual([{ fileId: "d", position: 1 }]);
+    const d = diffGallery(rows, inp(["c", "d", "a"]));
+    expect(d.keep).toEqual([{ id: "r3", position: 0, hidden: false }, { id: "r1", position: 2, hidden: false }]);
+    expect(d.add).toEqual([{ fileId: "d", position: 1, hidden: false }]);
     expect(d.tombstone).toEqual([]);
-    expect(d.drop).toEqual(["r2"]);
+    expect(d.detach).toEqual([]);
+    expect(d.drop).toEqual(["r2"]); // ohne Medium im Shop → einfach weg
     expect(d.changed).toBe(true);
-    expect(diffGallery(rows, ["d"]).tombstone.sort()).toEqual(["r1", "r3"]);
     // unverändert
-    expect(diffGallery([row("r1", "a", 0, "m1"), row("r2", "b", 1)], ["a", "b"]).changed).toBe(false);
+    expect(diffGallery([row("r1", "a", 0, "m1"), row("r2", "b", 1)], inp(["a", "b"])).changed).toBe(false);
     // nur umsortiert
-    expect(diffGallery([row("r1", "a", 0, "m1"), row("r2", "b", 1)], ["b", "a"])).toMatchObject({ changed: true, add: [], drop: [], tombstone: [] });
-    // gleiche Datei doppelt in der Datenbank → die zweite fliegt raus
-    expect(diffGallery([row("r1", "a", 0), row("r2", "a", 1)], ["a"]).drop).toEqual(["r2"]);
+    expect(diffGallery([row("r1", "a", 0, "m1"), row("r2", "b", 1)], inp(["b", "a"]))).toMatchObject({ changed: true, add: [], drop: [], tombstone: [], detach: [] });
+    // gleiche Datei doppelt in der Datenbank → die zweite fliegt raus (mit Medium: im Shop löschen, es ist unser Doppel)
+    expect(diffGallery([row("r1", "a", 0), row("r2", "a", 1)], inp(["a"])).drop).toEqual(["r2"]);
+    expect(diffGallery([row("r1", "a", 0, "m1"), row("r2", "a", 1, "m2")], inp(["a"])).tombstone).toEqual(["r2"]);
+  });
+
+  it("Entfernen eines Fotos, das im Shop ist: im Shop nur gelöscht, wenn so gewählt (Wunsch Inhaber 04.11.2026)", () => {
+    const rows = [row("r1", "a", 0, "m1"), row("r2", "b", 1, "m2"), row("r3", "c", 2, "m3")];
+    // a „aus System und Shop“, b „nur aus dem System“ (keine Wahl = bleibt im Shop), c „nur aus dem Shop“ (bleibt hier, hidden)
+    const d = diffGallery(rows, inp(["c"], { hidden: ["c"], drop: ["a"] }));
+    expect(d.tombstone).toEqual(["r1"]);
+    expect(d.detach).toEqual(["r2"]);
+    expect(d.keep).toEqual([{ id: "r3", position: 0, hidden: true }]);
+    expect(d.changed).toBe(true);
+    // nur „aus dem Shop“ genommen (sonst nichts) zählt als Änderung; „wieder in den Shop“ auch
+    expect(diffGallery(rows, inp(["a", "b", "c"], { hidden: ["b"] }))).toMatchObject({ changed: true, keep: [{ hidden: false }, { hidden: true }, { hidden: false }] });
+    expect(diffGallery([row("r1", "a", 0, "", false, true)], inp(["a"])).keep).toEqual([{ id: "r1", position: 0, hidden: false }]);
+    // schon „nur aus dem Shop“ genommen und jetzt ganz entfernt → im Shop löschen (falls dort noch da), auch ohne Wahl
+    expect(diffGallery([row("r1", "a", 0, "m1", false, true)], inp([])).tombstone).toEqual(["r1"]);
+    // frühere Form (nur Liste) und alles, was nicht ausdrücklich gewählt ist: nichts im Shop löschen
+    expect(diffGallery(rows, inp([])).detach.sort()).toEqual(["r1", "r2", "r3"]);
+    expect(diffGallery(rows, inp([])).tombstone).toEqual([]);
   });
 
   it("Eingabe aus dem Formular wird streng geprüft", () => {
-    expect(parseGalleryInput(JSON.stringify([U(1), U(2), U(1)]))).toEqual([U(1), U(2)]);
-    expect(parseGalleryInput(JSON.stringify(Array.from({ length: 14 }, (_, i) => U(i))))).toHaveLength(10);
-    expect(parseGalleryInput("[]")).toEqual([]);
+    // frühere Form: nur die Liste
+    expect(parseGalleryInput(JSON.stringify([U(1), U(2), U(1)]))).toEqual({ files: [U(1), U(2)], hidden: [], drop: [] });
+    expect(parseGalleryInput(JSON.stringify(Array.from({ length: 14 }, (_, i) => U(i))))!.files).toHaveLength(10);
+    expect(parseGalleryInput("[]")).toEqual({ files: [], hidden: [], drop: [] });
+    // neue Form: hidden nur aus der Liste, drop nie aus der Liste
+    expect(parseGalleryInput(JSON.stringify({ files: [U(1), U(2)], hidden: [U(2), U(9)], drop: [U(3), U(1), U(3)] })))
+      .toEqual({ files: [U(1), U(2)], hidden: [U(2)], drop: [U(3)] });
+    expect(parseGalleryInput(JSON.stringify({ files: [U(1)] }))).toEqual({ files: [U(1)], hidden: [], drop: [] });
+    expect(parseGalleryInput(JSON.stringify({ files: [U(1)], drop: ["../x"] }))).toBeNull();
+    expect(parseGalleryInput(JSON.stringify({ hidden: [U(1)] }))).toBeNull();
     expect(parseGalleryInput(JSON.stringify(["../etc/passwd"]))).toBeNull();
     expect(parseGalleryInput(JSON.stringify([1]))).toBeNull();
     expect(parseGalleryInput("{kaputt")).toBeNull();
+    expect(parseGalleryInput("null")).toBeNull();
     expect(parseGalleryInput(null)).toBeNull();
   });
 
@@ -41,9 +69,21 @@ describe("Shop-Galerie", () => {
     const rows = [row("r1", "a", 0, "m1"), row("r2", "b", 1), row("r3", "c", 2, "m3"), row("t1", "x", 0, "mx", true), row("t2", "y", 0, "gone", true)];
     const p = planGallery(rows, ["m1", "fremd", "mx"]);
     expect(p.remove).toEqual(["mx"]);
+    expect(p.unlink).toEqual([]);
     expect(p.dropTombstones).toEqual(["t2"]);
     expect(p.upload.map((r) => r.id)).toEqual(["r2", "r3"]); // r3: Medium m3 gibt es im Shop nicht mehr
     expect(p.lost.map((r) => r.id)).toEqual(["r3"]);
+  });
+
+  it("Plan: „nur aus dem Shop“ genommene werden dort gelöscht, bleiben bei uns und werden nie hochgeladen", () => {
+    const rows = [row("h1", "a", 0, "m1", false, true), row("h2", "b", 1, "weg", false, true), row("h3", "c", 2, "", false, true), row("r4", "d", 3, "m4")];
+    const p = planGallery(rows, ["m1", "m4"]);
+    expect(p.remove).toEqual(["m1"]);
+    expect(p.unlink.sort()).toEqual(["h1", "h2"]); // h2: im Shop schon weg → nur media_id leeren
+    expect(p.upload).toEqual([]);
+    expect(p.lost).toEqual([]);
+    // „wieder in den Shop“ (hidden false, ohne Medium) → hochladen
+    expect(planGallery([row("h3", "c", 0)], []).upload.map((r) => r.id)).toEqual(["h3"]);
   });
 
   it("Reihenfolge: unsere Galerie vorne, fremde Medien behalten ihre Reihenfolge; nur nötige Verschiebungen", () => {

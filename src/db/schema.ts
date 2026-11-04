@@ -534,6 +534,8 @@ export const shopVariants = pgTable("shop_variants", {
  * Fotos fürs Shop-Schaufenster (Wunsch Inhaber 04.11.2026): im Lager nur ein Foto (products.image_file_id),
  * im Shop eine eigene Galerie je Kanal. media_id = Shopify-Medium, das wir hochgeladen bzw. übernommen haben (leer = noch nicht im Shop).
  * removed = im Formular entfernt, im Shop noch zu löschen (danach verschwindet die Zeile).
+ * hidden = „nur aus dem Shop löschen“ (Wunsch Inhaber 04.11.2026): bleibt bei uns in der Galerie (grau), im Shop wird es gelöscht
+ * und media_id danach geleert; „Wieder in den Shop“ = hidden false → wird neu hochgeladen.
  */
 export const shopMedia = pgTable("shop_media", {
   id: id(),
@@ -543,6 +545,7 @@ export const shopMedia = pgTable("shop_media", {
   position: integer("position").notNull(),
   mediaId: text("media_id").notNull().default(""),
   removed: boolean("removed").notNull().default(false),
+  hidden: boolean("hidden").notNull().default(false),
   error: text("error").notNull().default(""),
   createdAt: createdAt(),
 }, (t) => [index("shop_media_product").on(t.productId, t.channel, t.position)]);

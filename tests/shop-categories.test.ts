@@ -264,8 +264,8 @@ run("Kategorien und Shop-Fotos (Datenbank, Shopify simuliert)", async () => {
       { productId: p.id, channel: "GENERAL_SHOP", fileId: g1, position: 0, mediaId: "m1" },
       { productId: p.id, channel: "GENERAL_SHOP", fileId: g2, position: 1, mediaId: "m2" },
     ]);
-    // im Formular: g1 entfernt, g3 neu nach vorne, g2 dahinter
-    expect(await db.transaction((tx) => saveGalleryTx(tx, p.id, "GENERAL_SHOP", [g3, g2]))).toBe(true);
+    // im Formular: g1 entfernt („aus System und Shop“), g3 neu nach vorne, g2 dahinter
+    expect(await db.transaction((tx) => saveGalleryTx(tx, p.id, "GENERAL_SHOP", { files: [g3, g2], hidden: [], drop: [g1] }))).toBe(true);
     expect((await gallery(p.id)).map((x) => [x.fileId, x.removed])).toEqual([[g1, true], [g3, false], [g2, false]]);
     expect(await syncGallery(p.id, "GENERAL_SHOP")).toEqual({ status: "done", uploaded: 1, removed: 1 });
     expect(q("productDeleteMedia")[0].variables).toEqual({ productId: pid, mediaIds: ["m1"] });
@@ -281,6 +281,70 @@ run("Kategorien und Shop-Fotos (Datenbank, Shopify simuliert)", async () => {
     expect(await syncGallery(p.id, "GENERAL_SHOP")).toMatchObject({ status: "done", uploaded: 2 });
     expect(media.get(pid)!.slice(-1)).toEqual(["fremd"]);
     expect(media.get(pid)).toHaveLength(3);
+  });
+
+  it("Entfernen mit Wahl (Wunsch Inhaber 04.11.2026): nur System → bleibt im Shop; nur Shop → bleibt hier; wieder in den Shop", async () => {
+    vi.stubGlobal("fetch", shopifyMock());
+    const { adoptShopGallery, galleriesOf, saveGalleryTx, syncGallery } = await import("../src/lib/shopify/gallery");
+    const { p, v } = await newProduct(`CAT-${tag}-G5`);
+    const { pid } = await link(v.id, "Werkzeug & Zubehör", ["s1", "s2", "s3", "s4"]);
+    const r = await adoptShopGallery(p.id, "GENERAL_SHOP", "u-test");
+    if (!r.ok) throw new Error("adopt");
+    const [f1, f2, f3, f4] = r.items.map((x) => x.fileId);
+    calls = [];
+    // f1 nur aus dem System, f2 nur aus dem Shop, f3 aus beiden, f4 bleibt
+    expect(await db.transaction((tx) => saveGalleryTx(tx, p.id, "GENERAL_SHOP", { files: [f2, f4], hidden: [f2], drop: [f3] }, "u-test"))).toBe(true);
+    expect((await gallery(p.id)).map((x) => [x.fileId, x.removed, x.hidden])).toEqual([[f3, true, false], [f2, false, true], [f4, false, false]]);
+    expect(await syncGallery(p.id, "GENERAL_SHOP")).toEqual({ status: "done", uploaded: 0, removed: 2 });
+    expect(q("productDeleteMedia").map((c) => [...c.variables!.mediaIds].sort())).toEqual([["s2", "s3"]]);
+    // s1 bleibt im Shop (gilt ab jetzt als fremd → hinter unserer Galerie), s2/s3 sind weg
+    expect(media.get(pid)).toEqual(["s4", "s1"]);
+    expect((await gallery(p.id)).map((x) => [x.fileId, x.mediaId, x.hidden])).toEqual([[f2, "", true], [f4, "s4", false]]);
+    expect((await galleriesOf(p.id)).GENERAL_SHOP.map((x) => [x.fileId, x.hidden])).toEqual([[f2, true], [f4, false]]);
+    // Protokoll: was im Shop gelöscht wurde und was dort bleibt
+    const log = await db.query.auditLog.findFirst({ where: and(eq(schema.auditLog.entityId, p.id), eq(schema.auditLog.action, "shop_gallery")), orderBy: (a, { desc }) => [desc(a.createdAt)] });
+    expect(log?.after).toMatchObject({ deleteInStore: [f3], keptInStore: [f1], hidden: [f2] });
+    // nichts mehr zu tun; das versteckte Foto wird nie hochgeladen
+    calls = [];
+    expect(await syncGallery(p.id, "GENERAL_SHOP")).toEqual({ status: "nothing" });
+    // „wieder in den Shop“ → neu hochgeladen und vorne einsortiert; das fremde s1 bleibt dahinter
+    expect(await db.transaction((tx) => saveGalleryTx(tx, p.id, "GENERAL_SHOP", { files: [f2, f4], hidden: [], drop: [] }))).toBe(true);
+    expect(await syncGallery(p.id, "GENERAL_SHOP")).toMatchObject({ status: "done", uploaded: 1, removed: 0 });
+    const back = (await gallery(p.id))[0].mediaId;
+    expect(back).not.toBe("");
+    expect(media.get(pid)).toEqual([back, "s4", "s1"]);
+    // Entfernen ohne ausdrückliche Wahl (frühere Form) löscht im Shop nichts
+    calls = [];
+    expect(await db.transaction((tx) => saveGalleryTx(tx, p.id, "GENERAL_SHOP", [f4]))).toBe(true);
+    await syncGallery(p.id, "GENERAL_SHOP");
+    expect(q("productDeleteMedia")).toHaveLength(0);
+    expect(media.get(pid)).toContain(back);
+  });
+
+  it("Löschen im Shop klappt nicht (Shop kurz weg) → bleibt vorgemerkt, der Hintergrund versucht es wieder", async () => {
+    const { saveGalleryTx, syncGallery, retryGalleryDeletes } = await import("../src/lib/shopify/gallery");
+    vi.stubGlobal("fetch", shopifyMock());
+    const g1 = await file(png(41)), g2 = await file(png(42));
+    const { p, v } = await newProduct(`CAT-${tag}-G6`);
+    const { pid } = await link(v.id, "Werkzeug & Zubehör", ["d1", "d2"]);
+    await db.insert(schema.shopMedia).values([
+      { productId: p.id, channel: "GENERAL_SHOP", fileId: g1, position: 0, mediaId: "d1" },
+      { productId: p.id, channel: "GENERAL_SHOP", fileId: g2, position: 1, mediaId: "d2" },
+    ]);
+    await db.transaction((tx) => saveGalleryTx(tx, p.id, "GENERAL_SHOP", { files: [g2], hidden: [g2], drop: [g1] }));
+    // Shop nicht erreichbar (schon beim Token – sonst wartet der Aufruf seine Wiederholungen ab)
+    await db.update(schema.shops).set({ tokenEnc: "", tokenExpiresAt: null }).where(eq(schema.shops.channel, "GENERAL_SHOP"));
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("fetch failed"); }));
+    expect(await syncGallery(p.id, "GENERAL_SHOP")).toMatchObject({ status: "failed" });
+    const rows = await gallery(p.id);
+    expect(rows.map((x) => [x.fileId, x.removed, x.mediaId, x.error])).toEqual([[g1, true, "d1", ""], [g2, false, "d2", ""]]);
+    // Hintergrund (Shop läuft, kein Fehler) → jetzt gelöscht
+    vi.stubGlobal("fetch", shopifyMock());
+    await db.update(schema.shops).set({ active: true, lastError: "" }).where(eq(schema.shops.channel, "GENERAL_SHOP"));
+    expect(await retryGalleryDeletes()).toBeGreaterThanOrEqual(1);
+    expect(media.get(pid)).toEqual([]);
+    expect((await gallery(p.id)).map((x) => [x.fileId, x.mediaId, x.hidden])).toEqual([[g2, "", true]]);
+    await db.update(schema.shops).set({ active: false }).where(eq(schema.shops.channel, "GENERAL_SHOP"));
   });
 
   it("Fotos aus dem Shop übernehmen; Galerie-Eingabe nimmt nur echte Bilder", async () => {
