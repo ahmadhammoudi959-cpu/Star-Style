@@ -7,7 +7,8 @@ import { openItems } from "@/lib/receivables";
 import { loadInsights } from "@/lib/insights-data";
 import { aiConfigured } from "@/lib/ai/client";
 import { formatCents } from "@/lib/money";
-import { daysBetween, formatDate, todayIso } from "@/lib/dates";
+import { daysBetween, formatDate, formatDateTime, todayIso } from "@/lib/dates";
+import { failuresSincePrevious } from "@/lib/login";
 import { setupSteps } from "@/lib/onboarding";
 import { fill } from "@/i18n";
 import { pendingSummary } from "@/lib/shopify/product-push";
@@ -15,7 +16,7 @@ import { pendingSummary } from "@/lib/shopify/product-push";
 export default async function Home() {
   const session = await requireSession();
   const { t, intl } = await getI18n();
-  const [stats, al, open, ins, setup, pend] = await Promise.all([dashboardStats(), alerts(), openItems(), loadInsights(), setupSteps(), pendingSummary()]);
+  const [stats, al, open, ins, setup, pend, fails] = await Promise.all([dashboardStats(), alerts(), openItems(), loadInsights(), setupSteps(), pendingSummary(), failuresSincePrevious()]);
   const ai = aiConfigured();
   const debts = open.filter((r) => r.state.openCents > 0);
   const rOpen = debts.reduce((s, r) => s + r.state.openCents, 0);
@@ -39,6 +40,16 @@ export default async function Home() {
         <h1 className="text-3xl font-bold tracking-tight">{t.home.greeting}, {session.name.split(" ")[0]}</h1>
         <p className="text-ink-soft">{t.home.subtitle}</p>
       </div>
+
+      {fails.n > 0 && (
+        <Link href="/settings#security" className="group card flex animate-rise flex-wrap items-center justify-between gap-3 p-4 ring-1 ring-amber-200 hover:shadow-lift">
+          <span className="flex items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700"><Icon name="shield" className="icon-pop h-5 w-5" /></span>
+            <span className="text-sm font-semibold text-amber-900">{fill(fails.n === 1 ? t.security.alertOne : t.security.alert, { n: fails.n, time: formatDateTime(fails.last, intl) })}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">{t.security.alertLink}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></span>
+        </Link>
+      )}
 
       {!setup.allDone && (
         <section className="card animate-rise overflow-hidden">

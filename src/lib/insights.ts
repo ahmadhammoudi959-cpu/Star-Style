@@ -10,6 +10,7 @@ export const WINDOW_DAYS = 90;
 
 export type StockItem = {
   variantId: string; name: string; sku: string; supplierId: string | null; supplierName: string;
+  code?: string; // Nummer auf der Packung: Barcode der Variante, sonst Art.-Nr.
   stock: number; reserved: number; minStock: number; sold: number; // verkauft in WINDOW_DAYS
   unitCostCents: number; lastReceipt: string | null;
 };
@@ -35,7 +36,7 @@ export function reorderSuggestions(items: StockItem[], o: { leadDays?: number; c
   return out.sort((a, b) => rank[a.urgency] - rank[b.urgency] || (a.daysLeft ?? 1e9) - (b.daysLeft ?? 1e9));
 }
 
-export type BatchItem = { batchId: string; variantId: string; name: string; expiry: string; qtyLeft: number; unitCostCents: number };
+export type BatchItem = { batchId: string; variantId: string; name: string; code?: string; expiry: string; qtyLeft: number; unitCostCents: number };
 export type ExpiryRisk = BatchItem & { daysToExpiry: number; expectedSold: number; riskQty: number; riskCents: number; action: "writeOff" | "discount" | "watch" };
 
 /** Chargen werden nach FEFO verkauft: frühere Chargen verbrauchen zuerst das Verkaufstempo. */

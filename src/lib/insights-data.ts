@@ -10,7 +10,7 @@ type Row = Record<string, unknown>;
 export async function loadStockItems(): Promise<StockItem[]> {
   const since = addDaysIso(todayIso(), -WINDOW_DAYS);
   const r = await db.execute<Row>(sql`
-    select v.id, p.name_de, v.size, v.color, p.sku, p.supplier_id, coalesce(s.name, '') as supplier,
+    select v.id, p.name_de, v.size, v.color, p.sku, v.barcode, p.supplier_id, coalesce(s.name, '') as supplier,
       v.stock_qty, v.min_stock, greatest(v.avg_cost_cents, 0) as avg_cost, p.purchase_price_cents,
       coalesce((select sum(qty) from reservations r where r.variant_id = v.id and r.active and r.expires_at > now()), 0)::int as reserved,
       coalesce((select -sum(m.qty) from stock_movements m where m.variant_id = v.id and m.ref_type = 'invoice'
@@ -20,6 +20,7 @@ export async function loadStockItems(): Promise<StockItem[]> {
     where v.active and p.active`);
   return r.rows.map((x) => ({
     variantId: String(x.id), name: variantLabel(String(x.name_de), String(x.size), String(x.color)), sku: String(x.sku),
+    code: String(x.barcode || x.sku),
     supplierId: x.supplier_id ? String(x.supplier_id) : null, supplierName: String(x.supplier),
     stock: Number(x.stock_qty), reserved: Number(x.reserved), minStock: Number(x.min_stock), sold: Math.max(0, Number(x.sold)),
     unitCostCents: Number(x.purchase_price_cents) || Number(x.avg_cost), lastReceipt: x.last_receipt ? String(x.last_receipt).slice(0, 10) : null,
@@ -30,11 +31,11 @@ export async function loadInsights() {
   const today = todayIso();
   const items = await loadStockItems();
   const b = await db.execute<Row>(sql`
-    select b.id, b.variant_id, p.name_de, v.size, v.color, b.expiry_date, b.qty_left, b.unit_cost_cents
+    select b.id, b.variant_id, p.name_de, v.size, v.color, b.expiry_date, b.qty_left, b.unit_cost_cents, coalesce(nullif(v.barcode, ''), p.sku) as code
     from batches b join variants v on v.id = b.variant_id join products p on p.id = v.product_id
     where b.qty_left > 0 and b.expiry_date is not null and b.expiry_date <= ${addDaysIso(today, 120)}::date`);
   const batches: BatchItem[] = b.rows.map((x) => ({
-    batchId: String(x.id), variantId: String(x.variant_id), name: variantLabel(String(x.name_de), String(x.size), String(x.color)),
+    batchId: String(x.id), variantId: String(x.variant_id), name: variantLabel(String(x.name_de), String(x.size), String(x.color)), code: String(x.code ?? ""),
     expiry: String(x.expiry_date).slice(0, 10), qtyLeft: Number(x.qty_left), unitCostCents: Number(x.unit_cost_cents),
   }));
   const perDay = new Map(items.map((i) => [i.variantId, i.sold / WINDOW_DAYS]));

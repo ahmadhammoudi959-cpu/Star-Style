@@ -39,6 +39,9 @@ const PATHS = {
   upload: "M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3",
   scan: "M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13.5 8v8M17 8v8",
   bolt: "M13 2 4 14h7l-1 8 9-12h-7z",
+  shield: "M12 3 4 6v6c0 4.6 3.4 8.1 8 9 4.6-.9 8-4.4 8-9V6zM9 12l2 2 4-4",
+  key: "M8 19a4 4 0 1 1 0-8 4 4 0 0 1 0 8zM11 12l9-9M17 6l3 3M14.5 8.5l2 2",
+  phone: "M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 18h2",
 } as const;
 
 export type IconName = keyof typeof PATHS;

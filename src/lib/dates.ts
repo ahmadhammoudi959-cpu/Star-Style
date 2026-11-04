@@ -12,6 +12,11 @@ export function formatDate(iso: string | null | undefined, locale = "de-DE"): st
   const d = new Date(iso.length === 10 ? iso + "T12:00:00Z" : iso);
   return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" }).format(d);
 }
+/** Datum und Uhrzeit (Europe/Berlin), z. B. „04.11.2026, 10:15“ */
+export function formatDateTime(iso: string | null | undefined, locale = "de-DE"): string {
+  if (!iso) return "";
+  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin" }).format(new Date(iso));
+}
 export function daysBetween(fromIso: string, toIso: string): number {
   return Math.round((new Date(toIso + "T12:00:00Z").getTime() - new Date(fromIso + "T12:00:00Z").getTime()) / 86400000);
 }

@@ -44,10 +44,35 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
   locale: text("locale").notNull().default("de"),
+  // Zwei-Schritt-Anmeldung: Schlüssel verschlüsselt (crypto.ts); eingeschaltet erst mit totp_enabled_at
   totpSecret: text("totp_secret"),
+  totpEnabledAt: timestamp("totp_enabled_at", { withTimezone: true }),
+  totpLastStep: integer("totp_last_step"), // zuletzt benutztes 30-s-Fenster → derselbe Code geht nicht zweimal
+  recoveryCodes: jsonb("recovery_codes").$type<string[]>().notNull().default([]), // nur HMAC der Ersatz-Codes
+  // +1 = alle Sitzungen (und „Gerät vertrauen“) ungültig: Passwort geändert, „alle Geräte abmelden“, Zwei-Schritt eingeschaltet
+  sessionVersion: integer("session_version").notNull().default(1),
+  passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/**
+ * Jeder Anmeldeversuch (Sicherheit): Grundlage für die Sperre nach Fehlversuchen und für „Letzte Anmeldungen“.
+ * device = ID aus dem Geräte-Cookie, wenn das Gerät für dieses Konto bekannt war, sonst leer.
+ * reason: success | needCode | invalid | code | locked | expired (gezählt als Fehlversuch: invalid, code)
+ */
+export const loginAttempts = pgTable("login_attempts", {
+  id: id(),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  userId: text("user_id"),
+  email: text("email").notNull().default(""),
+  ip: text("ip").notNull().default(""),
+  userAgent: text("user_agent").notNull().default(""),
+  device: text("device").notNull().default(""),
+  step: text("step").notNull(), // password | code | change
+  ok: boolean("ok").notNull(),
+  reason: text("reason").notNull(),
+}, (t) => [index("login_attempts_at").on(t.at), index("login_attempts_user_at").on(t.userId, t.at), index("login_attempts_ip_at").on(t.ip, t.at)]);
 
 /** Firmendaten – genau eine Zeile (id = "company") */
 export const companySettings = pgTable("company_settings", {

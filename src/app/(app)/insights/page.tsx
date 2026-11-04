@@ -46,10 +46,11 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
             </div>
           </div>
           <div className="table-wrap mt-3"><table className="tbl">
-            <thead><tr><th>{t.product.nameDe}</th><th className="text-end">{t.ins.available}</th><th className="text-end">{t.ins.perMonth}</th><th className="text-end">{t.ins.daysLeft}</th><th className="text-end">{t.ins.suggest}</th><th className="text-end">{t.ins.cost}</th><th className="w-px"><span className="sr-only">{t.product.open}</span></th></tr></thead>
+            <thead><tr><th>{t.product.nameDe}</th><th>{t.ins.code}</th><th className="text-end">{t.ins.available}</th><th className="text-end">{t.ins.perMonth}</th><th className="text-end">{t.ins.daysLeft}</th><th className="text-end">{t.ins.suggest}</th><th className="text-end">{t.ins.cost}</th><th className="w-px"><span className="sr-only">{t.product.open}</span></th></tr></thead>
             <tbody>{g.items.map((r) => (
               <tr key={r.variantId}>
-                <td><Link href={`/stock/${r.variantId}`} className="font-semibold hover:text-brand-700">{r.name}</Link><div className="text-xs text-ink-soft" dir="ltr">{r.sku}</div></td>
+                <td><Link href={`/stock/${r.variantId}`} className="font-semibold hover:text-brand-700">{r.name}</Link></td>
+                <td className="num">{r.code ?? r.sku}</td>
                 <td className={`num text-end ${r.available <= 0 ? "font-bold text-red-600" : ""}`}>{r.available}</td>
                 <td className="num text-end">{Math.round(r.perDay * 30)}</td>
                 <td className="text-end"><span className={`badge ${urgTone[r.urgency]}`}>{r.urgency === "out" ? t.ins.urgency.out : r.daysLeft !== null && r.daysLeft < 21 ? `${r.daysLeft} ${t.ins.days}` : r.belowMin ? t.ins.belowMin : r.daysLeft === null ? t.ins.urgency[r.urgency] : `${r.daysLeft} ${t.ins.days}`}</span></td>
@@ -64,10 +65,11 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
 
       {tab === "expiry" && (counts.expiry === 0 ? <Empty text={t.ins.noneExpiry} /> : (
         <section className="card animate-rise overflow-hidden"><div className="table-wrap"><table className="tbl">
-          <thead><tr><th>{t.product.nameDe}</th><th>{t.ins.expiryDate}</th><th className="text-end">{t.ins.stock}</th><th className="text-end">{t.ins.atRisk}</th><th className="text-end">{t.ins.value}</th><th></th><th className="w-px"><span className="sr-only">{t.product.open}</span></th></tr></thead>
+          <thead><tr><th>{t.product.nameDe}</th><th>{t.ins.code}</th><th>{t.ins.expiryDate}</th><th className="text-end">{t.ins.stock}</th><th className="text-end">{t.ins.atRisk}</th><th className="text-end">{t.ins.value}</th><th></th><th className="w-px"><span className="sr-only">{t.product.open}</span></th></tr></thead>
           <tbody>{ins.expiry.map((r) => (
             <tr key={r.batchId}>
               <td><Link href={`/stock/${r.variantId}`} className="font-semibold hover:text-brand-700">{r.name}</Link></td>
+              <td className="num">{r.code}</td>
               <td className="num">{formatDate(r.expiry, intl)} <span className="text-xs text-ink-soft">({r.daysToExpiry} {t.ins.days})</span></td>
               <td className="num text-end">{r.qtyLeft}</td>
               <td className="num text-end font-bold">{r.riskQty}</td>
@@ -83,10 +85,11 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
 
       {tab === "slow" && (counts.slow === 0 ? <Empty text={t.ins.noneSlow} /> : (
         <section className="card animate-rise overflow-hidden"><div className="table-wrap"><table className="tbl">
-          <thead><tr><th>{t.product.nameDe}</th><th className="text-end">{t.ins.stock}</th><th className="text-end">{t.ins.lockedValue}</th><th className="text-end">{t.ins.sinceReceipt}</th><th className="w-px"><span className="sr-only">{t.product.open}</span></th></tr></thead>
+          <thead><tr><th>{t.product.nameDe}</th><th>{t.ins.code}</th><th className="text-end">{t.ins.stock}</th><th className="text-end">{t.ins.lockedValue}</th><th className="text-end">{t.ins.sinceReceipt}</th><th className="w-px"><span className="sr-only">{t.product.open}</span></th></tr></thead>
           <tbody>{ins.slow.map((r) => (
             <tr key={r.variantId}>
-              <td><Link href={`/stock/${r.variantId}`} className="font-semibold hover:text-brand-700">{r.name}</Link><div className="text-xs text-ink-soft" dir="ltr">{r.sku}</div></td>
+              <td><Link href={`/stock/${r.variantId}`} className="font-semibold hover:text-brand-700">{r.name}</Link></td>
+                <td className="num">{r.code ?? r.sku}</td>
               <td className="num text-end">{r.stock}</td>
               <td className="num text-end font-semibold">{formatCents(r.valueCents, intl)}</td>
               <td className="num text-end">{r.daysSinceReceipt === null ? "—" : `${r.daysSinceReceipt} ${t.ins.days}`}</td>

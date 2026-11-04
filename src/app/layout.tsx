@@ -2,7 +2,11 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { getI18n } from "@/i18n";
 
-export const metadata: Metadata = { title: "Star Style", description: "Lager, Verkauf und Rechnungen" };
+export const metadata: Metadata = {
+  title: "Star Style", description: "Lager, Verkauf und Rechnungen",
+  robots: { index: false, follow: false, nocache: true }, // internes System
+  referrer: "same-origin",
+};
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#0b1222" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,19 +1,65 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { sessionCurrent } from "@/lib/session-check";
 
-const PUBLIC = ["/login", "/setup", "/api/health", "/api/shopify/webhook"]; // Webhook prüft selbst per HMAC
+/**
+ * Türsteher für jede Anfrage:
+ * 1. Ohne gültige Sitzung (Signatur + Sitzungs-Version aus der Datenbank) nur Anmeldung, Einrichtung, Health und Shop-Webhook.
+ * 2. Jede Seite bekommt eine Content-Security-Policy mit Einmal-Nonce: nur unsere eigenen Skripte laufen,
+ *    keine fremden Seiten dürfen uns einbetten, Formulare gehen nur an uns.
+ * Läuft in Node (nicht Edge), damit die Sitzungs-Version aus der Datenbank geprüft werden kann.
+ */
+const PUBLIC = ["/login", "/setup", "/api/health", "/api/shopify/webhook", "/robots.txt"]; // Webhook prüft selbst per HMAC
+const dev = process.env.NODE_ENV !== "production";
+
+function contentSecurityPolicy(nonce: string) {
+  return [
+    "default-src 'self'",
+    // strict-dynamic: Skripte, die unsere Skripte nachladen, sind erlaubt; wasm-unsafe-eval für den Barcode-Leser (WebAssembly)
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${dev ? " 'unsafe-eval'" : ""}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://cdn.shopify.com",
+    "font-src 'self' data:",
+    `connect-src 'self'${dev ? " ws: wss:" : ""}`,
+    "media-src 'self' blob:",
+    "worker-src 'self' blob:",
+    "manifest-src 'self'",
+    "frame-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    ...(dev ? [] : ["upgrade-insecure-requests"]),
+  ].join("; ");
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/"))) return NextResponse.next();
-  const session = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
-  if (!session) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    url.search = "";
-    return NextResponse.redirect(url);
+  const isPublic = PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  if (!isPublic) {
+    const s = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
+    if (!s || !(await sessionCurrent(s.uid, s.sv))) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "";
+      const res = NextResponse.redirect(url);
+      if (req.cookies.has(SESSION_COOKIE)) res.cookies.delete(SESSION_COOKIE); // abgelaufene oder abgemeldete Sitzung entfernen
+      return res;
+    }
   }
-  return NextResponse.next();
+  if (pathname.startsWith("/api/")) return NextResponse.next(); // Dateien/PDFs setzen eigene Kopfzeilen
+
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const csp = contentSecurityPolicy(nonce);
+  const headers = new Headers(req.headers);
+  headers.set("x-nonce", nonce);
+  headers.set("Content-Security-Policy", csp); // Next.js liest den Nonce daraus und setzt ihn an seine Skripte
+  const res = NextResponse.next({ request: { headers } });
+  res.headers.set("Content-Security-Policy", csp);
+  return res;
 }
 
-export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|fonts/).*)"] };
+export const config = {
+  runtime: "nodejs",
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|fonts/).*)"],
+};

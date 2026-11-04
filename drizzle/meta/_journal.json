@@ -92,6 +92,13 @@
       "when": 1793738621983,
       "tag": "0012_variant_weight",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793780759587,
+      "tag": "0013_security",
+      "breakpoints": true
     }
   ]
 }

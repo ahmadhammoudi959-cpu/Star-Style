@@ -25,9 +25,9 @@ export default async function OrderListPage({ searchParams }: { searchParams: Pr
         <div className="print:hidden"><PrintButton label={t.pay.print} /></div>
       </div>
       <table className="tbl">
-        <thead><tr><th>Art.-Nr.</th><th>Artikel</th><th className="text-end">Menge</th><th className="text-end">EK ca.</th></tr></thead>
+        <thead><tr><th>Barcode / Art.-Nr.</th><th>Artikel</th><th className="text-end">Menge</th><th className="text-end">EK ca.</th></tr></thead>
         <tbody>{items.map((r) => (
-          <tr key={r.variantId}><td className="num">{r.sku}</td><td>{r.name}</td><td className="num text-end font-bold">{r.qty}</td><td className="num text-end">{formatCents(r.costCents, intl)}</td></tr>
+          <tr key={r.variantId}><td className="num">{r.code ?? r.sku}</td><td>{r.name}</td><td className="num text-end font-bold">{r.qty}</td><td className="num text-end">{formatCents(r.costCents, intl)}</td></tr>
         ))}</tbody>
       </table>
       <div className="mt-4 text-end text-sm">Summe ca.: <b className="num">{formatCents(items.reduce((s, r) => s + r.costCents, 0), intl)}</b></div>
