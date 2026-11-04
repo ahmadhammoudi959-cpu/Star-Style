@@ -34,8 +34,8 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
   return (
     <div>
       <PageHeader title={t.pay.receivables} />
-      <div className="stagger mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card href={q({ f: "all" })} active={f === "all"} label={t.pay.totalOpen} value={formatCents(totalOpen, intl)} sub={`${debts.length} ${t.pay.openInvoices}`} dot="bg-brand-500" />
+      <div className="stagger mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4">
+        <Card wide href={q({ f: "all" })} active={f === "all"} label={t.pay.totalOpen} value={formatCents(totalOpen, intl)} sub={`${debts.length} ${t.pay.openInvoices}`} dot="bg-brand-500" />
         <Card href={q({ f: "red" })} active={f === "red"} label={t.pay.totalOverdue} value={formatCents(totalOverdue, intl)} tone={totalOverdue ? "text-red-600" : ""} dot="bg-red-500" />
         <Card href={q({ f: "yellow" })} active={f === "yellow"} label={t.pay.dueSoon} value={formatCents(soonCents, intl)} tone={soonCents ? "text-amber-600" : ""} dot="bg-amber-400" />
       </div>
@@ -75,7 +75,7 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
         </table></div>
           <div className="space-y-2 p-3 md:hidden">
             {groups.map((g) => (
-              <div key={g.id} className="space-y-2 rounded-xl bg-brand-50/40 p-3 ring-1 ring-black/5">
+              <div key={g.id} className="space-y-1.5 rounded-xl bg-brand-50/40 p-2.5 ring-1 ring-black/5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 font-bold"><span className={`h-3 w-3 shrink-0 rounded-full ${LIGHT[g.light]}`} />{g.name}</span>
                   <span className={`num font-bold ${g.open < 0 ? "text-violet-700" : ""}`}>{formatCents(g.open, intl)}</span>
@@ -84,9 +84,9 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
                   <span>{t.pay.openInvoices}: <b className="num text-ink">{g.count}</b></span>
                   {g.overdue > 0 && <span className="font-semibold text-red-600">{t.pay.overdue}: <span className="num">{formatCents(g.overdue, intl)}</span></span>}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Link href={`/customers/${g.id}/statement`} className="btn-ghost group py-2.5 text-sm"><Icon name="receipt" className="h-4 w-4" />{t.pay.statement}</Link>
-                  <OpenButton href={`/customers/${g.id}`} label={t.product.open} className="py-2.5 text-sm" />
+                <div className="flex justify-end gap-2">
+                  <Link href={`/customers/${g.id}/statement`} className="btn-ghost group px-2.5 py-1.5 text-xs"><Icon name="receipt" className="h-4 w-4" />{t.pay.statement}</Link>
+                  <OpenButton href={`/customers/${g.id}`} label={t.product.open} className="px-2.5 py-1.5 text-xs" />
                 </div>
               </div>
             ))}
@@ -111,19 +111,23 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
         </table></div>
           <div className="space-y-2 p-3 md:hidden">
             {rows.map((r) => (
-              <div key={r.invoiceId} className={`space-y-2 rounded-xl p-3 ring-1 ring-black/5 ${r.light === "red" ? "bg-red-50/60" : "bg-brand-50/40"}`}>
+              <div key={r.invoiceId} className={`space-y-1.5 rounded-xl p-2.5 ring-1 ring-black/5 ${r.light === "red" ? "bg-red-50/60" : "bg-brand-50/40"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 font-bold"><span className={`h-3 w-3 shrink-0 rounded-full ${LIGHT[r.light]}`} /><bdi dir="ltr">{r.number}</bdi></span>
                   <span className={`num font-bold ${r.state.openCents < 0 ? "text-violet-700" : ""}`}>{formatCents(r.state.openCents, intl)}</span>
                 </div>
-                <div className="text-sm">{r.customerName}</div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
-                  <span>{t.pay.nextDue}: <span className="num text-ink">{r.state.nextDueDate ? formatDate(r.state.nextDueDate, intl) : "—"}</span></span>
-                  <span>{t.pay.paid}: <span className="num text-ink">{formatCents(r.state.paidCents, intl)}</span></span>
-                  {r.state.daysOverdue > 0 && <span className="font-semibold text-red-600">{t.pay.daysOverdue}: {r.state.daysOverdue}</span>}
-                  {r.dunningLevel > 0 && <span className="badge bg-amber-100 text-amber-800">{t.pay.dunningLevels[Math.min(r.dunningLevel, 3) as 1 | 2 | 3]}</span>}
+                <div className="flex items-end justify-between gap-2">
+                  <div className="min-w-0 space-y-1">
+                    <div className="text-sm">{r.customerName}</div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-soft">
+                      <span>{t.pay.nextDue}: <span className="num text-ink">{r.state.nextDueDate ? formatDate(r.state.nextDueDate, intl) : "—"}</span></span>
+                      <span>{t.pay.paid}: <span className="num text-ink">{formatCents(r.state.paidCents, intl)}</span></span>
+                      {r.state.daysOverdue > 0 && <span className="font-semibold text-red-600">{t.pay.daysOverdue}: {r.state.daysOverdue}</span>}
+                      {r.dunningLevel > 0 && <span className="badge bg-amber-100 text-amber-800">{t.pay.dunningLevels[Math.min(r.dunningLevel, 3) as 1 | 2 | 3]}</span>}
+                    </div>
+                  </div>
+                  <OpenButton href={`/sales/invoices/${r.invoiceId}`} label={t.lists.openInvoice} className="shrink-0 px-2.5 py-1.5 text-xs" />
                 </div>
-                <OpenButton href={`/sales/invoices/${r.invoiceId}`} label={t.lists.openInvoice} className="w-full py-2.5 text-sm" />
               </div>
             ))}
           </div>
@@ -133,11 +137,12 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
   );
 }
 
-function Card({ href, active, label, value, sub, tone = "", dot }: { href: string; active: boolean; label: string; value: string; sub?: string; tone?: string; dot: string }) {
+/** wide = auf dem Handy über beide Spalten (die Summe), die anderen zwei darunter nebeneinander */
+function Card({ href, active, label, value, sub, tone = "", dot, wide = false }: { href: string; active: boolean; label: string; value: string; sub?: string; tone?: string; dot: string; wide?: boolean }) {
   return (
-    <Link href={href} className={`card card-hover group p-5 ${active ? "ring-2 ring-brand-500" : ""}`}>
-      <div className="flex items-center gap-2 text-sm text-ink-soft"><span className={`h-2.5 w-2.5 rounded-full ${dot}`} />{label}</div>
-      <div className={`num mt-1 text-2xl font-bold ${tone}`}>{value}</div>
+    <Link href={href} className={`card card-hover group p-3.5 sm:col-span-1 sm:p-5 ${wide ? "col-span-2" : ""} ${active ? "ring-2 ring-brand-500" : ""}`}>
+      <div className="flex items-center gap-2 text-xs text-ink-soft sm:text-sm"><span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} />{label}</div>
+      <div className={`num mt-1 text-lg font-bold sm:text-2xl ${tone}`}>{value}</div>
       {sub && <div className="text-xs text-ink-soft">{sub}</div>}
     </Link>
   );

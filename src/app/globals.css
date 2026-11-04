@@ -11,8 +11,10 @@
 
 :root { --font-sans: "Plex"; color-scheme: light; }
 html, body { background: #f4f6fa; color: #1d2433; }
-/* Ab Tablet/PC alles auf 90 % (Wunsch Inhaber): Tailwind rechnet in rem, daher skaliert die ganze Oberfläche mit. Handy bleibt 100 % (Fingerbedienung). */
+/* Ab Tablet/PC alles auf 90 % (Wunsch Inhaber): Tailwind rechnet in rem, daher skaliert die ganze Oberfläche mit.
+   Handy 87,5 % (Wunsch Inhaber 04.11.2026: kleinere Schrift auf dem Handy). */
 @media (min-width: 768px) { html { font-size: 90%; } }
+@media (max-width: 767.98px) { html { font-size: 87.5%; } }
 body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 
 @layer components {
@@ -86,3 +88,12 @@ body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smooth
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Handy: Eingabefelder bleiben 16 px – sonst zoomt das iPhone beim Antippen in die Seite */
+@media (max-width: 767.98px) {
+  .input, select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]) { font-size: 16px; }
+}
+
+/* Waagerechte Leiste zum Wischen (Handy): ohne sichtbaren Balken, rastet je Kachel ein */
+.swipe-row { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.swipe-row::-webkit-scrollbar { display: none; }

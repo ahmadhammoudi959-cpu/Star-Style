@@ -84,9 +84,9 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         </div>
       </div>
       {/* Auswählen statt tippen: Kunde, Status, oder Beleg direkt aus der Liste */}
-      <form className="card relative z-10 mb-4 flex flex-col gap-3 p-4 animate-rise md:flex-row md:flex-wrap md:items-end">
+      <form className="card relative z-10 mb-4 grid grid-cols-2 gap-2 p-3 animate-rise md:flex md:flex-row md:flex-wrap md:items-end md:gap-3 md:p-4">
         <input type="hidden" name="tab" value={tab} />
-        <div className="md:w-72">
+        <div className="col-span-2 md:w-72">
           <SearchPick name="q" defaultValue={q} label={t.lists.pickDoc} placeholder={t.lists.searchDoc} emptyLabel={t.sales.empty}
             items={rows.map((r) => ({ label: `${String(r.number)} · ${String(r.customer)}`, sub: `${formatDate(String(r.d), intl)} · ${formatCents(Number(r.amount), intl)}`,
               href: `/sales/${tab}/${r.id}`, search: `${String(r.number)} ${String(r.customer)}`.toLowerCase() }))} />
@@ -97,24 +97,24 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         {filtered && <Link href={`/sales?tab=${tab}`} className="btn-ghost group"><Icon name="x" className="h-4 w-4" />{t.stock.clear}</Link>}
       </form>
       {totals && (
-        <div className="mb-4 grid gap-3 animate-rise sm:grid-cols-2">
-          <div className="card group flex items-center gap-4 p-4">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Icon name="receipt" className="icon-pop h-5 w-5" /></span>
+        <div className="mb-4 grid grid-cols-2 gap-2 animate-rise sm:gap-3">
+          <div className="card group flex items-center gap-4 p-3 sm:p-4">
+            <span className="hidden h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700 sm:grid"><Icon name="receipt" className="icon-pop h-5 w-5" /></span>
             <div className="min-w-0">
-              <div className="text-sm text-ink-soft">{t.sales.totalSales}</div>
-              <div className="num text-2xl font-bold">{formatCents(Number(totals.sales), intl)}</div>
+              <div className="text-xs text-ink-soft sm:text-sm">{t.sales.totalSales}</div>
+              <div className="num text-lg font-bold sm:text-2xl">{formatCents(Number(totals.sales), intl)}</div>
               <div className="text-xs text-ink-soft">{fill(t.sales.totalSalesSub, { n: totals.sales_n })}</div>
             </div>
           </div>
-          <div className="card group flex items-center gap-4 p-4">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-red-50 text-red-600"><Icon name="x" className="icon-pop h-5 w-5" /></span>
+          <div className="card group flex items-center gap-4 p-3 sm:p-4">
+            <span className="hidden h-11 w-11 shrink-0 place-items-center rounded-xl bg-red-50 text-red-600 sm:grid"><Icon name="x" className="icon-pop h-5 w-5" /></span>
             <div className="min-w-0">
-              <div className="text-sm text-ink-soft">{t.sales.totalCancelled}</div>
-              <div className={`num text-2xl font-bold ${Number(totals.cancelled) > 0 ? "text-red-600" : ""}`}>{formatCents(Number(totals.cancelled), intl)}</div>
+              <div className="text-xs text-ink-soft sm:text-sm">{t.sales.totalCancelled}</div>
+              <div className={`num text-lg font-bold sm:text-2xl ${Number(totals.cancelled) > 0 ? "text-red-600" : ""}`}>{formatCents(Number(totals.cancelled), intl)}</div>
               <div className="text-xs text-ink-soft">{fill(t.sales.totalCancelledSub, { n: totals.cancelled_n })}</div>
             </div>
           </div>
-          <p className="text-xs text-ink-soft sm:col-span-2">{q.trim() || customer ? t.sales.totalsFiltered : t.sales.totalsNote}</p>
+          <p className="col-span-2 text-xs text-ink-soft">{q.trim() || customer ? t.sales.totalsFiltered : t.sales.totalsNote}</p>
         </div>
       )}
       <div className="card overflow-hidden animate-rise">
@@ -140,9 +140,9 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
             ))}</tbody>
           </table></div>
           {/* Handy: eine Karte pro Beleg, kein seitliches Scrollen */}
-          <div className="space-y-2 p-3 md:hidden">
+          <div className="space-y-2 p-2 md:hidden">
             {shown.map((r) => (
-              <div key={String(r.id)} className="space-y-2 rounded-xl bg-brand-50/40 p-3 ring-1 ring-black/5">
+              <div key={String(r.id)} className="space-y-1.5 rounded-xl bg-brand-50/40 p-2.5 ring-1 ring-black/5">
                 <div className="flex items-center justify-between gap-2">
                   <bdi dir="ltr" className="font-bold">{String(r.number)}</bdi>
                   <span className={`num font-bold ${Number(r.amount) < 0 ? "text-red-600" : ""}`}>{formatCents(Number(r.amount), intl)}</span>
@@ -151,10 +151,12 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                   <span className="[overflow-wrap:anywhere]">{String(r.customer)}</span>
                   <span className="num text-xs text-ink-soft">{formatDate(String(r.d), intl)}</span>
                 </div>
-                <div className="flex flex-wrap items-center gap-1">
-                  <StatusBadge t={t} status={String(r.status)} />{r.kind === "CANCELLATION" && <span className="badge bg-red-50 text-red-700">Storno</span>}{payBadge(r)}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex flex-wrap items-center gap-1">
+                    <StatusBadge t={t} status={String(r.status)} />{r.kind === "CANCELLATION" && <span className="badge bg-red-50 text-red-700">Storno</span>}{payBadge(r)}
+                  </span>
+                  <OpenButton href={`/sales/${tab}/${r.id}`} label={t.product.open} className="shrink-0 px-2.5 py-1.5 text-xs" />
                 </div>
-                <OpenButton href={`/sales/${tab}/${r.id}`} label={t.product.open} className="w-full py-2.5 text-sm" />
               </div>
             ))}
           </div>

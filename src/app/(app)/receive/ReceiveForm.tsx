@@ -53,8 +53,8 @@ export function ReceiveForm({ t, options, suppliers, today, intl }: {
           {state.id && <Link href={`/receive/${state.id}`} className="ms-auto inline-flex items-center gap-1 underline"><Icon name="eye" className="h-4 w-4" />{t.product.open}</Link>}
         </div>
       )}
-      <section className="card grid gap-4 p-5 md:grid-cols-4">
-        <Field label={t.receive.supplier} className="md:col-span-2">
+      <section className="card grid grid-cols-2 gap-3 p-4 sm:p-5 md:grid-cols-4 md:gap-4">
+        <Field label={t.receive.supplier} className="col-span-2">
           <select name="supplierId" className="input" defaultValue="">
             <option value="">{t.common.none}</option>
             {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

@@ -29,8 +29,8 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
     <div>
       <PageHeader title={t.customer.title} actions={<Link href="/customers/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.customer.new}</Link>} />
       {/* Auswählen statt tippen: Stadt, Steuer, oder Kunde direkt aus der Liste */}
-      <form className="card relative z-10 mb-4 flex flex-col gap-3 p-4 animate-rise md:flex-row md:flex-wrap md:items-end">
-        <div className="md:w-80">
+      <form className="card relative z-10 mb-4 grid grid-cols-2 gap-2 p-3 animate-rise md:flex md:flex-row md:flex-wrap md:items-end md:gap-3 md:p-4">
+        <div className="col-span-2 md:w-80">
           <SearchPick name="q" defaultValue={q} label={t.lists.pickCustomer} placeholder={t.lists.searchCustomer} emptyLabel={t.customer.empty}
             items={all.map((r) => ({ label: r.name, sub: [`${t.customer.number} ${r.number}`, [r.city, r.country].filter(Boolean).join(", "), r.vatId].filter(Boolean).join(" · "),
               href: `/customers/${r.id}`, search: [r.name, r.city, r.vatId, r.email, String(r.number)].join(" ").toLowerCase() }))} />
@@ -59,16 +59,18 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                 </tr>
               ))}</tbody>
             </table></div>
-            <div className="space-y-2 p-3 md:hidden">
+            <div className="space-y-2 p-2 md:hidden">
               {rows.map((r) => (
-                <div key={r.id} className="space-y-2 rounded-xl bg-brand-50/40 p-3 ring-1 ring-black/5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold [overflow-wrap:anywhere]">{r.name}</span>
-                    <span className="text-xs text-ink-soft">{t.customer.number} {r.number}</span>
+                <div key={r.id} className="flex items-center justify-between gap-2 rounded-xl bg-brand-50/40 p-2.5 ring-1 ring-black/5">
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-bold [overflow-wrap:anywhere]">{r.name}</span>
+                      <span className="text-xs text-ink-soft">{t.customer.number} {r.number}</span>
+                    </div>
+                    <div className="text-xs text-ink-soft">{[r.city, r.country].filter(Boolean).join(", ")}{r.vatId && <> · <bdi dir="ltr">{r.vatId}</bdi></>}</div>
+                    <span className="badge bg-brand-50 text-brand-700">{t.taxMode[r.mode]}</span>
                   </div>
-                  <div className="text-sm text-ink-soft">{[r.city, r.country].filter(Boolean).join(", ")}{r.vatId && <> · <bdi dir="ltr">{r.vatId}</bdi></>}</div>
-                  <span className="badge bg-brand-50 text-brand-700">{t.taxMode[r.mode]}</span>
-                  <OpenButton href={`/customers/${r.id}`} label={t.product.open} className="w-full py-2.5 text-sm" />
+                  <OpenButton href={`/customers/${r.id}`} label={t.product.open} className="shrink-0 px-2.5 py-1.5 text-xs" />
                 </div>
               ))}
             </div>

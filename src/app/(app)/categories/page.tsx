@@ -70,17 +70,19 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
 
 function CategoryCard({ t, c, channels }: { t: Dict; c: CategoryInfo; channels: ShopChannel[] }) {
   return (
-    <div className="space-y-2 rounded-xl bg-brand-50/40 p-3 ring-1 ring-black/5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-bold [overflow-wrap:anywhere]"><bdi>{c.name}</bdi></span>
-        <span className="shrink-0 text-xs text-ink-soft">{fill(t.cat.count, { n: c.n })}</span>
-      </div>
-      {channels.length > 0 && (
-        <div className="flex flex-wrap gap-2 text-xs">
-          {channels.map((ch) => <span key={ch} className="flex items-center gap-1"><span className="text-ink-soft">{t.shop.names[ch]}:</span><StoreChip t={t} st={c.stores[ch]} /></span>)}
+    <div className="flex items-center justify-between gap-2 rounded-xl bg-brand-50/40 p-2.5 ring-1 ring-black/5">
+      <div className="min-w-0 space-y-1">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="font-bold [overflow-wrap:anywhere]"><bdi>{c.name}</bdi></span>
+          <span className="text-xs text-ink-soft">{fill(t.cat.count, { n: c.n })}</span>
         </div>
-      )}
-      <OpenButton href={`/categories/${c.id}`} label={t.product.open} className="w-full py-2.5 text-sm" />
+        {channels.length > 0 && (
+          <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs">
+            {channels.map((ch) => <span key={ch} className="flex items-center gap-1"><span className="text-ink-soft">{t.shop.names[ch]}:</span><StoreChip t={t} st={c.stores[ch]} /></span>)}
+          </div>
+        )}
+      </div>
+      <OpenButton href={`/categories/${c.id}`} label={t.product.open} className="shrink-0 px-2.5 py-1.5 text-xs" />
     </div>
   );
 }

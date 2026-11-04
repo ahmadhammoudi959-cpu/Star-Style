@@ -30,15 +30,15 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
       <PageHeader title={t.stock.title} subtitle={`${t.stock.value}: ${formatCents(total, intl)}`} />
 
       {/* Filter: Kategorie (filtert sofort), Suche, nur wenig Bestand (filtert sofort) */}
-      <form className="card relative z-10 mb-4 flex flex-col gap-3 p-4 animate-rise md:flex-row md:flex-wrap md:items-end">
+      <form className="card relative z-10 mb-4 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2 p-3 animate-rise md:flex md:flex-row md:flex-wrap md:items-end md:gap-3 md:p-4">
         {cats.length > 0 && <CategorySelect categories={cats} label={t.picker.category} allLabel={t.picker.all} name="cat" defaultValue={cat} autoSubmit className="md:w-64" />}
-        <div className="min-w-0 md:max-w-md md:flex-1">
+        <div className={`min-w-0 md:max-w-md md:flex-1 ${cats.length ? "" : "col-span-2"}`}>
           <SearchPick name="q" defaultValue={q} label={t.picker.searchLabel} placeholder={t.product.searchHint} emptyLabel={t.picker.empty}
             items={rows.map((r) => ({ label: [r.nameDe, [r.size, r.color].filter(Boolean).join(" · ")].filter(Boolean).join(" – "),
               sub: [r.barcode ?? r.sku, r.category, `${t.product.stock}: ${r.stockQty}`].filter(Boolean).join(" · "), href: `/stock/${r.id}`, imageId: r.imageId,
               search: [r.nameDe, r.nameNl, r.sku, r.barcode ?? "", r.size, r.color, r.category].join(" ").toLowerCase() }))} />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="col-span-2 flex flex-wrap items-center gap-2">
           <AutoSubmitCheckbox name="low" defaultChecked={lowOnly} label={t.stock.filterLow} />
           <button className="btn-primary group"><Icon name="search" className="h-4 w-4" />{t.common.search.replace("…", "").trim()}</button>
           {filtered && <Link href="/stock" className="btn-ghost group"><Icon name="x" className="h-4 w-4" />{t.stock.clear}</Link>}
@@ -85,22 +85,24 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
             </div>
           </div>
 
-          {/* Handy/Tablet/kleiner Laptop: eine Karte je Größe/Farbe, alle Angaben sichtbar */}
-          <div className="space-y-2 xl:hidden">
+          {/* Handy/Tablet/kleiner Laptop: kompakte Karte je Größe/Farbe (Zahlen nebeneinander), alle Angaben sichtbar */}
+          <div className="grid gap-2 md:grid-cols-2 xl:hidden">
             {rows.map((r) => (
-              <div key={r.id} className="card space-y-3 p-3 animate-rise">
-                <NameCell r={r} big />
-                <dl className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-xl bg-brand-50/40 p-2.5 text-xs ring-1 ring-black/5 sm:grid-cols-4">
-                  <Item label={t.product.sku}><Code value={r.sku} /></Item>
-                  <Item label={t.product.barcode}>{r.barcode ? <Code value={r.barcode} strong /> : "—"}</Item>
+              <div key={r.id} className="card p-3 animate-rise">
+                <div className="flex items-start justify-between gap-2">
+                  <NameCell r={r} />
+                  <OpenButton href={`/stock/${r.id}`} label={t.product.open} className="shrink-0 px-2.5 py-1.5 text-xs" />
+                </div>
+                <dl className="mt-2 grid grid-cols-4 gap-x-2 gap-y-1.5 rounded-xl bg-brand-50/40 px-2.5 py-2 text-xs ring-1 ring-black/5">
                   <Item label={t.product.stock}><span className="num text-sm font-bold"><Qty r={r} /></span></Item>
                   <Item label={t.product.available}><span className="num text-sm font-bold">{r.stockQty - r.reserved}</span></Item>
                   <Item label={t.product.reserved}><span className="num">{r.reserved || "—"}</span></Item>
                   <Item label={t.product.minStock}><span className="num">{r.minStock || "—"}</span></Item>
-                  <Item label={t.receive.expiry}>{expiry(r) ?? "—"}</Item>
-                  <Item label={t.stock.value}><span className="num">{formatCents(r.valueCents, intl)}</span></Item>
+                  <Item label={t.product.sku} wide><Code value={r.sku} /></Item>
+                  <Item label={t.product.barcode} wide>{r.barcode ? <Code value={r.barcode} strong /> : "—"}</Item>
+                  <Item label={t.receive.expiry} wide>{expiry(r) ?? "—"}</Item>
+                  <Item label={t.stock.value} wide><span className="num">{formatCents(r.valueCents, intl)}</span></Item>
                 </dl>
-                <OpenButton href={`/stock/${r.id}`} label={t.product.open} className="w-full py-2.5 text-sm" />
               </div>
             ))}
           </div>
@@ -135,8 +137,8 @@ function Code({ value, strong = false }: { value: string; strong?: boolean }) {
   return <bdi dir="ltr" className={`block text-xs tabular-nums [overflow-wrap:anywhere] ${strong ? "text-ink" : "text-ink-soft"}`}>{value}</bdi>;
 }
 
-function Item({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="min-w-0"><dt className="text-[0.6875rem] text-ink-soft">{label}</dt><dd className="mt-0.5">{children}</dd></div>;
+function Item({ label, children, wide = false }: { label: string; children: React.ReactNode; wide?: boolean }) {
+  return <div className={`min-w-0 ${wide ? "col-span-2" : ""}`}><dt className="text-[0.6875rem] leading-tight text-ink-soft">{label}</dt><dd className="mt-0.5">{children}</dd></div>;
 }
 
 

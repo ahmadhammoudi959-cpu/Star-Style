@@ -76,19 +76,21 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
             </div>
             <div className="mt-3 space-y-2 p-3 md:hidden">
               {rows.map((r) => (
-                <div key={r.id} className="space-y-2 rounded-xl bg-brand-50/40 p-3 ring-1 ring-black/5">
+                <div key={r.id} className="space-y-1.5 rounded-xl bg-brand-50/40 p-2.5 ring-1 ring-black/5">
                   <div className="flex items-center justify-between gap-2">
                     <bdi dir="ltr" className="font-bold">{r.number}</bdi>
-                    <span className="num text-sm text-ink-soft">{formatDate(r.date, intl)}</span>
+                    <span className="num text-xs text-ink-soft">{formatDate(r.date, intl)}</span>
                   </div>
                   <div className="text-sm">{r.supplier ?? t.common.none}{r.invoiceNo && <> · <bdi dir="ltr">{r.invoiceNo}</bdi></>}</div>
                   {r.initial && <span className="badge bg-sky-50 text-sky-800">{t.product.initialNote}</span>}
-                  <div className="flex flex-wrap gap-x-4 text-xs">
-                    <span>{t.receive.items}: <b className="num">{r.lines}</b></span>
-                    <span>{t.common.qty}: <b className="num">{r.qty}</b></span>
-                    <span>{t.receive.value}: <b className="num">{formatCents(r.value, intl)}</b></span>
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="flex flex-wrap gap-x-3 text-xs">
+                      <span>{t.receive.items}: <b className="num">{r.lines}</b></span>
+                      <span>{t.common.qty}: <b className="num">{r.qty}</b></span>
+                      <span>{t.receive.value}: <b className="num">{formatCents(r.value, intl)}</b></span>
+                    </div>
+                    <OpenButton href={`/receive/${r.id}`} label={t.product.open} className="shrink-0 px-2.5 py-1.5 text-xs" />
                   </div>
-                  <OpenButton href={`/receive/${r.id}`} label={t.product.open} className="w-full py-2.5 text-sm" />
                 </div>
               ))}
             </div>

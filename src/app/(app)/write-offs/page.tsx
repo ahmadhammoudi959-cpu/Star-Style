@@ -41,17 +41,19 @@ export default async function WriteOffsPage() {
           </table></div>
           <div className="mt-3 space-y-2 p-3 md:hidden">
             {history.rows.map((r) => (
-              <div key={String(r.id)} className="space-y-2 rounded-xl bg-amber-50/50 p-3 ring-1 ring-black/5">
+              <div key={String(r.id)} className="space-y-1.5 rounded-xl bg-amber-50/50 p-2.5 ring-1 ring-black/5">
                 <div className="flex items-center justify-between gap-2">
                   <bdi dir="ltr" className="font-bold">{String(r.number)}</bdi>
                   <span className="num text-xs text-ink-soft">{formatDate(String(r.date), intl)}</span>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                  <span className="badge bg-amber-100 text-amber-800">{t.writeOff.reasons[r.reason as keyof typeof t.writeOff.reasons]}</span>
-                  <span>{t.common.qty}: <b className="num">{Number(r.qty)}</b></span>
-                  <span>{t.writeOff.value}: <b className="num">{formatCents(Number(r.value), intl)}</b></span>
+                <div className="flex items-end justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                    <span className="badge bg-amber-100 text-amber-800">{t.writeOff.reasons[r.reason as keyof typeof t.writeOff.reasons]}</span>
+                    <span>{t.common.qty}: <b className="num">{Number(r.qty)}</b></span>
+                    <span>{t.writeOff.value}: <b className="num">{formatCents(Number(r.value), intl)}</b></span>
+                  </div>
+                  <OpenButton href={`/write-offs/${r.id}`} label={t.product.open} className="shrink-0 px-2.5 py-1.5 text-xs" />
                 </div>
-                <OpenButton href={`/write-offs/${r.id}`} label={t.product.open} className="w-full py-2.5 text-sm" />
               </div>
             ))}
           </div>

@@ -42,7 +42,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         <MonthNav month={month} base="/expenses" months={t.rep.months} locked={locked} />
       </div>
       {/* Auswählen statt tippen: Kategorie, oder Ausgabe direkt aus der Liste */}
-      <form className="card relative z-10 mb-5 flex flex-col gap-3 p-4 animate-rise md:flex-row md:flex-wrap md:items-end">
+      <form className="card relative z-10 mb-5 grid grid-cols-2 gap-2 p-3 animate-rise md:flex md:flex-row md:flex-wrap md:items-end md:gap-3 md:p-4">
         <input type="hidden" name="month" value={month} />
         <div className="md:w-80">
           <SearchPick name="q" defaultValue={q} label={t.lists.pickExpense} placeholder={t.exp.search} emptyLabel={t.exp.empty}
@@ -54,7 +54,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         {(q || cat) && <Link href={`/expenses?month=${month}`} className="btn-ghost group"><Icon name="x" className="h-4 w-4" />{t.stock.clear}</Link>}
       </form>
 
-      <div className="stagger mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="stagger mb-5 grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
         <Kpi label={t.exp.total} value={formatCents(sum("netCents"), intl)} sub={`${rows.length} ${t.exp.count} · ${t.exp.net}`} />
         <Kpi label={t.exp.vat} value={formatCents(sum("vatCents"), intl)} />
         <Kpi label={t.exp.open} value={formatCents(unpaid.reduce((s, r) => s + r.grossCents, 0), intl)} tone={unpaid.length ? "text-amber-600" : ""} />
@@ -91,19 +91,21 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
           </table></div>
           <div className="space-y-2 p-3 md:hidden">
             {rows.map((r) => (
-              <div key={r.id} className={`space-y-2 rounded-xl p-3 ring-1 ring-black/5 ${sp.saved === r.id ? "bg-brand-50" : "bg-brand-50/40"}`}>
+              <div key={r.id} className={`space-y-1.5 rounded-xl p-2.5 ring-1 ring-black/5 ${sp.saved === r.id ? "bg-brand-50" : "bg-brand-50/40"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-bold [overflow-wrap:anywhere]">{r.vendorName}</span>
                   <span className="num font-bold">{formatCents(r.grossCents, intl)}</span>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-soft">
-                  <span className="num">{formatDate(r.date, intl)}</span>
-                  {r.invoiceNo && <bdi dir="ltr">{r.invoiceNo}</bdi>}
-                  <span className="badge bg-brand-50 text-brand-700">{t.exp.categories[r.category]}</span>
-                  {!r.paid && <span className="badge bg-amber-100 text-amber-800">{t.exp.open}</span>}
-                  {!r.fileId && <span className="badge bg-red-50 text-red-700">{t.exp.receiptMissing}</span>}
+                <div className="flex items-end justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-soft">
+                    <span className="num">{formatDate(r.date, intl)}</span>
+                    {r.invoiceNo && <bdi dir="ltr">{r.invoiceNo}</bdi>}
+                    <span className="badge bg-brand-50 text-brand-700">{t.exp.categories[r.category]}</span>
+                    {!r.paid && <span className="badge bg-amber-100 text-amber-800">{t.exp.open}</span>}
+                    {!r.fileId && <span className="badge bg-red-50 text-red-700">{t.exp.receiptMissing}</span>}
+                  </div>
+                  <OpenButton href={`/expenses/${r.id}`} label={t.product.open} className="shrink-0 px-2.5 py-1.5 text-xs" />
                 </div>
-                <OpenButton href={`/expenses/${r.id}`} label={t.product.open} className="w-full py-2.5 text-sm" />
               </div>
             ))}
           </div>

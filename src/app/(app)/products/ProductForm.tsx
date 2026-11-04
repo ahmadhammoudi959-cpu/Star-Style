@@ -130,7 +130,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
       <input type="hidden" name="variants" value={JSON.stringify(variants.map(({ key, stockQty: _s, imageFileId: _i, ...v }) => ({ ...v, ref: key })))} />
       <ErrorBox message={errorText ?? (waitUpload ? t.product.gallery.waitUpload : undefined)} />
 
-      <section className="card flex flex-col gap-4 p-5 animate-rise sm:flex-row sm:items-center">
+      <section className="card flex flex-col gap-3 p-4 animate-rise sm:flex-row sm:items-center sm:gap-4 sm:p-5">
         <PhotoPicker name="image" initialId={initial.imageFileId} labels={photoLabels} size={132} />
         <div>
           <h2 className="text-lg font-bold">{t.product.photo}</h2>
@@ -138,7 +138,8 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
         </div>
       </section>
 
-      <section className="card grid gap-4 p-5 md:grid-cols-2 animate-rise">
+      {/* Handy: kurze Felder paarweise nebeneinander (Wunsch Inhaber 04.11.2026), lange über die ganze Breite */}
+      <section className="card grid grid-cols-2 gap-3 p-4 animate-rise sm:p-5 md:gap-4">
         <Field label={t.product.sku} hint={t.product.skuHint}>
           <input name="sku" value={sku} required={!firstBarcode} className="input num" dir="ltr"
             onChange={(e) => { const v = e.target.value; setSku(v); setSkuFollows(!v.trim() || v.trim() === firstBarcode); }} />
@@ -147,10 +148,10 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
           <input name="category" defaultValue={v.category} list="cats" className="input" />
           <datalist id="cats">{categories.map((c) => <option key={c} value={c} />)}</datalist>
         </Field>
-        <Field label={t.product.nameDe}><input name="nameDe" defaultValue={v.nameDe} required className="input" dir="ltr" lang="de" /></Field>
-        <Field label={t.product.nameNl}><input name="nameNl" defaultValue={v.nameNl} className="input" dir="ltr" lang="nl" /></Field>
-        <Field label={t.product.descDe}><textarea name="descriptionDe" defaultValue={v.descriptionDe} rows={3} className="input" dir="ltr" lang="de" /></Field>
-        <Field label={t.product.descNl}><textarea name="descriptionNl" defaultValue={v.descriptionNl} rows={3} className="input" dir="ltr" lang="nl" /></Field>
+        <Field label={t.product.nameDe} className="col-span-2 md:col-span-1"><input name="nameDe" defaultValue={v.nameDe} required className="input" dir="ltr" lang="de" /></Field>
+        <Field label={t.product.nameNl} className="col-span-2 md:col-span-1"><input name="nameNl" defaultValue={v.nameNl} className="input" dir="ltr" lang="nl" /></Field>
+        <Field label={t.product.descDe} className="col-span-2 md:col-span-1"><textarea name="descriptionDe" defaultValue={v.descriptionDe} rows={3} className="input" dir="ltr" lang="de" /></Field>
+        <Field label={t.product.descNl} className="col-span-2 md:col-span-1"><textarea name="descriptionNl" defaultValue={v.descriptionNl} rows={3} className="input" dir="ltr" lang="nl" /></Field>
         <Field label={t.product.supplier}>
           <select name="supplierId" defaultValue={v.supplierId} className="input">
             <option value="">{t.common.none}</option>
@@ -165,7 +166,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
         </Field>
       </section>
 
-      <section className="card grid gap-4 p-5 md:grid-cols-3 animate-rise">
+      <section className="card grid grid-cols-2 gap-3 p-4 animate-rise sm:p-5 md:grid-cols-3 md:gap-4">
         <Field label={t.product.purchase}>
           <MoneyInput name="purchasePrice" value={prices.p} onChange={(p) => setPrices((x) => ({ ...x, p }))} />
         </Field>
@@ -175,7 +176,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
         <Field label={t.product.retail} hint={margin.r != null ? `${t.product.margin}: ${margin.r} %` : undefined}>
           <MoneyInput name="retailPrice" value={prices.r} onChange={(r) => setPrices((x) => ({ ...x, r }))} />
         </Field>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 md:col-span-3">
+        <div className="col-span-2 flex flex-wrap items-center gap-x-6 gap-y-3 md:col-span-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
             <input type="checkbox" name="tracksExpiry" checked={tracksExpiry} onChange={(e) => setTracksExpiry(e.target.checked)} className="h-5 w-5 rounded accent-brand-600" />
             {t.product.tracksExpiry}

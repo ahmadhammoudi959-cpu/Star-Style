@@ -52,9 +52,10 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           <Icon name="arrowRight" className="h-4 w-4 shrink-0 text-brand-700 rtl:rotate-180" />
         </Link>
       ))}
-      <form className="relative z-10 mb-4 flex flex-col gap-3 animate-rise md:flex-row md:items-end">
+      {/* Handy: Kategorie und Suche nebeneinander */}
+      <form className="relative z-10 mb-4 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2 animate-rise md:flex md:flex-row md:items-end md:gap-3">
         {cats.length > 0 && <CategorySelect categories={cats} label={t.picker.category} allLabel={t.picker.all} name="cat" defaultValue={cat} autoSubmit className="md:w-64" />}
-        <div className="min-w-0 md:max-w-md md:flex-1">
+        <div className={`min-w-0 md:max-w-md md:flex-1 ${cats.length ? "" : "col-span-2"}`}>
           <SearchPick name="q" defaultValue={q} label={t.picker.searchLabel} placeholder={t.product.searchHint} emptyLabel={t.picker.empty}
             items={rows.map((r) => ({ label: r.nameDe, sub: [r.sku, r.category].filter(Boolean).join(" · "), href: `/products/${r.id}`, imageId: r.imageFileId,
               search: [r.nameDe, r.nameNl, r.sku, r.category, ...r.barcodes].join(" ").toLowerCase() }))} />
@@ -107,26 +108,28 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             </div>
           </div>
 
-          {/* Handy/Tablet: eine Karte pro Artikel, alle Angaben sichtbar */}
-          <div className="space-y-2 lg:hidden">
+          {/* Handy/Tablet: kompakte Karte pro Artikel (Wunsch Inhaber 04.11.2026: nebeneinander statt untereinander), alle Angaben sichtbar */}
+          <div className="grid gap-2 sm:grid-cols-2 lg:hidden">
             {rows.map((r) => (
-              <div key={r.id} className={`card space-y-3 p-3 animate-rise ${r.active ? "" : "opacity-50"}`}>
-                <div className="flex gap-3">
-                  <Link href={`/products/${r.id}`} className="shrink-0"><Thumb id={r.imageFileId} size={56} /></Link>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <Link href={`/products/${r.id}`} className="block font-semibold leading-snug [overflow-wrap:anywhere]">{r.nameDe}</Link>
-                    {r.nameNl && <div className="text-xs text-ink-soft [overflow-wrap:anywhere]" dir="auto">{r.nameNl}</div>}
-                    {r.variants > 1 && <span className="badge bg-brand-50 text-brand-700">{r.variants} {t.product.variants}</span>}
+              <div key={r.id} className={`card p-3 animate-rise ${r.active ? "" : "opacity-50"}`}>
+                <div className="flex items-start gap-2.5">
+                  <Link href={`/products/${r.id}`} className="shrink-0"><Thumb id={r.imageFileId} size={44} /></Link>
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/products/${r.id}`} className="block text-sm font-semibold leading-snug [overflow-wrap:anywhere]">{r.nameDe}</Link>
+                    {r.nameNl && <div className="truncate text-xs text-ink-soft" dir="auto">{r.nameNl}</div>}
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {r.category && <span className="badge bg-black/5 font-medium text-ink-soft">{r.category}</span>}
+                      {r.variants > 1 && <span className="badge bg-brand-50 text-brand-700">{r.variants} {t.product.variants}</span>}
+                    </div>
                   </div>
+                  <OpenButton href={`/products/${r.id}`} label={t.product.open} className="shrink-0 px-2.5 py-1.5 text-xs" />
                 </div>
-                <dl className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-xl bg-brand-50/40 p-2.5 text-xs ring-1 ring-black/5">
-                  <Item label={t.product.sku}><Code value={r.sku} /></Item>
-                  <Item label={t.product.barcode}><Barcodes list={r.barcodes} t={t} /></Item>
-                  <Item label={t.product.category}><span className="[overflow-wrap:anywhere]">{r.category || "—"}</span></Item>
-                  <Item label={t.product.wholesale}><span className="num">{formatCents(r.wholesaleCents, intl)}</span></Item>
-                  <Item label={t.product.stock}><span className={`num font-semibold ${r.low ? "text-amber-600" : ""}`}>{r.stock}</span></Item>
+                <dl className="mt-2 grid grid-cols-4 gap-x-2 gap-y-1.5 rounded-xl bg-brand-50/40 px-2.5 py-2 text-xs ring-1 ring-black/5">
+                  <Item label={t.product.sku} wide><Code value={r.sku} /></Item>
+                  <Item label={t.product.barcode} wide><Barcodes list={r.barcodes} t={t} /></Item>
+                  <Item label={t.product.wholesale} wide><span className="num font-semibold">{formatCents(r.wholesaleCents, intl)}</span></Item>
+                  <Item label={t.product.stock} wide><span className={`num font-semibold ${r.low ? "text-amber-600" : ""}`}>{r.stock}</span></Item>
                 </dl>
-                <OpenButton href={`/products/${r.id}`} label={t.product.open} className="w-full py-2.5 text-sm" />
               </div>
             ))}
           </div>
@@ -153,7 +156,7 @@ function Barcodes({ list, t }: { list: string[]; t: Dict }) {
   );
 }
 
-function Item({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="min-w-0"><dt className="text-[0.6875rem] text-ink-soft">{label}</dt><dd className="mt-0.5">{children}</dd></div>;
+function Item({ label, children, wide = false }: { label: string; children: React.ReactNode; wide?: boolean }) {
+  return <div className={`min-w-0 ${wide ? "col-span-2" : ""}`}><dt className="truncate text-[0.6875rem] text-ink-soft" title={label}>{label}</dt><dd className="mt-0.5">{children}</dd></div>;
 }
 

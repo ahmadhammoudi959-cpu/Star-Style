@@ -13,9 +13,10 @@ export function SettingsForm({ t, s }: { t: Dict; s: Record<string, string | num
     <form action={action} className="space-y-5">
       <ErrorBox message={state?.error === "logoType" ? t.settings.logoType : state?.error === "datev" ? `${t.settings.consultant} / ${t.settings.client}` : state?.error ? t.common.required : undefined} />
       {state?.ok && <p className="flex animate-rise items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700"><Icon name="check" className="h-4 w-4" />{t.common.saved}</p>}
-      <section className="card grid gap-4 p-5 md:grid-cols-2 animate-rise">
-        <h2 className="text-lg font-bold md:col-span-2">{t.settings.company}</h2>
-        <div className="flex flex-wrap items-center gap-4 rounded-xl bg-brand-50/50 p-4 ring-1 ring-brand-100 md:col-span-2">
+      {/* Handy: kurze Felder paarweise nebeneinander (Wunsch Inhaber 04.11.2026) */}
+      <section className="card grid grid-cols-2 gap-3 p-4 animate-rise sm:p-5 md:gap-4">
+        <h2 className="col-span-2 text-lg font-bold">{t.settings.company}</h2>
+        <div className="col-span-2 flex flex-wrap items-center gap-4 rounded-xl bg-brand-50/50 p-4 ring-1 ring-brand-100">
           <div className="grid h-20 w-40 place-items-center overflow-hidden rounded-lg bg-white ring-1 ring-black/5">
             {s.logoFileId ? <img src={`/api/files/${s.logoFileId}`} alt="Logo" className="max-h-full max-w-full object-contain" /> : <Icon name="receipt" className="h-8 w-8 text-ink-soft/40" />}
           </div>
@@ -25,31 +26,31 @@ export function SettingsForm({ t, s }: { t: Dict; s: Record<string, string | num
             {s.logoFileId && <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="removeLogo" className="h-4 w-4 accent-red-600" />{t.settings.removeLogo}</label>}
           </div>
         </div>
-        <Field label={t.setup.companyName}><input name="name" defaultValue={v("name")} required className="input" /></Field>
-        <Field label={t.settings.owner}><input name="owner" defaultValue={v("owner")} className="input" /></Field>
-        <Field label={t.setup.street}><input name="street" defaultValue={v("street")} className="input" /></Field>
-        <div className="grid grid-cols-[minmax(0,1fr)_2fr_1fr] gap-3">
+        <Field label={t.setup.companyName} className="col-span-2 md:col-span-1"><input name="name" defaultValue={v("name")} required className="input" /></Field>
+        <Field label={t.settings.owner} className="col-span-2 md:col-span-1"><input name="owner" defaultValue={v("owner")} className="input" /></Field>
+        <Field label={t.setup.street} className="col-span-2 md:col-span-1"><input name="street" defaultValue={v("street")} className="input" /></Field>
+        <div className="col-span-2 grid grid-cols-[minmax(0,1fr)_2fr_1fr] gap-3 md:col-span-1">
           <Field label={t.setup.zip}><input name="zip" defaultValue={v("zip")} className="input" dir="ltr" /></Field>
           <Field label={t.setup.city}><input name="city" defaultValue={v("city")} className="input" /></Field>
           <Field label={t.supplier.country}><input name="country" defaultValue={v("country") || "DE"} maxLength={2} className="input uppercase" dir="ltr" /></Field>
         </div>
-        <Field label={t.supplier.email}><input name="email" type="email" defaultValue={v("email")} className="input" dir="ltr" /></Field>
+        <Field label={t.supplier.email} className="col-span-2 md:col-span-1"><input name="email" type="email" defaultValue={v("email")} className="input" dir="ltr" /></Field>
         <Field label={t.supplier.phone}><input name="phone" defaultValue={v("phone")} className="input" dir="ltr" /></Field>
         <Field label={t.settings.website}><input name="website" defaultValue={v("website")} className="input" dir="ltr" /></Field>
         <Field label={t.setup.vatId}><input name="vatId" defaultValue={v("vatId")} className="input" dir="ltr" /></Field>
         <Field label={t.settings.taxNumber}><input name="taxNumber" defaultValue={v("taxNumber")} className="input" dir="ltr" /></Field>
       </section>
-      <section className="card grid gap-4 p-5 md:grid-cols-3 animate-rise">
-        <h2 className="text-lg font-bold md:col-span-3">{t.settings.bank}</h2>
+      <section className="card grid grid-flow-row-dense grid-cols-2 gap-3 p-4 animate-rise sm:p-5 md:grid-flow-row md:grid-cols-3 md:gap-4">
+        <h2 className="col-span-2 text-lg font-bold md:col-span-3">{t.settings.bank}</h2>
         <Field label={t.settings.bankName}><input name="bankName" defaultValue={v("bankName")} className="input" /></Field>
-        <Field label={t.settings.iban}><input name="iban" defaultValue={v("iban")} className="input" dir="ltr" /></Field>
+        <Field label={t.settings.iban} className="col-span-2 md:col-span-1"><input name="iban" defaultValue={v("iban")} className="input" dir="ltr" /></Field>
         <Field label={t.settings.bic}><input name="bic" defaultValue={v("bic")} className="input" dir="ltr" /></Field>
       </section>
-      <section className="card grid gap-4 p-5 md:grid-cols-2 animate-rise">
-        <h2 className="text-lg font-bold md:col-span-2">{t.settings.invoice}</h2>
+      <section className="card grid grid-cols-2 gap-3 p-4 animate-rise sm:p-5 md:gap-4">
+        <h2 className="col-span-2 text-lg font-bold">{t.settings.invoice}</h2>
         <Field label={t.settings.paymentDays}><input name="defaultPaymentDays" type="number" min={0} defaultValue={v("defaultPaymentDays") || "14"} className="input num" /></Field>
         <Field label={t.settings.offerDays}><input name="offerValidityDays" type="number" min={1} defaultValue={v("offerValidityDays") || "14"} className="input num" /></Field>
-        <Field label={t.settings.footer} className="md:col-span-2"><textarea name="invoiceFooter" rows={3} defaultValue={v("invoiceFooter")} className="input" /></Field>
+        <Field label={t.settings.footer} className="col-span-2"><textarea name="invoiceFooter" rows={3} defaultValue={v("invoiceFooter")} className="input" /></Field>
       </section>
       <section className="card flex items-start gap-3 p-5 animate-rise">
         <input id="showGuide" type="checkbox" name="showGuide" defaultChecked={v("showGuide") === "true" || v("showGuide") === "1"} className="mt-1 h-5 w-5 accent-brand-600" />
@@ -58,8 +59,8 @@ export function SettingsForm({ t, s }: { t: Dict; s: Record<string, string | num
           <span className="block text-sm text-ink-soft">{t.setup1.showGuideHint}</span>
         </label>
       </section>
-      <section id="datev" className="card grid scroll-mt-6 gap-4 p-5 md:grid-cols-3 animate-rise">
-        <div className="flex flex-wrap items-center justify-between gap-2 md:col-span-3">
+      <section id="datev" className="card grid scroll-mt-6 grid-cols-2 gap-3 p-4 animate-rise sm:p-5 md:grid-cols-3 md:gap-4">
+        <div className="col-span-2 flex flex-wrap items-center justify-between gap-2 md:col-span-3">
           <h2 className="text-lg font-bold">{t.settings.datev}</h2>
           <Link href="/settings/accounts" className="text-sm font-semibold text-brand-700 hover:underline">{t.settings.accounts} →</Link>
         </div>
@@ -73,7 +74,7 @@ export function SettingsForm({ t, s }: { t: Dict; s: Record<string, string | num
             {t.rep.months.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
           </select>
         </Field>
-        <Field label={t.settings.advisorEmail} className="md:col-span-2"><input name="advisorEmail" type="email" defaultValue={v("advisorEmail")} className="input" dir="ltr" /></Field>
+        <Field label={t.settings.advisorEmail} className="col-span-2"><input name="advisorEmail" type="email" defaultValue={v("advisorEmail")} className="input" dir="ltr" /></Field>
       </section>
       <div className="flex justify-end"><SubmitButton className="btn-primary px-8 py-3">{t.common.save}</SubmitButton></div>
     </form>
