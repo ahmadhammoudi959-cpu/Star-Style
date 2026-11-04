@@ -40,18 +40,22 @@ body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smooth
   /* Grid-Spalten dürfen schrumpfen (sonst schieben breite Tabellen die Seite auf dem Handy seitlich) */
   .grid > * { min-width: 0; }
   .tbl { @apply w-full text-sm; }
-  .tbl th { @apply whitespace-nowrap border-b border-black/5 bg-brand-50/60 px-3 py-2.5 text-start text-xs font-semibold uppercase tracking-wide text-ink-soft; }
-  .tbl th.text-end { text-align: end; }
-  .tbl td { @apply border-b border-black/5 px-3 py-2.5 align-middle; }
+  /* Überschrift und Werte jeder Spalte mittig, Überschriften einzeilig (Wunsch Inhaber 04.11.2026) – gilt auch für Zellen mit text-start/-end */
+  .tbl th { @apply whitespace-nowrap border-b border-black/5 bg-brand-50/60 px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-ink-soft; }
+  .tbl td { @apply border-b border-black/5 px-3 py-2.5 text-center align-middle; }
+  .tbl td .flex, .tbl td.flex { justify-content: center; }
+  .tbl td .w-fit { margin-inline: auto; }
   .tbl tbody tr { @apply transition-colors hover:bg-brand-50/40; }
-  /* Tabelle, die ohne seitliches Scrollen auf den Bildschirm passen muss: engere Zellen, Überschriften dürfen umbrechen */
-  .tbl-fit th { @apply whitespace-normal px-2 leading-snug; }
+  /* Tabelle, die ohne seitliches Scrollen auf den Bildschirm passen muss: engere Zellen (Überschriften bleiben einzeilig) */
+  .tbl-fit th { @apply px-2 leading-snug; }
   .tbl-fit td { @apply px-2; }
   .badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold; }
   .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
   /* Beträge in Arabisch: Minus und € in deutscher Reihenfolge („-400,00 €“), Ausrichtung bleibt RTL */
   [dir="rtl"] .num:not(input) { direction: ltr; unicode-bidi: isolate; text-align: right; }
   [dir="rtl"] .num.text-end:not(input) { text-align: left; }
+  /* in Tabellen auch Beträge mittig */
+  [dir="rtl"] .tbl .num:not(input), [dir="rtl"] .tbl .num.text-end:not(input) { text-align: center; }
 }
 
 /* schmale, helle Bildlaufleiste in der dunklen Seitenleiste */
