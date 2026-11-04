@@ -12,6 +12,7 @@ import { cancelInvoice, issueInvoice, saveInvoiceDraft, startCorrection, SalesEr
 import { cancelPayment, PaymentError, recordPayment } from "../payments";
 import { bookWriteOff } from "../stock";
 import { todayIso } from "../dates";
+import { verifyCustomerVat } from "../customer-vat";
 
 export const CHANNELS: ShopChannel[] = ["BRAND_SHOP", "GENERAL_SHOP"];
 
@@ -152,16 +153,37 @@ export async function processDirty() {
 
 // ───────────────────────── Bestellungen ─────────────────────────
 
-const ORDER_FIELDS = `id name createdAt updatedAt processedAt cancelledAt test email currencyCode taxesIncluded displayFinancialStatus paymentGatewayNames
+const ORDER_BASE = `id name createdAt updatedAt processedAt cancelledAt test email currencyCode taxesIncluded displayFinancialStatus paymentGatewayNames
   billingAddress { firstName lastName company address1 address2 zip city countryCodeV2 phone }
   shippingAddress { firstName lastName company address1 address2 zip city countryCodeV2 phone }
   totalPriceSet { shopMoney { amount } } currentTotalPriceSet { shopMoney { amount } } totalOutstandingSet { shopMoney { amount } } totalRefundedSet { shopMoney { amount } }
   lineItems(first: 100) { nodes { id sku title variantTitle quantity variant { id } discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount } } taxLines { rate } } }
   shippingLines(first: 10) { nodes { title discountedPriceSet { shopMoney { amount } } taxLines { rate } } }
   refunds { id createdAt totalRefundedSet { shopMoney { amount } } refundLineItems(first: 100) { nodes { quantity restockType lineItem { id } } } }`;
+// USt-IdNr. aus dem Checkout (Reverse Charge) – braucht das App-Recht read_customers (oder read_taxes).
+// Fehlt das Recht, geht es ohne weiter (steuerfreie EU-Bestellungen dann von Hand) und es wird alle 6 h neu versucht.
+const ORDER_TAX = ` customer { taxSettings { taxId } }`;
+const taxIdAccess = new Map<string, { ok: boolean; at: number }>();
+const SCOPE_ERROR = /access denied|not approved|taxSettings|read_customers|read_taxes/i;
+
+async function gqlOrders<T>(shop: Shop, build: (fields: string) => string, variables: Record<string, unknown>): Promise<T> {
+  const state = taxIdAccess.get(shop.channel);
+  const tryTax = !state || state.ok || Date.now() - state.at > 6 * 3600_000;
+  if (!tryTax) return gql<T>(shop, build(ORDER_BASE), variables);
+  try {
+    const d = await gql<T>(shop, build(ORDER_BASE + ORDER_TAX), variables);
+    taxIdAccess.set(shop.channel, { ok: true, at: Date.now() });
+    return d;
+  } catch (e) {
+    if (!(e instanceof ShopifyError && e.code === "graphql" && SCOPE_ERROR.test(e.message))) throw e;
+    taxIdAccess.set(shop.channel, { ok: false, at: Date.now() });
+    if (await once(`scope:taxid:${shop.channel}:${todayIso()}`)) await logEvent(shop.channel as ShopChannel, "warn", "order", "needScopeTaxes");
+    return gql<T>(shop, build(ORDER_BASE), variables);
+  }
+}
 
 export async function fetchOrder(shop: Shop, id: string) {
-  const d = await gql<{ order: ShopOrder | null }>(shop, `query($id: ID!) { order(id: $id) { ${ORDER_FIELDS} } }`, { id });
+  const d = await gqlOrders<{ order: ShopOrder | null }>(shop, (f) => `query($id: ID!) { order(id: $id) { ${f} } }`, { id });
   return d.order;
 }
 
@@ -172,8 +194,8 @@ export async function syncOrders(channel: ShopChannel) {
   const since = shop.lastOrderSync ? new Date(shop.lastOrderSync.getTime() - 10 * 60_000) : shop.ordersSince ?? new Date(Date.now() - 86_400_000);
   let after: string | null = null, processed = 0;
   do {
-    const d: { orders: { pageInfo: { hasNextPage: boolean; endCursor: string }; nodes: ShopOrder[] } } = await gql(shop,
-      `query($after: String, $q: String) { orders(first: 25, after: $after, sortKey: UPDATED_AT, query: $q) { pageInfo { hasNextPage endCursor } nodes { ${ORDER_FIELDS} } } }`,
+    const d: { orders: { pageInfo: { hasNextPage: boolean; endCursor: string }; nodes: ShopOrder[] } } = await gqlOrders(shop,
+      (f) => `query($after: String, $q: String) { orders(first: 25, after: $after, sortKey: UPDATED_AT, query: $q) { pageInfo { hasNextPage endCursor } nodes { ${f} } } }`,
       { after, q: `updated_at:>='${since.toISOString()}'` });
     for (const o of d.orders.nodes) { await processOrder(shop, o); processed++; }
     after = d.orders.pageInfo.hasNextPage ? d.orders.pageInfo.endCursor : null;
@@ -202,11 +224,17 @@ async function currentInvoice(channel: ShopChannel, externalId: string) {
 async function findOrCreateCustomer(c: ReturnType<typeof mapOrder>["customer"]) {
   if (c.email) {
     const ex = await db.query.customers.findFirst({ where: sql`lower(${schema.customers.email}) = ${c.email}` });
-    if (ex) return ex.id;
+    if (ex) {
+      // USt-IdNr. aus dem Shop-Checkout übernehmen (neu oder geändert → wird gleich neu geprüft)
+      if (c.vatId && ex.vatId !== c.vatId) {
+        await db.update(schema.customers).set({ vatId: c.vatId, vatIdStatus: "PENDING", type: "COMPANY" }).where(eq(schema.customers.id, ex.id));
+      }
+      return ex.id;
+    }
   }
   const [row] = await db.insert(schema.customers).values({
     name: c.name, type: c.type, contact: c.contact, email: c.email, phone: c.phone, street: c.street, zip: c.zip, city: c.city, country: c.country,
-    priceGroup: "RETAIL", notes: "aus Shopify angelegt",
+    vatId: c.vatId, vatIdStatus: c.vatId ? "PENDING" : "NONE", priceGroup: "RETAIL", notes: "aus Shopify angelegt",
   }).returning({ id: schema.customers.id });
   return row.id;
 }
@@ -244,6 +272,15 @@ async function doProcessOrder(shop: Shop, o: ShopOrder) {
       return;
     }
     const customerId = await findOrCreateCustomer(m.customer);
+    if (m.taxMode === "EU_REVERSE_CHARGE") {
+      // Shopify hat die USt-IdNr. im Checkout geprüft; wir prüfen selbst noch einmal (BZSt/VIES) und speichern den Nachweis
+      const v = await verifyCustomerVat(customerId);
+      if (v.status === "INVALID") {
+        if (await once(`review:${channel}:${o.id}`)) await logEvent(channel, "warn", "review", "skip:vatInvalid", o.name);
+        return;
+      }
+      if (!v.status) m.warnings.push("vatCheckLater");
+    }
     const draft = await saveInvoiceDraft({
       customerId, channel, discountBp: 0, notes: `Shop-Bestellung ${o.name}`, lines: m.lines, deliveryDate: m.date, retentionOfTitle: false,
       pricesGross: m.pricesGross, taxOverride: { mode: m.taxMode, ossCountry: m.ossCountry }, externalOrderId: o.id,

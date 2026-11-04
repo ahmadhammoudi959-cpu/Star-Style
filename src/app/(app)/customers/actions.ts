@@ -1,4 +1,5 @@
 "use server";
+import { verifyCustomerVat } from "@/lib/customer-vat";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -7,7 +8,7 @@ import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { parseMoney } from "@/lib/money";
 import { audit } from "@/lib/stock";
-import { checkBzst, checkVies, splitVatId, type VatCheckResult } from "@/lib/vat-check";
+import { splitVatId } from "@/lib/vat-check";
 
 export type CustomerState = { error?: string } | undefined;
 
@@ -69,26 +70,8 @@ export async function runVatCheck(_: CheckState, fd: FormData): Promise<CheckSta
   const id = String(fd.get("customerId") ?? "");
   const c = await db.query.customers.findFirst({ where: eq(schema.customers.id, id) });
   if (!c || !c.vatId) return { error: "required" };
-  const company = await db.query.companySettings.findFirst();
-  const results: VatCheckResult[] = [];
-  if (company?.vatId) {
-    results.push(await checkBzst({ ownVatId: company.vatId, vatId: c.vatId, company: c.name, city: c.city, zip: c.zip, street: c.street }));
-  }
-  results.push(await checkVies(c.vatId));
-  const decided = results.find((r) => r.valid !== null);
-  await db.transaction(async (tx) => {
-    for (const r of results) {
-      await tx.insert(schema.vatChecks).values({
-        customerId: c.id, vatId: c.vatId, source: r.source, valid: r.valid, name: r.name, address: r.address, error: r.error, raw: r.raw ?? null,
-      });
-    }
-    if (decided) {
-      const status = decided.valid ? "VALID" : "INVALID";
-      await tx.update(schema.customers).set({ vatIdStatus: status, vatCheckedAt: new Date() }).where(eq(schema.customers.id, c.id));
-      await audit(tx, { entity: "customer", entityId: c.id, action: "vat_check", before: { status: c.vatIdStatus }, after: { status }, userId: session.uid });
-    }
-  });
+  const v = await verifyCustomerVat(c.id, session.uid);
   revalidatePath(`/customers/${c.id}`);
-  if (!decided) return { error: company?.vatId ? "unavailable" : "ownVatMissing" };
+  if (!v.status) return { error: v.ownVatMissing ? "ownVatMissing" : "unavailable" };
   return { ok: true };
 }

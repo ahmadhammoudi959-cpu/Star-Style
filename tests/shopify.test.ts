@@ -58,6 +58,26 @@ describe("Shopify-Bestellung → Rechnung", () => {
     const ch = { ...at, countryCodeV2: "CH" };
     expect(mapOrder(order({ shippingAddress: ch, billingAddress: ch, lineItems: noTax, shippingLines: { nodes: [] }, totalPriceSet: money(23.97) }), links)).toMatchObject({ taxMode: "EXPORT", skip: null, customer: { type: "COMPANY", name: "Salon Wien GmbH" } });
   });
+  it("Reverse Charge aus dem Shop-Checkout: ausländische EU-USt-IdNr. → steuerfrei automatisch, sonst von Hand", () => {
+    const at = { firstName: "Anna", lastName: "Berg", company: "", address1: "Ring 1", zip: "1010", city: "Wien", countryCodeV2: "AT" };
+    const noTax = { nodes: [{ ...order().lineItems.nodes[0], taxLines: [] }] };
+    const base = { shippingAddress: at, billingAddress: at, lineItems: noTax, shippingLines: { nodes: [] }, totalPriceSet: money(23.97) };
+    const rc = mapOrder(order({ ...base, customer: { taxSettings: { taxId: " atu 123.456-78 " } } }), links);
+    expect(rc).toMatchObject({ taxMode: "EU_REVERSE_CHARGE", skip: null, customer: { type: "COMPANY", vatId: "ATU12345678", name: "Anna Berg" } });
+    expect(rc.warnings).not.toContain("vatCountryMismatch");
+    // deutsche USt-IdNr. bei Lieferung nach Österreich: kein Reverse Charge → von Hand
+    expect(mapOrder(order({ ...base, customer: { taxSettings: { taxId: "DE123456789" } } }), links).skip).toBe("noTaxEu");
+    // keine/ungültige Nummer → von Hand
+    expect(mapOrder(order({ ...base, customer: { taxSettings: { taxId: null } } }), links).skip).toBe("noTaxEu");
+    expect(mapOrder(order({ ...base, customer: { taxSettings: { taxId: "123" } } }), links).skip).toBe("noTaxEu");
+    // Nummer aus einem anderen EU-Land → steuerfrei, aber Hinweis
+    expect(mapOrder(order({ ...base, customer: { taxSettings: { taxId: "NL123456789B01" } } }), links).warnings).toContain("vatCountryMismatch");
+    // Griechenland schreibt EL
+    const gr = { ...at, countryCodeV2: "GR", city: "Athen" };
+    expect(mapOrder(order({ ...base, shippingAddress: gr, billingAddress: gr, customer: { taxSettings: { taxId: "EL123456789" } } }), links)).toMatchObject({ taxMode: "EU_REVERSE_CHARGE", skip: null });
+    // Inland mit USt-IdNr.: normale 19 %, Nummer wird beim Kunden gespeichert
+    expect(mapOrder(order({ customer: { taxSettings: { taxId: "DE123456789" } } }), links)).toMatchObject({ taxMode: "DOMESTIC", customer: { type: "COMPANY", vatId: "DE123456789" } });
+  });
   it("Fremdwährung wird nicht automatisch gebucht", () => {
     expect(mapOrder(order({ currencyCode: "CHF" }), links).skip).toBe("currency");
   });
@@ -86,19 +106,25 @@ run("Shopify-Abgleich (Datenbank, Shopify simuliert)", async () => {
   let variantId = "";
   const calls: { url: string; body: string }[] = [];
   let ordersPayload: ShopOrder[] = [];
+  let viesValid = true, denyTax = false;
 
   function shopifyMock() {
     return vi.fn(async (url: string, init: { body: string | URLSearchParams }) => {
       const body = String(init.body);
       calls.push({ url, body });
       if (url.endsWith("/admin/oauth/access_token")) return new Response(JSON.stringify({ access_token: "tok", scope: "x", expires_in: 86399 }));
+      if (url.includes("check-vat-number")) return Response.json({ valid: viesValid, name: "SALON WIEN GMBH", address: "RING 1, 1010 WIEN" });
+      if (url.includes("evatr")) return Response.json({});
       const q = JSON.parse(body).query as string;
+      if (denyTax && q.includes("taxSettings")) return Response.json({ errors: [{ message: "Access denied for taxSettings field. Required access: `read_customers` access scope.", extensions: { code: "ACCESS_DENIED" } }] });
       if (q.includes("productVariants")) return Response.json({ data: { productVariants: { pageInfo: { hasNextPage: false, endCursor: "" }, nodes: [
         { id: "gid://shopify/ProductVariant/901", sku: "X", barcode: ean, displayName: "Haarspray - 300 ml", inventoryItem: { id: "gid://shopify/InventoryItem/701", tracked: true } },
         { id: "gid://shopify/ProductVariant/902", sku: "UNBEKANNT", barcode: "", displayName: "Geschenkkarte", inventoryItem: { id: "gid://shopify/InventoryItem/702", tracked: false } },
       ] } } });
       if (q.includes("inventorySetQuantities")) return Response.json({ data: { inventorySetQuantities: { userErrors: [] } } });
-      if (q.includes("orders(")) return Response.json({ data: { orders: { pageInfo: { hasNextPage: false, endCursor: "" }, nodes: ordersPayload } } });
+      // wie Shopify: ohne angefragtes Feld kommt auch keine USt-IdNr. zurück
+      if (q.includes("orders(")) return Response.json({ data: { orders: { pageInfo: { hasNextPage: false, endCursor: "" },
+        nodes: q.includes("taxSettings") ? ordersPayload : ordersPayload.map(({ customer: _c, ...o }) => o) } } });
       return Response.json({ errors: [{ message: "unexpected" }] });
     });
   }
@@ -160,6 +186,48 @@ run("Shopify-Abgleich (Datenbank, Shopify simuliert)", async () => {
     expect((await db.query.variants.findFirst({ where: eq(schema.variants.id, variantId) }))!.stockQty).toBe(20);
     const events = await db.select().from(schema.shopEvents).where(eq(schema.shopEvents.ref, base.name));
     expect(events.map((e) => e.kind)).toEqual(expect.arrayContaining(["order", "refund", "cancel"]));
+  }, 30_000);
+
+  it("Reverse Charge: gültige USt-IdNr. → steuerfreie Rechnung + Nachweis; ungültig → von Hand; ohne Recht → weiter ohne Nummer", async () => {
+    vi.stubGlobal("fetch", shopifyMock());
+    const at = { firstName: "Anna", lastName: "Berg", company: "Salon Wien GmbH", address1: "Ring 1", zip: "1010", city: "Wien", countryCodeV2: "AT" };
+    const rcOrder = (n: string, taxId: string) => order({ id: "gid://shopify/Order/rc" + n + ean, name: "#RC" + n + ean.slice(-3), email: `rc${n}${ean}@test.at`,
+      shippingAddress: at, billingAddress: at, customer: { taxSettings: { taxId } },
+      lineItems: { nodes: [{ id: "gid://shopify/LineItem/rc" + n + ean, sku: "X", title: "Haarspray", variantTitle: "300 ml", quantity: 2, variant: { id: "gid://shopify/ProductVariant/901" }, discountedUnitPriceAfterAllDiscountsSet: money(8.39), taxLines: [] }] },
+      shippingLines: { nodes: [] }, totalPriceSet: money(16.78), currentTotalPriceSet: money(16.78) });
+
+    viesValid = true;
+    const ok = rcOrder("1", "ATU12345678");
+    ordersPayload = [ok];
+    await sync.syncOrders("BRAND_SHOP");
+    const inv = await db.query.invoices.findFirst({ where: and(eq(schema.invoices.externalOrderId, ok.id), eq(schema.invoices.status, "ISSUED")) });
+    expect(inv).toMatchObject({ taxMode: "EU_REVERSE_CHARGE", grossCents: 1678, netCents: 1678, vatCents: 0, custVatId: "ATU12345678" });
+    const cust = await db.query.customers.findFirst({ where: eq(schema.customers.id, inv!.customerId) });
+    expect(cust).toMatchObject({ vatId: "ATU12345678", vatIdStatus: "VALID", type: "COMPANY" });
+    expect((await db.select().from(schema.vatChecks).where(eq(schema.vatChecks.customerId, cust!.id))).some((c) => c.source === "VIES" && c.valid)).toBe(true);
+
+    viesValid = false;
+    const bad = rcOrder("2", "ATU99999999");
+    ordersPayload = [bad];
+    await sync.syncOrders("BRAND_SHOP");
+    expect(await db.query.invoices.findFirst({ where: eq(schema.invoices.externalOrderId, bad.id) })).toBeUndefined();
+    const ev = await db.select().from(schema.shopEvents).where(eq(schema.shopEvents.ref, bad.name));
+    expect(ev.map((e) => e.message)).toContain("skip:vatInvalid");
+
+    // App ohne Recht read_customers: Abgleich läuft weiter, steuerfreie EU-Bestellung bleibt für Handarbeit
+    denyTax = true; viesValid = true;
+    const noScope = rcOrder("3", "ATU12345678");
+    ordersPayload = [noScope];
+    await sync.syncOrders("BRAND_SHOP");
+    expect(await db.query.invoices.findFirst({ where: eq(schema.invoices.externalOrderId, noScope.id) })).toBeUndefined();
+    const all = await db.select().from(schema.shopEvents).where(eq(schema.shopEvents.channel, "BRAND_SHOP"));
+    expect(all.map((e) => e.message)).toContain("needScopeTaxes");
+    denyTax = false;
+
+    // aufräumen: die steuerfreie Bestellung im Shop stornieren → Bestand wieder wie vorher
+    ordersPayload = [{ ...ok, cancelledAt: "2026-10-18T13:00:00Z", displayFinancialStatus: "REFUNDED", totalRefundedSet: money(16.78) }];
+    await sync.syncOrders("BRAND_SHOP");
+    expect((await db.query.invoices.findFirst({ where: eq(schema.invoices.id, inv!.id) }))!.status).toBe("CANCELLED");
   }, 30_000);
 
   it("geänderte Bestände werden automatisch gemeldet und die Warteschlange geleert", async () => {
