@@ -26,7 +26,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   };
 
   return (
-    <div>
+    <div className="page-wide">
       <PageHeader title={t.stock.title} subtitle={`${t.stock.value}: ${formatCents(total, intl)}`} />
 
       {/* Filter: Kategorie (filtert sofort), Suche, nur wenig Bestand (filtert sofort) */}

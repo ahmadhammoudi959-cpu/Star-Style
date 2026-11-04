@@ -42,7 +42,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   }));
 
   return (
-    <div>
+    <div className="page-wide">
       <PageHeader title={t.product.title} actions={<Link href="/products/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.product.new}</Link>} />
       {pend.map((x) => (
         <Link key={x.channel} href={`/shops/${x.channel}#pending`} className="card card-hover group mb-3 flex animate-rise items-center gap-3 p-3 text-sm ring-1 ring-accent-500/20">
@@ -77,7 +77,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 <th>{t.product.nameDe}</th>
                 <th>{t.product.nameNl}</th>
                 <th>{t.product.category}</th>
-                <th className="w-[5.5rem] text-end">{t.product.wholesale}</th>
+                <th className="w-[7.5rem] text-end">{t.product.wholesale}</th>
                 <th className="w-px text-end">{t.product.stock}</th>
                 <th className="w-px"><span className="sr-only">{t.product.open}</span></th>
               </tr></thead>

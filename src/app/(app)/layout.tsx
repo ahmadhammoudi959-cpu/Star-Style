@@ -80,7 +80,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <form action={logout} className="lg:hidden"><button aria-label={t.common.logout} className="btn-ghost px-3"><Icon name="logout" /></button></form>
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 pb-28 pt-6 lg:px-8 lg:pb-12">{children}</main>
+        {/* Seiten mit breiten Tabellen (Artikel, Lager) markieren sich mit .page-wide und dürfen breiter werden (Wunsch Inhaber 04.11.2026) */}
+        <main className="mx-auto max-w-6xl px-4 pb-28 pt-6 lg:px-8 lg:pb-12 has-[.page-wide]:max-w-[96rem]">{children}</main>
       </div>
       <BottomNav items={mobile} all={items.map((it) => (it.href === "/scan" ? { ...it, highlight: true } : it))} menuLabel={t.nav.menu} closeLabel={t.common.close} footer={menuFooter} />
     </div>
