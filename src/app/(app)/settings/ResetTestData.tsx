@@ -29,6 +29,7 @@ export function ResetTestData({ t, p, fingerprint, syncOn, empty }: { t: Dict; p
     { label: r.offers, n: p.offers }, { label: r.payments, n: p.payments }, { label: r.receipts, n: p.receipts },
     { label: r.writeOffs, n: p.writeOffs }, { label: r.expenses, n: p.expenses },
     { label: r.customers, n: p.customers, names: names(p.customerNames, MAX_CUSTOMERS) },
+    { label: r.exports, n: p.exports },
     { label: r.suppliers, n: p.suppliers.length, names: names(p.suppliers) },
     { label: r.units, n: p.units },
   ].filter((x) => x.n > 0);

@@ -5,7 +5,7 @@ import { fingerprint, isEmpty, toPreview } from "../src/lib/test-reset-sql";
 describe("System zurücksetzen – Vorschau", () => {
   const row = {
     invoices: 3, cancellations: 2, drafts: 0, offers: 2, payments: 1, receipts: 2, write_offs: 0, expenses: 0, customers: 3, units: 199, stocked: 2,
-    sequences: 5, products_kept: 461, customer_names: ["Ahmad", "Fedaa", "محمد"], suppliers: '["Fedaa"]', numbers: ["RE-2026-0001"],
+    sequences: 5, exports: 1, products_kept: 461, customer_names: ["Ahmad", "Fedaa", "محمد"], suppliers: '["Fedaa"]', numbers: ["RE-2026-0001"],
     digest: "abc",
   };
 
@@ -15,6 +15,7 @@ describe("System zurücksetzen – Vorschau", () => {
     expect(p.writeOffs).toBe(0);
     expect(p.sequences).toBe(5);
     expect(p.productsKept).toBe(461);
+    expect(p.exports).toBe(1);
     expect(p.suppliers).toEqual(["Fedaa"]);
     expect(p.customerNames).toEqual(["Ahmad", "Fedaa", "محمد"]);
     expect(isEmpty(p)).toBe(false);
@@ -24,6 +25,7 @@ describe("System zurücksetzen – Vorschau", () => {
     const a = toPreview(row);
     expect(fingerprint(a)).toBe(fingerprint(toPreview(row)));
     expect(fingerprint(a)).not.toBe(fingerprint(toPreview({ ...row, payments: 2 })));
+    expect(fingerprint(a)).not.toBe(fingerprint(toPreview({ ...row, exports: 2 })));
     expect(fingerprint(a)).not.toBe(fingerprint(toPreview({ ...row, digest: "abd" }))); // z. B. anderer Lieferant würde gelöscht
   });
 
@@ -32,6 +34,7 @@ describe("System zurücksetzen – Vorschau", () => {
     expect(isEmpty(toPreview({ products_kept: 500 }))).toBe(true);
     expect(isEmpty(toPreview({ stocked: 1 }))).toBe(false);
     expect(isEmpty(toPreview({ sequences: 1 }))).toBe(false);
+    expect(isEmpty(toPreview({ exports: 1 }))).toBe(false);
   });
 });
 
@@ -66,6 +69,17 @@ run("System zurücksetzen (Datenbank)", async () => {
     }
   });
 
+  it("ein abgeschlossener Monat sperrt (kann man selbst wieder öffnen), eine Monatsmappe nicht", async () => {
+    const [lock] = await db.insert(schema.periodLocks).values({ month: "2026-09" }).returning();
+    try {
+      expect((await resetStatus()).block).toBe("live");
+      expect(await liveStatus()).toEqual({ live: true, since: null });
+    } finally {
+      await db.delete(schema.periodLocks).where(eq(schema.periodLocks.month, lock.month));
+    }
+    expect((await resetStatus()).block).toBe(null);
+  });
+
   it("löscht alle Bewegungen und Vorgänge, ALLE Artikel bleiben (Bestand 0); danach Echtbetrieb – nie wieder", async () => {
     await db.update(schema.shops).set({ active: false });
     await db.insert(schema.companySettings).values({ id: "company" }).onConflictDoNothing();
@@ -81,6 +95,9 @@ run("System zurücksetzen (Datenbank)", async () => {
     const [cust] = await db.insert(schema.customers).values({ name: `Kunde ${tag}` }).returning();
     // eine (Test-)Bestellung aus dem Shop sperrt nicht mehr (Wunsch Inhaber 04.11.2026)
     await db.insert(schema.invoices).values({ customerId: cust.id, externalOrderId: `gid://shopify/Order/${tag}` });
+    // Test-Monatsmappe (wie live am 03.11.2026) sperrt nicht und geht mit
+    const [zip] = await db.insert(schema.storedFiles).values({ name: "m.zip", mime: "application/zip", size: 1, sha256: "x", data: Buffer.from([9]) }).returning();
+    await db.insert(schema.advisorExports).values({ month: "2026-11", fileId: zip.id, bookings: 4 });
     // Artikel-Fotos (Shop-Galerie) bleiben
     const [kf] = await db.insert(schema.storedFiles).values({ name: "k", mime: "image/png", size: 1, sha256: "x", data: Buffer.from([2]) }).returning();
     await db.insert(schema.shopMedia).values({ productId: sold.p.id, channel: "GENERAL_SHOP", fileId: kf.id, position: 0 });
@@ -90,6 +107,7 @@ run("System zurücksetzen (Datenbank)", async () => {
     expect(before.block).toBe(null);
     expect(before.preview.suppliers).toEqual([`Nur-Beleg-Lieferant ${tag}`]);
     expect(before.preview.productsKept).toBeGreaterThanOrEqual(3);
+    expect(before.preview.exports).toBe(1);
 
     await expect(resetTestData("veraltet", "u-test")).rejects.toBeInstanceOf(ResetError);
     await resetTestData(before.fingerprint, "u-test");
@@ -107,6 +125,8 @@ run("System zurücksetzen (Datenbank)", async () => {
     expect((await db.select().from(schema.invoices)).length).toBe(0);
     expect((await db.select().from(schema.goodsReceipts)).length).toBe(0);
     expect((await db.select().from(schema.stockMovements)).length).toBe(0);
+    expect((await db.select().from(schema.advisorExports)).length).toBe(0);
+    expect(await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, zip.id) })).toBe(undefined);
     expect((await db.select().from(schema.auditLog).where(eq(schema.auditLog.action, "reset"))).length).toBeGreaterThan(0);
     expect(await db.transaction((tx) => nextNumber(tx, "INVOICE", 2026))).toBe("RE-2026-0001");
     const [c] = await db.insert(schema.customers).values({ name: `Erster echter Kunde ${tag}` }).returning();
