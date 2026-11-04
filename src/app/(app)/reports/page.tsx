@@ -122,8 +122,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
       <section className="card animate-rise p-5">
         <h2 className="mb-3 text-lg font-bold">{t.rep.year} {month.slice(0, 4)}</h2>
-        <YearChart data={year} months={t.rep.months} active={month} intl={intl}
-          labels={{ revenue: t.rep.revenue, profit: t.rep.profit, grossProfit: t.rep.grossProfit, expenses: t.rep.expenses, losses: t.rep.losses }} />
+        <YearChart data={year} months={t.rep.months} active={month} intl={intl} today={todayIso().slice(0, 7)}
+          labels={{ revenue: t.rep.revenue, profit: t.rep.profit, grossProfit: t.rep.grossProfit, expenses: t.rep.expenses, losses: t.rep.losses,
+            openMonth: t.rep.viewMonth, loss: t.rep.loss, lossNote: t.rep.lossNote, hint: t.rep.chartHint, empty: t.rep.noYearData }} />
         <details className="mt-3">
           <summary className="cursor-pointer text-sm font-semibold text-brand-700">{t.rep.table}</summary>
           <div className="table-wrap mt-2"><table className="tbl">

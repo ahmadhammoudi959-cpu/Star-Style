@@ -108,7 +108,7 @@ const ar: Dict = {
     title: "المخزون", movements: "الحركات", value: "قيمة المخزون بسعر الشراء", low: "تحت الحد الأدنى", filterLow: "بس الكميات القليلة",
     type: { RECEIPT: "إدخال", SALE: "بيع", RETURN: "إرجاع", WRITE_OFF: "تالف", ADJUSTMENT: "جرد", CANCEL: "إلغاء" },
     adjust: "تصحيح بالجرد", counted: "العدد الحقيقي", adjustReason: "السبب", adjusted: "تم تصحيح الكمية",
-    avgCost: "متوسط سعر الشراء", batches: "الدفعات", expiresIn: "بتنتهي بعد {d} يوم", expired: "منتهية",
+    avgCost: "متوسط سعر الشراء", batches: "الدفعات", expiresIn: "بتنتهي بعد {d} يوم", expiresToday: "بتنتهي اليوم", expired: "منتهية",
   },
   writeOff: {
     title: "التالف والخسائر", new: "تسجيل تالف", reason: "السبب",
@@ -161,6 +161,7 @@ const ar: Dict = {
     add: "ضيف", inDoc: "مضاف: {n}", done: "تم", empty: "ما في منتجات هون.", lines: "البنود",
   },
   sales: {
+    totalSales: "إجمالي المبيعات", totalSalesSub: "عدد الفواتير الصالحة: {n} (مع الضريبة، بعد الإلغاءات)", totalCancelled: "إجمالي الطلبات الملغية", totalCancelledSub: "عدد الفواتير يلي انلغت كلها أو جزء منها: {n}", totalsNote: "كل الفواتير لهلق، والمبالغ مع الضريبة.", totalsFiltered: "بس للبحث أو الزبون يلي مختارو، والمبالغ مع الضريبة.",
     invoice: "فاتورة", offer: "عرض سعر", title: "المبيعات", newOffer: "عرض سعر جديد", newInvoice: "فاتورة مباشرة", offers: "عروض الأسعار", invoices: "الفواتير",
     customer: "الزبون", pickCustomer: "اختار الزبون", lines: "البنود", price: "سعر القطعة بدون ضريبة", lineDiscount: "خصم %",
     docDiscount: "خصم على كل الفاتورة %", subtotal: "المجموع قبل الخصم", discount: "الخصم",
@@ -180,6 +181,8 @@ const ar: Dict = {
     retention: "الاحتفاظ بالملكية", reservation: "الحجز",
   },
   pay: {
+    planRemoveHint: "بدون أقساط بيرجع موعد الدفع العادي. اضغط حفظ لتثبيتها.",
+    firstInvalid: "الدفعة الأولى: اكتب مبلغ صحيح", firstTooBig: "الدفعة الأولى أكبر من مبلغ الفاتورة", countInvalid: "عدد الأقساط من ١ لـ ٣٦", everyInvalid: "كل كم يوم: من ١ لـ ٣٦٥", preview: "رح يطلع {n} أقساط: الأول ({first}) بتاريخ {from}، والأخير بتاريخ {to}.", previewOne: "رح يطلع قسط واحد ({first}) بتاريخ {from}.", sumOk: "المجموع مظبوط ({sum})",
     amountInvalid: "اكتب مبلغ صحيح", planInvalid: "خطة الأقساط ناقصة، شيك التاريخ والمبلغ", planOrder: "رتب الأقساط حسب التاريخ", reason: "اكتب السبب", notOverdue: "ما في شي متأخر، ما بدها تذكير", notPayable: "ما فيك تسجل دفعة على هالفاتورة", alreadyCancelled: "ملغاة من قبل", dunningsDone: "رسائل التذكير يلي انعملت", schedule: "جدول الدفع", payments: "الدفعات الواصلة", noPayments: "لسا ما في ولا دفعة", fee: "رسوم", newDue: "المهلة الجديدة", editPlan: "تعديل خطة الأقساط", kpiOpen: "ديون عند الزبائن", openInvoices: "فواتير مفتوحة", days: "يوم",
     title: "الدفعات", receivables: "المستحقات", paid: "مدفوع", open: "باقي", overdue: "متأخر", credit: "رصيد للزبون",
     status: { PAID: "مدفوع", OPEN: "مو مدفوع", PARTIAL: "مدفوع جزئياً", OVERDUE: "متأخر", CREDIT: "رصيد للزبون، لازم يرجعله" },
@@ -212,6 +215,7 @@ const ar: Dict = {
     errors: { date: "اكتب تاريخ صحيح", vendor: "اكتب اسم المورد", amount: "اكتب مبلغ صحيح", rate: "نسبة الضريبة غلط", goodsService: "شراء البضاعة ما بيكون خدمة، شيك نوع الضريبة", rcRate: "بهالحالة اختار ١٩٪ أو ٧٪", vatIdRequired: "للبضاعة من أوروبا لازم الرقم الضريبي الأوروبي للمورد", paidInfo: "اكتب تاريخ الدفع وطريقته", paidDate: "تاريخ الدفع قبل الفاتورة بكتير", duplicate: "هالفاتورة من هالمورد مسجلة من قبل", periodLocked: "هالشهر مسكّر", notFound: "المصروف مو موجود", fileType: "اختار صورة أو ملف", fileTooLarge: "الملف كبير، الحد ٨ ميغا" },
   },
   rep: {
+    viewMonth: "افتح تقرير الشهر", loss: "خسارة", lossNote: "العمود تحت خط الصفر = خسارة بهالشهر.", chartHint: "اضغط على أي شهر لتشوف أرقامه.", noYearData: "لسا ما في أرقام بهالسنة.",
     table: "اعرضها كجدول",
     title: "التقارير", revenue: "المبيعات بدون ضريبة", cogs: "كلفة البضاعة المباعة", grossProfit: "الربح الإجمالي", margin: "نسبة الربح", expenses: "المصاريف", losses: "التالف", profit: "الربح الصافي",
     channels: "قنوات البيع", channel: "القناة", direct: "مصاريف القناة", contribution: "ربح القناة", byCategory: "المصاريف حسب النوع",

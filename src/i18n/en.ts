@@ -108,7 +108,7 @@ const en: Dict = {
     title: "Stock", movements: "Movements", value: "Stock value (cost)", low: "below minimum", filterLow: "Low stock only",
     type: { RECEIPT: "Goods in", SALE: "Sale", RETURN: "Return", WRITE_OFF: "Loss", ADJUSTMENT: "Stocktake", CANCEL: "Cancellation" },
     adjust: "Stocktake correction", counted: "Counted quantity", adjustReason: "Reason", adjusted: "Stock corrected",
-    avgCost: "Avg. cost", batches: "Batches", expiresIn: "expires in {d} days", expired: "expired",
+    avgCost: "Avg. cost", batches: "Batches", expiresIn: "expires in {d} days", expiresToday: "expires today", expired: "expired",
   },
   writeOff: {
     title: "Losses & write-offs", new: "Record loss", reason: "Reason",
@@ -161,6 +161,7 @@ const en: Dict = {
     add: "Add", inDoc: "Added: {n}", done: "Done", empty: "No products found.", lines: "Lines",
   },
   sales: {
+    totalSales: "Total sales", totalSalesSub: "Valid invoices: {n} (gross, after cancellations)", totalCancelled: "Total cancelled", totalCancelledSub: "Invoices fully or partly cancelled: {n}", totalsNote: "All invoices so far, amounts incl. VAT.", totalsFiltered: "Only for the chosen search or customer, amounts incl. VAT.",
     invoice: "Invoice", offer: "Quote", title: "Sales", newOffer: "New quote", newInvoice: "Direct invoice", offers: "Quotes", invoices: "Invoices",
     customer: "Customer", pickCustomer: "Choose customer", lines: "Lines", price: "Unit price (net)", lineDiscount: "Disc. %",
     docDiscount: "Overall discount %", subtotal: "Subtotal", discount: "Discount",
@@ -180,6 +181,8 @@ const en: Dict = {
     retention: "Retention of title", reservation: "Reservation",
   },
   pay: {
+    planRemoveHint: "Without instalments the normal due date applies. Save to apply.",
+    firstInvalid: "First instalment: please enter a valid amount", firstTooBig: "The first instalment is larger than the invoice total", countInvalid: "Number of instalments: 1 to 36", everyInvalid: "Every: 1 to 365 days", preview: "Gives {n} instalments: the first ({first}) on {from}, the last on {to}.", previewOne: "Gives one instalment ({first}) on {from}.", sumOk: "Total matches ({sum})",
     amountInvalid: "Please enter a valid amount", planInvalid: "Plan incomplete (check dates and amounts)", planOrder: "Please sort instalments by date", reason: "Please enter a reason", notOverdue: "Nothing overdue – no reminder needed", notPayable: "No payment can be recorded for this invoice", alreadyCancelled: "Already cancelled", dunningsDone: "Reminders issued", schedule: "Payment schedule", payments: "Payments received", noPayments: "No payment yet", fee: "Fee", newDue: "New deadline", editPlan: "Change instalment plan", kpiOpen: "Receivables", openInvoices: "open invoices", days: "days",
     title: "Payments", receivables: "Receivables", paid: "Paid", open: "Open", overdue: "Overdue", credit: "Credit",
     status: { PAID: "Paid", OPEN: "Open", PARTIAL: "Partly paid", OVERDUE: "Overdue", CREDIT: "Credit – refund" },
@@ -212,6 +215,7 @@ const en: Dict = {
     errors: { date: "Please enter a valid date", vendor: "Please enter the supplier", amount: "Please enter a valid amount", rate: "Invalid VAT rate", goodsService: "A goods purchase can't be a service – please check the tax case", rcRate: "Please choose 19 % or 7 % for this tax case", vatIdRequired: "The supplier's VAT ID is required for goods from the EU", paidInfo: "Please enter payment date and method", paidDate: "Payment date is too long before the invoice date", duplicate: "This invoice from this supplier is already recorded", periodLocked: "This month is closed", notFound: "Expense not found", fileType: "Please choose a photo or PDF", fileTooLarge: "File too large (max. 8 MB)" },
   },
   rep: {
+    viewMonth: "Open month report", loss: "Loss", lossNote: "A bar below the 0 line = a loss in that month.", chartHint: "Tap a month to see its numbers.", noYearData: "No figures for this year yet.",
     table: "Show as table",
     title: "Reports", revenue: "Net sales", cogs: "Cost of goods sold", grossProfit: "Gross profit", margin: "Margin", expenses: "Costs", losses: "Losses", profit: "Profit",
     channels: "Sales channels", channel: "Channel", direct: "Direct costs", contribution: "Contribution", byCategory: "Costs by category",

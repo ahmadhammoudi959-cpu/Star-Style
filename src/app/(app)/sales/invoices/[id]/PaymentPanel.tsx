@@ -116,7 +116,7 @@ export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: stri
           )}
           {st.openCents > 0 && (
             <details className="card animate-rise group/d p-5">
-              <summary className="cursor-pointer list-none font-bold">{t.pay.editPlan}</summary>
+              <summary className="-m-1 flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg p-1 font-bold outline-none focus-visible:ring-2 focus-visible:ring-brand-500 [&::-webkit-details-marker]:hidden"><span className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4 text-brand-600" />{t.pay.editPlan}</span><Icon name="arrowRight" className="h-4 w-4 rotate-90 text-ink-soft transition group-open/d:-rotate-90" /></summary>
               <div className="mt-3"><PlanForm t={t} invoiceId={inv.id} grossCents={inv.grossCents} plan={plan} today={today} intl={intl} /></div>
             </details>
           )}

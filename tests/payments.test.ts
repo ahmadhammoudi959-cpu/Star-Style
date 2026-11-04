@@ -39,6 +39,26 @@ describe("Zahlungsstand (rein)", () => {
     expect(rows.map((r) => r.amountCents)).toEqual([333_33, 333_33, 333_35]);
     expect(rows.map((r) => r.dueDate)).toEqual(["2026-11-01", "2026-12-01", "2026-12-31"]);
   });
+
+  it("Ratenplan: erste Rate zählt mit; Rest nie verloren; Summe immer = Brutto", () => {
+    const sum = (r: { amountCents: number }[]) => r.reduce((s, x) => s + x.amountCents, 0);
+    // 100 € sofort + 2 weitere Raten (Anzahl 3 inkl. erster)
+    const a = splitInstallments(400_00, 100_00, 3, "2026-11-04", 30, addDaysIso);
+    expect(a).toEqual([
+      { dueDate: "2026-11-04", amountCents: 100_00 }, { dueDate: "2026-12-04", amountCents: 150_00 }, { dueDate: "2027-01-03", amountCents: 150_00 },
+    ]);
+    // Anzahl 1 mit Anzahlung: der Rest bekommt trotzdem eine Rate (früher ging er verloren)
+    const b = splitInstallments(400_00, 100_00, 1, "2026-11-04", 30, addDaysIso);
+    expect(b).toEqual([{ dueDate: "2026-11-04", amountCents: 100_00 }, { dueDate: "2026-12-04", amountCents: 300_00 }]);
+    // erste Rate = alles
+    expect(splitInstallments(400_00, 400_00, 3, "2026-11-04", 30, addDaysIso)).toEqual([{ dueDate: "2026-11-04", amountCents: 400_00 }]);
+    for (const [total, first, n, every] of [[71_40, 0, 3, 30], [71_40, 10_00, 5, 14], [1_000_01, 333_33, 4, 7], [1, 0, 3, 30], [999_99, 0, 36, 30]]) {
+      const r = splitInstallments(total, first, n, "2026-11-04", every, addDaysIso);
+      expect(sum(r)).toBe(total);
+      expect(r.every((x) => x.amountCents > 0)).toBe(true);
+      expect(r.map((x) => x.dueDate)).toEqual([...r.map((x) => x.dueDate)].sort());
+    }
+  });
 });
 
 const run = process.env.DATABASE_URL ? describe : describe.skip;

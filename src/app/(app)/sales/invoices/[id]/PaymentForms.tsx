@@ -1,7 +1,7 @@
 "use client";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { addPaymentAction, cancelPaymentAction, dunningAction, savePlanAction } from "../../pay-actions";
-import { PlanEditor, fromPlanRows, toPlanRows } from "../../PlanEditor";
+import { PlanEditor, fromPlanRows, planProblem, toPlanRows } from "../../PlanEditor";
 import { Icon } from "@/components/Icon";
 import { formatCents } from "@/lib/money";
 import type { Dict } from "@/i18n/de";
@@ -55,17 +55,20 @@ export function PlanForm({ t, invoiceId, grossCents, plan, today, intl }: { t: D
   const [state, action, pending] = useActionState(savePlanAction, undefined);
   const [rows, setRows] = useState(toPlanRows(plan));
   const p = fromPlanRows(rows);
-  const ok = !rows.length || p.reduce((s, r) => s + r.amountCents, 0) === grossCents;
+  const problem = planProblem(rows, grossCents);
+  const changed = JSON.stringify(p) !== JSON.stringify(plan.map((r) => ({ dueDate: r.dueDate, amountCents: r.amountCents })));
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="invoiceId" value={invoiceId} />
       <input type="hidden" name="plan" value={JSON.stringify(p)} />
       <PlanEditor t={t} grossCents={grossCents} rows={rows} setRows={setRows} today={today} intl={intl} />
       <div className="flex gap-2">
-        <button disabled={pending || !ok} className="btn-primary flex-1">{t.pay.savePlan}</button>
-        {plan.length > 0 && <button type="button" disabled={pending} onClick={() => setRows([])} className="btn-ghost">{t.pay.removePlan}</button>}
+        <button disabled={pending || !!problem || !changed} className="btn-primary flex-1">{t.pay.savePlan}</button>
+        {rows.length > 0 && <button type="button" disabled={pending} onClick={() => setRows([])} className="btn-ghost">{t.pay.removePlan}</button>}
       </div>
-      {state?.ok && <p className="text-xs font-semibold text-brand-700">✓ {t.common.saved}</p>}
+      {problem && problem !== "planSum" && <p className="text-xs font-semibold text-red-600">{t.pay[problem]}</p>}
+      {!rows.length && plan.length > 0 && <p className="text-xs text-ink-soft">{t.pay.planRemoveHint}</p>}
+      {state?.ok && !changed && <p className="text-xs font-semibold text-emerald-700">✓ {t.common.saved}</p>}
       <Msg t={t} state={state} />
     </form>
   );

@@ -72,7 +72,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
                       <td className="num text-end font-semibold">{l.qty}</td>
                       <td className="num text-end">{formatCents(l.cost, intl)}</td>
                       <td className="num text-end font-semibold">{formatCents(l.qty * l.cost, intl)}</td>
-                      <td dir="ltr" className="text-start text-xs">{l.batchNo || "—"}</td>
+                      <td className="text-xs"><bdi dir="ltr">{l.batchNo || "—"}</bdi></td>
                       <td className="num">{l.expiry ? formatDate(l.expiry, intl) : "—"}</td>
                     </tr>
                   ))}

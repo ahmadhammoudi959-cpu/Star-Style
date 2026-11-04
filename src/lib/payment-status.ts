@@ -63,7 +63,8 @@ export function splitInstallments(totalCents: number, firstCents: number, count:
   const rows: { dueDate: string; amountCents: number }[] = [];
   let rest = totalCents;
   if (firstCents > 0) { rows.push({ dueDate: firstDate, amountCents: firstCents }); rest -= firstCents; }
-  const n = Math.max(count - (firstCents > 0 ? 1 : 0), 0);
+  // „Anzahl Raten“ zählt die erste Rate mit; bleibt danach ein Rest, bekommt er mindestens eine Rate (Summe = Brutto)
+  const n = Math.min(Math.max(count - (firstCents > 0 ? 1 : 0), rest > 0 ? 1 : 0), Math.max(rest, 0)); // nie eine Rate mit 0 Cent
   if (n > 0 && rest > 0) {
     const each = Math.floor(rest / n);
     for (let i = 0; i < n; i++) {

@@ -9,7 +9,7 @@ import { ProductPickerBar } from "@/components/ProductPickerBar";
 import { bpToPercent, formatCents, parseMoney, parsePercentToBp } from "@/lib/money";
 import { computeTotals, determineTaxMode, effectiveRateBp } from "@/lib/tax";
 import type { Dict } from "@/i18n/de";
-import { PlanEditor, fromPlanRows, toPlanRows, type PlanRow } from "./PlanEditor";
+import { PlanEditor, fromPlanRows, planProblem, toPlanRows, type PlanRow } from "./PlanEditor";
 
 export type CustomerOpt = { id: string; number: number; name: string; city: string; type: "COMPANY" | "PERSON"; country: string; vatIdStatus: "NONE" | "PENDING" | "VALID" | "INVALID"; priceGroup: "WHOLESALE" | "RETAIL"; openCents?: number; creditLimitCents?: number | null };
 export type SaleOption = PickerOption & { wholesalePriceCents: number; retailPriceCents: number; vatRateBp: number; available: number };
@@ -63,7 +63,8 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
   const [planRows, setPlanRows] = useState<PlanRow[]>(toPlanRows(initial.installments ?? []));
   const initialPaid = payMode === "full" ? gross : payMode === "partial" ? Math.min(parseMoney(partial) ?? 0, gross) : 0;
   const plan = planOn ? fromPlanRows(planRows) : [];
-  const planOk = !planOn || (plan.length > 0 && plan.every((r) => r.amountCents > 0 && r.dueDate) && plan.reduce((s, r) => s + r.amountCents, 0) === gross);
+  const planErr = !planOn ? null : planRows.length ? planProblem(planRows, gross) : "planInvalid"; // gleiche Prüfung wie der Server
+  const planOk = !planErr;
   const overLimit = kind === "invoice" && customer?.creditLimitCents != null && (customer.openCents ?? 0) + gross - initialPaid > customer.creditLimitCents;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
 
@@ -263,7 +264,7 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
             </dl>
           ) : <p className="text-sm text-ink-soft">{t.sales.noLines}</p>}
           {overLimit && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">{t.pay.creditWarn} {t.pay.openNow}: {formatCents(customer?.openCents ?? 0, intl)} · {t.pay.creditLimit}: {formatCents(customer?.creditLimitCents ?? 0, intl)}</p>}
-          {!planOk && <p className="mt-3 text-xs font-semibold text-red-600">{t.pay.planSum}</p>}
+          {planErr && <p className="mt-3 text-xs font-semibold text-red-600">{t.pay[planErr]}</p>}
           <div className="mt-4 grid gap-2">
             <button type="submit" onClick={(e) => { if (pending) e.preventDefault(); else choose("save"); }}
               disabled={!customer || !valid || !lines.length || !planOk} className={`${kind === "offer" ? "btn-primary py-3" : "btn-ghost py-3"} ${pending ? "opacity-60" : ""}`}>

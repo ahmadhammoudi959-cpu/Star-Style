@@ -16,7 +16,7 @@ export function AccountsForm({ t, rows }: { t: Dict; rows: { key: string; label:
         <thead><tr><th></th><th className="text-end">{t.settings.standard}</th><th className="w-40"></th></tr></thead>
         <tbody>{rows.map((r) => (
           <tr key={r.key}>
-            <td dir="ltr" className="text-start">{r.label}</td>
+            <td><bdi dir="ltr">{r.label}</bdi></td>
             <td className="num text-end text-ink-soft">{r.standard}</td>
             <td><input name={`acc_${r.key}`} value={vals[r.key]} onChange={(e) => setVals({ ...vals, [r.key]: e.target.value.replace(/\D/g, "") })} inputMode="numeric" maxLength={8} placeholder={String(r.standard)} dir="ltr" className={`input num py-1.5 ${vals[r.key] ? "ring-2 ring-amber-300" : ""}`} /></td>
           </tr>

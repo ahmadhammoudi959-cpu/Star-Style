@@ -39,7 +39,9 @@ export async function cancelPaymentAction(_: PayState, fd: FormData): Promise<Pa
 export async function savePlanAction(_: PayState, fd: FormData): Promise<PayState> {
   const s = await requireSession();
   const invoiceId = String(fd.get("invoiceId"));
-  const plan = z.array(z.object({ dueDate: date, amountCents: z.number().int() })).safeParse(JSON.parse(String(fd.get("plan") ?? "[]")));
+  let raw: unknown;
+  try { raw = JSON.parse(String(fd.get("plan") ?? "[]")); } catch { return { error: "planInvalid" }; }
+  const plan = z.array(z.object({ dueDate: date, amountCents: z.number().int() })).max(60).safeParse(raw);
   if (!plan.success) return { error: "planInvalid" };
   try { await setInstallments(invoiceId, plan.data, s.uid); } catch (e) { return fail(e); }
   return done(invoiceId);

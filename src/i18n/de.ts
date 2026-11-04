@@ -106,7 +106,7 @@ const de = {
     title: "Lager", movements: "Bewegungen", value: "Lagerwert (EK)", low: "unter Mindestbestand", filterLow: "Nur niedriger Bestand",
     type: { RECEIPT: "Wareneingang", SALE: "Verkauf", RETURN: "Rückgabe", WRITE_OFF: "Verlust", ADJUSTMENT: "Inventur", CANCEL: "Storno" },
     adjust: "Inventur-Korrektur", counted: "Gezählter Bestand", adjustReason: "Grund", adjusted: "Bestand korrigiert",
-    avgCost: "Ø Einkaufspreis", batches: "Chargen", expiresIn: "läuft ab in {d} Tagen", expired: "abgelaufen",
+    avgCost: "Ø Einkaufspreis", batches: "Chargen", expiresIn: "läuft ab in {d} Tagen", expiresToday: "läuft heute ab", expired: "abgelaufen",
   },
   writeOff: {
     title: "Verluste & Abschreibungen", new: "Verlust erfassen", reason: "Grund",
@@ -159,6 +159,7 @@ const de = {
     add: "Hinzufügen", inDoc: "Ausgewählt: {n}", done: "Fertig", empty: "Keine Artikel gefunden.", lines: "Positionen",
   },
   sales: {
+    totalSales: "Verkäufe gesamt", totalSalesSub: "Gültige Rechnungen: {n} (brutto, nach Stornos)", totalCancelled: "Storniert gesamt", totalCancelledSub: "Ganz oder teilweise stornierte Rechnungen: {n}", totalsNote: "Alle Rechnungen bisher, Beträge mit MwSt.", totalsFiltered: "Nur für die gewählte Suche bzw. den gewählten Kunden, Beträge mit MwSt.",
     invoice: "Rechnung", offer: "Angebot", title: "Verkauf", newOffer: "Neues Angebot", newInvoice: "Direkt-Rechnung", offers: "Angebote", invoices: "Rechnungen",
     customer: "Kunde", pickCustomer: "Kunde wählen", lines: "Positionen", price: "Einzelpreis netto", lineDiscount: "Rabatt %",
     docDiscount: "Gesamtrabatt %", subtotal: "Zwischensumme", discount: "Rabatt",
@@ -178,6 +179,8 @@ const de = {
     retention: "Eigentumsvorbehalt", reservation: "Reservierung",
   },
   pay: {
+    planRemoveHint: "Ohne Raten gilt wieder das normale Zahlungsziel. Zum Übernehmen speichern.",
+    firstInvalid: "Erste Rate: bitte einen gültigen Betrag eingeben", firstTooBig: "Die erste Rate ist größer als der Rechnungsbetrag", countInvalid: "Anzahl Raten: 1 bis 36", everyInvalid: "Abstand: 1 bis 365 Tage", preview: "Ergibt {n} Raten: die erste ({first}) am {from}, die letzte am {to}.", previewOne: "Ergibt eine Rate ({first}) am {from}.", sumOk: "Summe stimmt ({sum})",
     amountInvalid: "Bitte einen gültigen Betrag eingeben", planInvalid: "Ratenplan unvollständig (Datum und Betrag prüfen)", planOrder: "Raten bitte nach Datum sortieren", reason: "Bitte einen Grund angeben", notOverdue: "Nichts überfällig – keine Mahnung nötig", notPayable: "Für diese Rechnung kann keine Zahlung erfasst werden", alreadyCancelled: "Schon storniert", dunningsDone: "Erstellte Mahnungen", schedule: "Zahlungsplan", payments: "Eingegangene Zahlungen", noPayments: "Noch keine Zahlung", fee: "Gebühr", newDue: "Neue Frist", editPlan: "Ratenplan ändern", kpiOpen: "Offene Forderungen", openInvoices: "offene Rechnungen", days: "Tage",
     title: "Zahlungen", receivables: "Offene Posten", paid: "Bezahlt", open: "Offen", overdue: "Überfällig", credit: "Guthaben",
     status: { PAID: "Bezahlt", OPEN: "Offen", PARTIAL: "Teilweise bezahlt", OVERDUE: "Überfällig", CREDIT: "Guthaben – erstatten" },
@@ -210,6 +213,7 @@ const de = {
     errors: { date: "Bitte ein gültiges Datum eingeben", vendor: "Bitte den Lieferanten eintragen", amount: "Bitte einen gültigen Betrag eingeben", rate: "MwSt.-Satz ungültig", goodsService: "Wareneinkauf kann keine Dienstleistung sein – bitte Steuerfall prüfen", rcRate: "Bei diesem Steuerfall bitte 19 % oder 7 % wählen", vatIdRequired: "Bei Ware aus der EU ist die USt-IdNr. des Lieferanten Pflicht", paidInfo: "Bitte Zahlungsdatum und Zahlungsart angeben", paidDate: "Zahlungsdatum liegt zu weit vor dem Rechnungsdatum", duplicate: "Diese Rechnung von diesem Lieferanten ist schon erfasst", periodLocked: "Dieser Monat ist abgeschlossen", notFound: "Ausgabe nicht gefunden", fileType: "Bitte ein Foto oder PDF wählen", fileTooLarge: "Datei ist zu groß (max. 8 MB)" },
   },
   rep: {
+    viewMonth: "Monatsbericht öffnen", loss: "Verlust", lossNote: "Säule unter der 0-Linie = Verlust in diesem Monat.", chartHint: "Tippe auf einen Monat, um seine Zahlen zu sehen.", noYearData: "In diesem Jahr gibt es noch keine Zahlen.",
     table: "Als Tabelle anzeigen",
     title: "Berichte", revenue: "Umsatz netto", cogs: "Wareneinsatz", grossProfit: "Rohertrag", margin: "Marge", expenses: "Kosten", losses: "Verluste", profit: "Ergebnis",
     channels: "Verkaufskanäle", channel: "Kanal", direct: "Direkte Kosten", contribution: "Deckungsbeitrag", byCategory: "Kosten nach Kategorie",

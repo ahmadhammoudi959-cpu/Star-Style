@@ -253,7 +253,7 @@ function Log({ t, v }: { t: Dict; v: SecurityView }) {
                   <td className="num whitespace-nowrap py-1.5">{r.at}</td>
                   <td><span className={`badge ${tone(r.ok, r.key)}`}>{L.reasons[r.key]}</span></td>
                   <td>{r.device}</td>
-                  <td dir="ltr" className="break-all text-start">{r.ip}</td>
+                  <td className="break-all"><bdi dir="ltr">{r.ip}</bdi></td>
                 </tr>
               ))}
             </tbody>

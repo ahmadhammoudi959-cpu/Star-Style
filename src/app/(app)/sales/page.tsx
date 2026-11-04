@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { getI18n } from "@/i18n";
+import { fill, getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { formatCents } from "@/lib/money";
@@ -37,6 +37,19 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
           and (${cust}::text is null or i.customer_id = ${cust})
           and (${st}::text is null or ${st} in ('PAID', 'OPEN', 'PARTIAL', 'OVERDUE', 'CREDIT') or i.status::text = ${st})
         order by i.created_at desc limit 200`)).rows;
+
+  // Summen (Wunsch Inhaber 04.11.2026): gültige Rechnungen und Storniertes – gleiche Suche/Kunde wie die Liste, ohne 200er-Grenze.
+  // Storniert = ganze stornierte Rechnung; bei einer Korrektur nur der Betrag, um den die neue Rechnung kleiner ist.
+  const totals = tab === "invoices" ? (await db.execute<{ sales: string; sales_n: number; cancelled: string; cancelled_n: number }>(sql`
+    select coalesce(sum(i.gross_cents) filter (where i.status = 'ISSUED'), 0)::bigint as sales,
+           count(*) filter (where i.status = 'ISSUED')::int as sales_n,
+           coalesce(sum(greatest(i.gross_cents - coalesce(r.gross, 0), 0)) filter (where i.status = 'CANCELLED'), 0)::bigint as cancelled,
+           count(*) filter (where i.status = 'CANCELLED' and i.gross_cents - coalesce(r.gross, 0) > 0)::int as cancelled_n
+    from invoices i join customers c on c.id = i.customer_id
+    left join lateral (select sum(x.gross_cents) as gross from invoices x where x.replaces_invoice_id = i.id and x.status <> 'DRAFT') r on true
+    where i.kind = 'INVOICE'
+      and (${like}::text is null or lower(coalesce(i.number,'')) like ${like} or lower(c.name) like ${like})
+      and (${cust}::text is null or i.customer_id = ${cust})`)).rows[0] : null;
 
   const pay = tab === "invoices" ? new Map((await openItems()).map((r) => [r.invoiceId, r])) : new Map();
   const PAY_TONE = { PAID: "bg-emerald-100 text-emerald-800", OPEN: "bg-slate-100 text-slate-700", PARTIAL: "bg-sky-100 text-sky-800", OVERDUE: "bg-red-100 text-red-800", CREDIT: "bg-violet-100 text-violet-800" } as const;
@@ -83,6 +96,27 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         <FilterSelect name="status" label={t.lists.status} allLabel={t.lists.allStatuses} defaultValue={status} icon="check" className="md:w-56" options={statusOptions} />
         {filtered && <Link href={`/sales?tab=${tab}`} className="btn-ghost group"><Icon name="x" className="h-4 w-4" />{t.stock.clear}</Link>}
       </form>
+      {totals && (
+        <div className="mb-4 grid gap-3 animate-rise sm:grid-cols-2">
+          <div className="card group flex items-center gap-4 p-4">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Icon name="receipt" className="icon-pop h-5 w-5" /></span>
+            <div className="min-w-0">
+              <div className="text-sm text-ink-soft">{t.sales.totalSales}</div>
+              <div className="num text-2xl font-bold">{formatCents(Number(totals.sales), intl)}</div>
+              <div className="text-xs text-ink-soft">{fill(t.sales.totalSalesSub, { n: totals.sales_n })}</div>
+            </div>
+          </div>
+          <div className="card group flex items-center gap-4 p-4">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-red-50 text-red-600"><Icon name="x" className="icon-pop h-5 w-5" /></span>
+            <div className="min-w-0">
+              <div className="text-sm text-ink-soft">{t.sales.totalCancelled}</div>
+              <div className={`num text-2xl font-bold ${Number(totals.cancelled) > 0 ? "text-red-600" : ""}`}>{formatCents(Number(totals.cancelled), intl)}</div>
+              <div className="text-xs text-ink-soft">{fill(t.sales.totalCancelledSub, { n: totals.cancelled_n })}</div>
+            </div>
+          </div>
+          <p className="text-xs text-ink-soft sm:col-span-2">{q.trim() || customer ? t.sales.totalsFiltered : t.sales.totalsNote}</p>
+        </div>
+      )}
       <div className="card overflow-hidden animate-rise">
         {shown.length === 0 ? <p className="p-10 text-center text-ink-soft">{filtered ? t.lists.noMatch : t.sales.empty}</p> : (
           <>
