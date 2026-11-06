@@ -14,7 +14,12 @@ export type ContentBlock =
   | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean };
 export type Message = { role: "user" | "assistant"; content: string | ContentBlock[] };
-export type Tool = { name: string; description: string; input_schema: Record<string, unknown> };
+export type Tool = { name: string; description: string; input_schema: Record<string, unknown>; strict?: boolean };
+/**
+ * Höchstzahl Ausgabe-Tokens je Aufruf. Neuere Modelle (z. B. claude-sonnet-5-5) denken immer mit (adaptives Denken),
+ * und das Denken zählt in max_tokens – zu knapp = Antwort bricht ab (stop_reason "max_tokens"). Bezahlt wird nur, was entsteht.
+ */
+export const AI_MAX_TOKENS = 8000;
 export type AiResponse = { content: ContentBlock[]; stop_reason: string; usage?: { input_tokens: number; output_tokens: number } };
 
 export class AiError extends Error {
@@ -25,7 +30,7 @@ export class AiError extends Error {
 export async function callClaude(req: { system?: string; messages: Message[]; tools?: Tool[]; tool_choice?: Record<string, unknown>; max_tokens?: number }, opts: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}): Promise<AiResponse> {
   if (!aiConfigured()) throw new AiError("notConfigured");
   const f = opts.fetchImpl ?? fetch;
-  const body = JSON.stringify({ model: aiModel(), max_tokens: req.max_tokens ?? 2048, system: req.system, messages: req.messages, tools: req.tools, tool_choice: req.tool_choice });
+  const body = JSON.stringify({ model: aiModel(), max_tokens: req.max_tokens ?? AI_MAX_TOKENS, system: req.system, messages: req.messages, tools: req.tools, tool_choice: req.tool_choice });
   let last: AiError = new AiError("network");
   for (let attempt = 0; attempt < 3; attempt++) {
     const ctrl = new AbortController();

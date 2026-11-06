@@ -164,7 +164,7 @@ export async function ask(history: { role: "user" | "assistant"; text: string }[
   const messages: Message[] = history.slice(-10).map((h) => ({ role: h.role, content: h.text }));
   const used: string[] = [];
   for (let round = 0; round < 6; round++) {
-    const res = await callClaude({ system: systemPrompt(locale, company), messages, tools: TOOLS, max_tokens: 1500 });
+    const res = await callClaude({ system: systemPrompt(locale, company), messages, tools: TOOLS }); // max_tokens: AI_MAX_TOKENS (Denken zählt mit)
     messages.push({ role: "assistant", content: res.content });
     const calls = res.content.filter((c): c is Extract<ContentBlock, { type: "tool_use" }> => c.type === "tool_use");
     if (res.stop_reason !== "tool_use" || !calls.length) {
@@ -189,7 +189,7 @@ export async function ask(history: { role: "user" | "assistant"; text: string }[
 export async function summarizeMonth(month: string, prevMonth: string, locale: string, company: string) {
   const [cur, prev, stock, recv] = await Promise.all([runTool("month_report", { month }), runTool("month_report", { month: prevMonth }), runTool("stock_insights", {}), runTool("open_receivables", { limit: 10 })]);
   const res = await callClaude({
-    system: systemPrompt(locale, company), max_tokens: 1200,
+    system: systemPrompt(locale, company),
     messages: [{ role: "user", content: `Write the monthly report for ${month} for the owner: a short paragraph (what went well, what not, compared to the previous month), then 3 concrete recommendations as a list. Plain language, no jargon.\n\nCURRENT MONTH:\n${JSON.stringify(cur)}\n\nPREVIOUS MONTH:\n${JSON.stringify(prev)}\n\nSTOCK:\n${JSON.stringify(stock)}\n\nRECEIVABLES:\n${JSON.stringify(recv)}` }],
   });
   return res.content.filter((c): c is Extract<ContentBlock, { type: "text" }> => c.type === "text").map((c) => c.text).join("\n").trim();

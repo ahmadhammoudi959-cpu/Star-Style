@@ -1,10 +1,10 @@
 import "server-only";
-import { callClaude, type ContentBlock } from "./client";
+import { AiError, callClaude, type ContentBlock, type Message, type Tool } from "./client";
 import { mapReceipt, type RawReceipt } from "./receipt-map";
 import { EXPENSE_CATEGORIES } from "../accounts";
 import { todayIso } from "../dates";
 
-const TOOL = {
+const TOOL: Tool = {
   name: "record_invoice",
   description: "Record the data read from one purchase invoice or receipt.",
   input_schema: {
@@ -29,6 +29,7 @@ const TOOL = {
       notes: { type: "string", description: "Very short note (max 1 sentence, German) only if something is unclear or unusual, otherwise empty" },
     },
     required: ["is_invoice", "vendor_name", "vendor_country", "vendor_vat_id", "invoice_number", "invoice_date", "currency", "total_gross", "total_net", "total_vat", "vat_rate_percent", "reverse_charge", "is_goods", "category", "already_paid", "payment_method", "notes"],
+    additionalProperties: false,
   },
 };
 
@@ -37,17 +38,31 @@ Start Style is always the BUYER (recipient); the vendor is the company that issu
 Read the numbers exactly as printed. Never guess numbers that are not visible: use 0 or an empty string instead.
 Amounts are plain decimal numbers (e.g. 1234.56), dates are YYYY-MM-DD. Always answer by calling the record_invoice tool.`;
 
-export async function readReceipt(data: Buffer, mime: string) {
+/**
+ * Beleg lesen. Ohne erzwungenes Werkzeug: claude-sonnet-5-5 lehnt tool_choice "tool"/"any" ab (400, 06.11.2026) –
+ * darum tool_choice "auto" + strict (Eingabe passt genau zum Schema) und die Anweisung im Prompt.
+ * Kennt ein Modell/Gateway "strict" nicht → ohne strict. Antwortet das Modell nur mit Text → einmal neu fragen.
+ */
+export async function readReceipt(data: Buffer, mime: string, opts: { fetchImpl?: typeof fetch } = {}) {
   const b64 = data.toString("base64");
   const doc: ContentBlock = mime === "application/pdf"
     ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }
     : { type: "image", source: { type: "base64", media_type: mime, data: b64 } };
-  const res = await callClaude({
-    system: SYSTEM, max_tokens: 1024,
-    tools: [TOOL], tool_choice: { type: "tool", name: TOOL.name },
-    messages: [{ role: "user", content: [doc, { type: "text", text: "Read this document and record it." }] }],
-  });
-  const use = res.content.find((c) => c.type === "tool_use") as Extract<ContentBlock, { type: "tool_use" }> | undefined;
-  if (!use) throw new Error("noToolUse");
-  return mapReceipt(use.input as RawReceipt, todayIso());
+  const messages: Message[] = [{ role: "user", content: [doc, { type: "text", text: "Read this document and record it with the record_invoice tool." }] }];
+  const call = (strict: boolean) =>
+    callClaude({ system: SYSTEM, tools: [strict ? { ...TOOL, strict: true } : TOOL], tool_choice: { type: "auto" }, messages }, opts);
+  let strict = true;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let res;
+    try {
+      res = await call(strict);
+    } catch (e) {
+      if (!(strict && e instanceof AiError && e.code === "badRequest" && /strict/i.test(e.message))) throw e;
+      strict = false;
+      res = await call(false);
+    }
+    const use = res.content.find((c) => c.type === "tool_use") as Extract<ContentBlock, { type: "tool_use" }> | undefined;
+    if (use) return mapReceipt(use.input as RawReceipt, todayIso());
+  }
+  throw new Error("noToolUse");
 }
