@@ -61,5 +61,15 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   runtime: "nodejs",
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|fonts/).*)"],
+  // Server-Actions (Kopfzeile next-action) und der Shop-Webhook laufen NICHT durch den Türsteher:
+  // Next.js 15.5 wartet bei Node-Middleware nicht, bis der für sie kopierte Body fertig ist (`finalize()` ohne await,
+  // erst in Next 16 behoben). Kommt ein Upload über ~64 KB in Stücken an (Render-Proxy), fehlte der Action der Anfang
+  // samt Datei (06.11.2026: „Beleg lesen“ → pickFirst, Belegfotos/Produktfotos still weg).
+  // Sicher, weil jede Server-Action selbst requireSession() prüft (gleiche Prüfung inkl. Sitzungs-Version) und der Webhook per HMAC.
+  matcher: [
+    {
+      source: "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|fonts/|api/shopify/webhook).*)",
+      missing: [{ type: "header", key: "next-action" }],
+    },
+  ],
 };

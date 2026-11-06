@@ -15,7 +15,7 @@ export async function readReceiptAction(fd: FormData): Promise<{ ok: ReceiptSugg
   await requireSession();
   if (!aiConfigured()) return { error: "notConfigured" };
   const file = fd.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "pickFirst" };
+  if (!(file instanceof File) || file.size === 0) { console.warn("readReceipt: keine Datei in der Anfrage angekommen"); return { error: "pickFirst" }; }
   if (!AI_MIME.includes(file.type) || file.size > 9 * 1024 * 1024) return { error: "fileType" };
   try {
     return { ok: await readReceipt(Buffer.from(await file.arrayBuffer()), file.type) };

@@ -96,7 +96,7 @@ export function ExpenseForm({ t, intl, locale, initial, suppliers, locked, ai }:
       fd.set("file", await shrink(f));
       const r = await readReceiptAction(fd);
       if ("ok" in r) applyAi(r.ok);
-      else setAiMsg({ ok: false, text: r.error === "fileType" ? t.exp.errors.fileType : (t.ai.errors as Record<string, string>)[r.error] ?? t.ai.failed, warnings: [] });
+      else setAiMsg({ ok: false, text: r.error === "fileType" ? t.exp.errors.fileType : r.error === "pickFirst" ? t.ai.pickFirst : (t.ai.errors as Record<string, string>)[r.error] ?? t.ai.failed, warnings: [] });
     });
   };
 

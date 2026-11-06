@@ -29,6 +29,8 @@ services:
       # optional – leer lassen = System läuft ohne KI
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: ANTHROPIC_BASE_URL  # eigenes KI-Gateway (leer = direkt api.anthropic.com)
+        sync: false
       - key: ANTHROPIC_MODEL
         value: claude-sonnet-5-5
       - key: SHOPIFY_API_VERSION
