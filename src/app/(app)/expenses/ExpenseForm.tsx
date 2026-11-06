@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useMemo, useRef, useState, useTransition } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import { readReceiptAction } from "../ai-actions";
 import type { ReceiptSuggestion } from "@/lib/ai/receipt-map";
 import { deleteExpenseAction, saveExpenseAction } from "./actions";
@@ -7,6 +7,7 @@ import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
 import { formatCents, parseMoney } from "@/lib/money";
 import { EU_COUNTRIES, EXPENSE_CATEGORIES, expenseAmounts, suggestTaxCase, type ExpenseCategory, type ExpenseTaxCase, type PayMethod } from "@/lib/accounts";
+import type { RegionOption } from "@/lib/regions";
 import type { Dict } from "@/i18n/de";
 
 export type ExpenseFormData = {
@@ -16,7 +17,6 @@ export type ExpenseFormData = {
 };
 type Supplier = { name: string; country: string; vatId: string };
 
-const OTHER_COUNTRIES = ["CH", "GB", "US", "TR", "CN", "AE", "NO"];
 const TAX_CASES: ExpenseTaxCase[] = ["DOMESTIC", "EU_SERVICE", "EU_GOODS", "NON_EU_SERVICE", "NO_VAT"];
 
 /** Großes Handyfoto verkleinern (nur für das Auslesen; gespeichert wird das Original). */
@@ -34,8 +34,8 @@ async function shrink(file: File): Promise<File> {
   } catch { return file; }
 }
 
-export function ExpenseForm({ t, intl, locale, initial, suppliers, locked, ai }: {
-  t: Dict; intl: string; locale: string; initial: ExpenseFormData; suppliers: Supplier[]; locked: boolean; ai: boolean;
+export function ExpenseForm({ t, intl, regions, initial, suppliers, locked, ai }: {
+  t: Dict; intl: string; regions: RegionOption[]; initial: ExpenseFormData; suppliers: Supplier[]; locked: boolean; ai: boolean;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [reading, startRead] = useTransition();
@@ -58,12 +58,6 @@ export function ExpenseForm({ t, intl, locale, initial, suppliers, locked, ai }:
   const [date, setDate] = useState(initial.date);
   const [paidAt, setPaidAt] = useState(initial.paidAt || initial.date);
   const [paidAtTouched, setPaidAtTouched] = useState(Boolean(initial.id));
-
-  const regions = useMemo(() => {
-    let dn: Intl.DisplayNames | null = null;
-    try { dn = new Intl.DisplayNames([locale], { type: "region" }); } catch { /* alter Browser */ }
-    return ["DE", ...EU_COUNTRIES, ...OTHER_COUNTRIES].map((c) => ({ code: c, name: dn?.of(c) ?? c }));
-  }, [locale]);
 
   const apply = (next: { country?: string; category?: ExpenseCategory }) => {
     if (taxTouched) return;

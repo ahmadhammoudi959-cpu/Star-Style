@@ -148,7 +148,7 @@ export async function runTool(name: string, i: Record<string, unknown>): Promise
   }
 }
 
-const LANG: Record<string, string> = { de: "German", ar: "Arabic (simple, friendly Levantine Arabic as spoken in Syria/Lebanon; keep product names as they are)", en: "English" };
+const LANG: Record<string, string> = { de: "German", ar: "Arabic (simple, friendly Levantine Arabic as spoken in Syria/Lebanon; keep product names as they are)", en: "English", ku: "Kurmanji Kurdish (Latin script, simple everyday Kurmanji as spoken by Kurds from Syria/Turkey; keep product names as they are)" };
 
 export function systemPrompt(locale: string, company: string) {
   return `You are the business assistant inside the inventory and invoicing system of "${company || "Start Style Friseurbedarf"}", a barber and hairdresser supply wholesaler in Datteln, Germany.

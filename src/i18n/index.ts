@@ -3,14 +3,15 @@ import { cookies } from "next/headers";
 import de, { type Dict } from "./de";
 import ar from "./ar";
 import en from "./en";
+import ku from "./ku";
 
-export const LOCALES = ["de", "ar", "en"] as const;
+export const LOCALES = ["de", "ar", "en", "ku"] as const; // ku = Kurdî (Kurmancî, lateinische Schrift, LTR)
 export type Locale = (typeof LOCALES)[number];
 export const LOCALE_COOKIE = "ss_lang";
-const DICTS: Record<Locale, Dict> = { de, ar, en };
+const DICTS: Record<Locale, Dict> = { de, ar, en, ku };
 
 // Zahlen, Beträge und Datumsangaben überall im deutschen Format (Euro-Firma in Deutschland, lateinische Ziffern)
-export const INTL_LOCALE: Record<Locale, string> = { de: "de-DE", ar: "de-DE", en: "de-DE" };
+export const INTL_LOCALE: Record<Locale, string> = { de: "de-DE", ar: "de-DE", en: "de-DE", ku: "de-DE" };
 
 export async function getLocale(): Promise<Locale> {
   const c = await cookies();
