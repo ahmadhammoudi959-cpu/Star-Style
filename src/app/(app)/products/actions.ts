@@ -12,7 +12,8 @@ import { todayIso } from "@/lib/dates";
 import { deleteProduct, ProductDeleteError } from "@/lib/product-delete";
 import { encodePush, pushProductToShops, pushTargets, setCategoryMapping } from "@/lib/shopify/product-push";
 import { pushWeightsLater } from "@/lib/shopify/weights";
-import { pushPricesLater } from "@/lib/shopify/prices";
+import { pushProductPrices } from "@/lib/shopify/prices";
+import { encodePriceNotes } from "@/lib/shopify/product-push-map";
 import { adoptShopGallery, saveGalleryTx, syncGallery, syncGalleryLater, type AdoptResult, type GallerySync } from "@/lib/shopify/gallery";
 import { parseGalleryInput } from "@/lib/shopify/gallery-map";
 import { syncProductTypesLater } from "@/lib/shopify/collections";
@@ -121,6 +122,7 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   const weightChanged: string[] = []; // an die Shops melden
   const galleryChanged: ShopChannel[] = []; // eigene Shop-Fotos geändert → im Hintergrund an verbundene Shops
   let categoryChanged = false; // → im Shop den Produkttyp verbundener Produkte anpassen
+  let priceChanged = false; // → Shop-Preis der verbundenen Varianten gleich melden
   try {
     await db.transaction(async (tx) => {
       // Kategorie so schreiben, wie sie im Verzeichnis steht (Groß/klein); neue kommen ins Verzeichnis (Seite „Kategorien“)
@@ -142,7 +144,8 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
         await audit(tx, { entity: "product", entityId: d.id, action: "update", before, after: values, userId: session.uid });
         categoryChanged = before.category !== values.category;
         // Shop-Preis geändert (Großhandelspreis Salon oder MwSt.) → an verbundene Shop-Varianten melden (Wunsch Inhaber 09.11.2026)
-        if (before.retailPriceCents !== values.retailPriceCents || before.vatRateBp !== values.vatRateBp)
+        priceChanged = before.retailPriceCents !== values.retailPriceCents || before.vatRateBp !== values.vatRateBp;
+        if (priceChanged)
           await tx.insert(schema.shopPriceDirty).values({ productId: d.id }).onConflictDoUpdate({ target: schema.shopPriceDirty.productId, set: { at: new Date() } });
       } else {
         const [p] = await tx.insert(schema.products).values(values).returning({ id: schema.products.id });
@@ -238,12 +241,14 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   } catch (e) { console.error("shopify push", e); }
   // geändertes Gewicht der schon verbundenen Größen/Farben im Hintergrund an die Shops (Versand nach Gewicht)
   pushWeightsLater(weightChanged);
-  // geänderter Preis → im Hintergrund an die Shops (nur wo er dort abweicht)
-  pushPricesLater();
+  // geänderter Preis → gleich an die Shops (nur wo er dort abweicht); wartet höchstens 8 s, das Ergebnis steht über dem Formular.
+  // Klappt es nicht, bleibt die Vormerkung und der Worker versucht es alle 5 min wieder.
+  let price = "";
+  if (priceChanged) { try { price = encodePriceNotes(await pushProductPrices(productId!)); } catch (e) { console.error("shopify prices", e); } }
   // Kategorie geändert → verbundene Shop-Produkte wandern in die passende Kollektion; geänderte Shop-Fotos abgleichen
   if (categoryChanged) syncProductTypesLater([productId!]);
   syncGalleryLater(productId!, galleryChanged);
-  redirect(`/products/${productId}?saved=1${push ? `&push=${encodeURIComponent(push)}` : ""}`);
+  redirect(`/products/${productId}?saved=1${push ? `&push=${encodeURIComponent(push)}` : ""}${price ? `&price=${encodeURIComponent(price)}` : ""}`);
 }
 
 /** Ein Foto für die Shop-Galerie sofort speichern (im Browser schon verkleinert) → ID für das Formular */

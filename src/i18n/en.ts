@@ -96,6 +96,14 @@ const en: Dict = {
       failed: "{shop}: not uploaded. {reason}",
       notNow: "{shop}: not uploaded (your choice). It's listed under “Not in the shop yet” – upload it from there any time.",
     },
+    price: {
+      ok: "{shop}: new price is in the shop ✓{price}",
+      same: "{shop}: price in the shop is already right ✓{price}",
+      own: "{shop}: this size/colour has its own price – that one applies in the shop{price}. The item price does not change it.",
+      fail: "{shop}: the new price did not reach the shop{price} – reason in the shop log.",
+      retry: "{shop}: shop not reachable right now – the new price{price} is sent automatically within minutes.",
+      pending: "The new price is being sent to the shop – it will be there in a few seconds.",
+    },
     pushReasons: {
       noLocation: "No location selected in the shop settings.", noPrice: "The wholesale price is missing.", currency: "The shop doesn't use euro.",
       noWriteAccess: "The Shopify app lacks the permission to create products (write_products).", duplicate: "Another product in the shop already has this barcode.",

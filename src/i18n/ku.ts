@@ -284,6 +284,14 @@ const ku: Dict = {
       failed: "{shop}: nehat barkirin. {reason}",
       notNow: "{shop}: nehat barkirin (bijartina te). Di bin “Hîn ne di firoşgehê de” de ye – her dem dikarî ji wir bar bikî.",
     },
+    price: {
+      ok: "{shop}: bihayê nû di firoşgehê de ye ✓{price}",
+      same: "{shop}: bihayê di firoşgehê de jixwe rast e ✓{price}",
+      own: "{shop}: ev mezinahî/reng bihayekî xwe heye – ew di firoşgehê de derbas dibe{price}. Bihayê berhemê wî naguherîne.",
+      fail: "{shop}: bihayê nû negihîşt firoşgehê{price} – sedem di tomarên firoşgehê de ye.",
+      retry: "{shop}: firoşgeh niha nayê gihîştin – bihayê nû{price} di çend deqîqeyan de bixweber tê şandin.",
+      pending: "Bihayê nû niha ji firoşgehê re tê şandin – di çend saniyeyan de li wir e.",
+    },
     pushReasons: {
       noLocation: "Di mîhengên firoşgehê de cihê embarê nehatiye hilbijartin.",
       noPrice: "Bihayê komfiroşiyê (salon) kêm e.",

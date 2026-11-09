@@ -95,6 +95,14 @@ const de = {
       failed: "{shop}: nicht hochgeladen. {reason}",
       notNow: "{shop}: nicht hochgeladen (deine Wahl). Der Artikel steht unter „Noch nicht im Shop“ – dort jederzeit hochladen.",
     },
+    price: {
+      ok: "{shop}: neuer Preis im Shop ✓{price}",
+      same: "{shop}: Preis im Shop stimmt schon ✓{price}",
+      own: "{shop}: Diese Größe/Farbe hat einen eigenen Preis – der gilt im Shop{price}. Der Artikelpreis ändert ihn nicht.",
+      fail: "{shop}: neuer Preis nicht im Shop angekommen{price} – Grund im Shop-Protokoll.",
+      retry: "{shop}: Shop gerade nicht erreichbar – der neue Preis{price} wird in den nächsten Minuten automatisch gesendet.",
+      pending: "Der neue Preis wird gerade an den Shop gesendet – in wenigen Sekunden ist er dort.",
+    },
     pushReasons: {
       noLocation: "Im Shop ist noch kein Lagerort gewählt.", noPrice: "Der Einzelhandelspreis fehlt.", currency: "Der Shop rechnet nicht in Euro.",
       noWriteAccess: "Der Shopify-App fehlt das Recht, Produkte anzulegen (write_products).", duplicate: "Im Shop gibt es den Barcode schon bei einem anderen Artikel.",

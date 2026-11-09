@@ -261,5 +261,13 @@ run("Shopify-Abgleich (Datenbank, Shopify simuliert)", async () => {
     const again = await pushPrices([v!.productId], "BRAND_SHOP");
     expect(again[0]).toMatchObject({ updated: 0, failed: 0 });
     expect(updates).toHaveLength(1);
+    // beim Speichern: sofort melden, Ergebnis für den Hinweis; neuere Vormerkung (gleich danach gespeichert) bleibt stehen
+    const { pushProductPrices } = await import("../src/lib/shopify/prices");
+    await db.update(schema.products).set({ retailPriceCents: 3000 }).where(eq(schema.products.id, v!.productId));
+    await db.insert(schema.shopPriceDirty).values({ productId: v!.productId, at: new Date(Date.now() - 1000) });
+    const now = await pushProductPrices(v!.productId);
+    expect(now).toEqual([expect.objectContaining({ channel: "BRAND_SHOP", updated: 1, failed: 0, retry: false, priceCents: 3570, own: false })]);
+    expect(updates.at(-1)).toEqual({ productId: "gid://shopify/Product/55", variants: [{ id: "gid://shopify/ProductVariant/901", price: "35.70" }] });
+    expect(await db.query.shopPriceDirty.findFirst({ where: eq(schema.shopPriceDirty.productId, v!.productId) })).toBeUndefined();
   });
 });

@@ -311,3 +311,26 @@ export function planPriceUpdates(rows: PriceRow[], current: ShopVariantPrice[], 
   }
   return { updates: [...byProduct].map(([productId, variants]) => ({ productId, variants })), unchanged, missing };
 }
+
+/**
+ * Hinweis über dem Formular nach dem Speichern (?price=…): je Shop, ob der Preis dort angekommen ist.
+ * ok = im Shop geändert · same = stimmte schon · own = Größe/Farbe hat eigenen Preis (gilt im Shop) · fail = Fehler (Protokoll)
+ * · retry = Shop gerade nicht erreichbar (Worker versucht es alle 5 min) · pending = dauert länger, läuft im Hintergrund.
+ */
+export type PriceState = "ok" | "same" | "own" | "fail" | "retry";
+export type PriceNote = { channel: "BRAND_SHOP" | "GENERAL_SHOP"; state: PriceState; priceCents: number | null };
+const PRICE_STATES: readonly PriceState[] = ["ok", "same", "own", "fail", "retry"];
+export function encodePriceNotes(r: { channel: string; updated: number; failed: number; retry: boolean; own: boolean; priceCents: number | null }[] | null): string {
+  if (r === null) return "pending";
+  return r.map((x) => [x.channel, x.retry ? "retry" : x.failed ? "fail" : x.own ? "own" : x.updated ? "ok" : "same", x.priceCents ?? ""].join(".")).join("~");
+}
+export function decodePriceNotes(s: string | undefined): { pending: boolean; notes: PriceNote[] } {
+  if (!s) return { pending: false, notes: [] };
+  if (s === "pending") return { pending: true, notes: [] };
+  const notes = s.split("~").slice(0, 2).flatMap((part) => {
+    const [channel, state, cents = ""] = part.split(".");
+    if ((channel !== "BRAND_SHOP" && channel !== "GENERAL_SHOP") || !PRICE_STATES.includes(state as PriceState)) return [];
+    return [{ channel, state: state as PriceState, priceCents: /^\d{1,9}$/.test(cents) ? Number(cents) : null } as PriceNote];
+  });
+  return { pending: false, notes };
+}

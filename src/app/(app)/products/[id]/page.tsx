@@ -13,12 +13,14 @@ import { decodePush, productShopStatus, type PushResult } from "@/lib/shopify/pr
 import { fill, type Dict } from "@/i18n";
 import { weightInputParts } from "@/lib/weight";
 import { galleriesOf } from "@/lib/shopify/gallery";
+import { decodePriceNotes } from "@/lib/shopify/product-push-map";
+import { formatCents } from "@/lib/money";
 
 const toInput = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
-export default async function EditProduct({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; push?: string }> }) {
+export default async function EditProduct({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; push?: string; price?: string }> }) {
   const { id } = await params;
-  const { saved, push } = await searchParams;
+  const { saved, push, price } = await searchParams;
   const { t } = await getI18n();
   const p = await db.query.products.findFirst({ where: eq(schema.products.id, id) });
   if (!p) notFound();
@@ -31,6 +33,7 @@ export default async function EditProduct({ params, searchParams }: { params: Pr
         actions={vs[0] && <Link href={`/stock/${vs[0].id}`} className="btn-ghost group"><Icon name="layers" className="h-4 w-4" />{t.nav.stock}</Link>} />
       {saved && <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700 ring-1 ring-brand-100"><Icon name="check" className="h-4 w-4" />{t.common.saved}</div>}
       <PushNotes t={t} results={decodePush(push)} />
+      <PriceNotes t={t} s={price} />
       <ProductForm t={t} suppliers={suppliers} categories={categories} shopStatus={shopStatus} initial={{
         id: p.id, sku: p.sku, nameDe: p.nameDe, nameNl: p.nameNl, descriptionDe: p.descriptionDe, descriptionNl: p.descriptionNl,
         category: p.category, supplierId: p.supplierId ?? "", vatRateBp: p.vatRateBp,
@@ -59,6 +62,26 @@ function PushNotes({ t, results }: { t: Dict; results: PushResult[] }) {
       {notes.map((n, i) => (
         <div key={i} className={`flex animate-rise items-start gap-2 rounded-xl px-4 py-3 text-sm font-semibold ring-1 ${tone[n.kind]}`}>
           <Icon name={n.kind === "ok" ? "check" : "alert"} className="mt-0.5 h-4 w-4 shrink-0" />{n.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Nach dem Speichern mit geändertem Preis: ist der neue Preis im Shop angekommen? (Wunsch Inhaber 09.11.2026) */
+function PriceNotes({ t, s }: { t: Dict; s?: string }) {
+  const { pending, notes } = decodePriceNotes(s);
+  if (!pending && !notes.length) return null;
+  const items = pending ? [{ kind: "wait" as const, text: t.product.price.pending }] : notes.map((n) => ({
+    kind: n.state === "ok" || n.state === "same" ? ("ok" as const) : n.state === "fail" ? ("bad" as const) : ("wait" as const),
+    text: fill(t.product.price[n.state], { shop: t.shop.names[n.channel], price: n.priceCents != null ? ` (${formatCents(n.priceCents)})` : "" }),
+  }));
+  const tone = { ok: "bg-emerald-50 text-emerald-800 ring-emerald-100", wait: "bg-amber-50 text-amber-900 ring-amber-200", bad: "bg-red-50 text-red-800 ring-red-200" };
+  return (
+    <div className="mb-4 space-y-2">
+      {items.map((n, i) => (
+        <div key={i} className={`flex animate-rise items-start gap-2 rounded-xl px-4 py-3 text-sm font-semibold ring-1 ${tone[n.kind]}`}>
+          <Icon name={n.kind === "ok" ? "check" : n.kind === "bad" ? "alert" : "clock"} className="mt-0.5 h-4 w-4 shrink-0" />{n.text}
         </div>
       ))}
     </div>

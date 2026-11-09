@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  buildProductSet, decodePush, descriptionHtml, encodePush, matchCreatedVariants, planPriceUpdates, planVariantAdds, pushBlockers, resolveStoreType, shopPriceCents,
+  buildProductSet, decodePriceNotes, decodePush, encodePriceNotes, descriptionHtml, encodePush, matchCreatedVariants, planPriceUpdates, planVariantAdds, pushBlockers, resolveStoreType, shopPriceCents,
   storeTypesFrom, variantOptions, variantSku, type PushProduct, type PushVariant, type ShopProductShape,
 } from "../src/lib/shopify/product-push-map";
 
@@ -482,5 +482,29 @@ describe("planPriceUpdates (Preis-Abgleich)", () => {
     ], cur, false);
     expect(r.updates).toEqual([{ productId: "gid://p/A", variants: [{ id: "gid://v/1", price: "25.13" }] }]);
     expect(r.missing).toBe(1);
+  });
+});
+
+describe("Preis-Hinweis nach dem Speichern", () => {
+  const base = { updated: 0, failed: 0, retry: false, own: false, priceCents: 3570 };
+  it("hin und zurück, Zustand je Shop", () => {
+    const s = encodePriceNotes([
+      { ...base, channel: "GENERAL_SHOP", updated: 1 },
+      { ...base, channel: "BRAND_SHOP", failed: 1, retry: true, priceCents: null },
+    ]);
+    expect(s).toBe("GENERAL_SHOP.ok.3570~BRAND_SHOP.retry.");
+    expect(decodePriceNotes(s)).toEqual({ pending: false, notes: [
+      { channel: "GENERAL_SHOP", state: "ok", priceCents: 3570 }, { channel: "BRAND_SHOP", state: "retry", priceCents: null },
+    ] });
+    expect(encodePriceNotes([{ ...base, channel: "GENERAL_SHOP", own: true }])).toBe("GENERAL_SHOP.own.3570");
+    expect(encodePriceNotes([{ ...base, channel: "GENERAL_SHOP", failed: 2 }])).toBe("GENERAL_SHOP.fail.3570");
+    expect(encodePriceNotes([{ ...base, channel: "GENERAL_SHOP" }])).toBe("GENERAL_SHOP.same.3570");
+  });
+  it("länger als die Wartezeit → pending; Unsinn wird ignoriert", () => {
+    expect(encodePriceNotes(null)).toBe("pending");
+    expect(decodePriceNotes("pending")).toEqual({ pending: true, notes: [] });
+    expect(decodePriceNotes("GENERAL_SHOP.hack.1~BRAND_SHOP.ok.<b>")).toEqual({ pending: false, notes: [{ channel: "BRAND_SHOP", state: "ok", priceCents: null }] });
+    expect(decodePriceNotes("X.ok.1")).toEqual({ pending: false, notes: [] });
+    expect(decodePriceNotes(undefined)).toEqual({ pending: false, notes: [] });
   });
 });
