@@ -237,4 +237,29 @@ run("Shopify-Abgleich (Datenbank, Shopify simuliert)", async () => {
     const sv = await db.query.shopVariants.findFirst({ where: eq(schema.shopVariants.variantId, variantId) });
     expect(sv!.lastPushedQty).toBe(20);
   });
+
+  it("Preis-Abgleich: geänderter Großhandelspreis geht brutto an die verbundene Shop-Variante, gleicher Preis nicht", async () => {
+    const { pushPrices, pushDirtyPrices } = await import("../src/lib/shopify/prices");
+    const v = await db.query.variants.findFirst({ where: eq(schema.variants.id, variantId) });
+    await db.update(schema.products).set({ retailPriceCents: 2513, vatRateBp: 1900 }).where(eq(schema.products.id, v!.productId));
+    await db.insert(schema.shopVariants).values({ channel: "BRAND_SHOP", shopVariantId: "gid://shopify/ProductVariant/901", inventoryItemId: "gid://shopify/InventoryItem/701", variantId })
+      .onConflictDoUpdate({ target: [schema.shopVariants.channel, schema.shopVariants.shopVariantId], set: { variantId } });
+    let shopPrice = "20.00";
+    const updates: unknown[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init: { body: string }) => {
+      if (url.endsWith("/admin/oauth/access_token")) return new Response(JSON.stringify({ access_token: "tok", scope: "x", expires_in: 86399 }));
+      const { query, variables } = JSON.parse(String(init.body));
+      if (query.includes("taxesIncluded")) return Response.json({ data: { shop: { taxesIncluded: true } } });
+      if (query.includes("nodes(")) return Response.json({ data: { nodes: variables.ids.map((id: string) => ({ id, price: shopPrice, product: { id: "gid://shopify/Product/55" } })) } });
+      if (query.includes("productVariantsBulkUpdate")) { updates.push(variables); shopPrice = variables.variants[0].price; return Response.json({ data: { productVariantsBulkUpdate: { productVariants: [], userErrors: [] } } }); }
+      return Response.json({ errors: [{ message: "unexpected" }] });
+    }));
+    await db.insert(schema.shopPriceDirty).values({ productId: v!.productId }).onConflictDoNothing();
+    await pushDirtyPrices();
+    expect(updates).toEqual([{ productId: "gid://shopify/Product/55", variants: [{ id: "gid://shopify/ProductVariant/901", price: "29.90" }] }]);
+    expect(await db.query.shopPriceDirty.findFirst({ where: eq(schema.shopPriceDirty.productId, v!.productId) })).toBeUndefined();
+    const again = await pushPrices([v!.productId], "BRAND_SHOP");
+    expect(again[0]).toMatchObject({ updated: 0, failed: 0 });
+    expect(updates).toHaveLength(1);
+  });
 });

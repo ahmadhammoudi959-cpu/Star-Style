@@ -12,6 +12,7 @@ import { todayIso } from "@/lib/dates";
 import { deleteProduct, ProductDeleteError } from "@/lib/product-delete";
 import { encodePush, pushProductToShops, pushTargets, setCategoryMapping } from "@/lib/shopify/product-push";
 import { pushWeightsLater } from "@/lib/shopify/weights";
+import { pushPricesLater } from "@/lib/shopify/prices";
 import { adoptShopGallery, saveGalleryTx, syncGallery, syncGalleryLater, type AdoptResult, type GallerySync } from "@/lib/shopify/gallery";
 import { parseGalleryInput } from "@/lib/shopify/gallery-map";
 import { syncProductTypesLater } from "@/lib/shopify/collections";
@@ -140,6 +141,9 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
         await tx.update(schema.products).set(values).where(eq(schema.products.id, d.id));
         await audit(tx, { entity: "product", entityId: d.id, action: "update", before, after: values, userId: session.uid });
         categoryChanged = before.category !== values.category;
+        // Shop-Preis geändert (Großhandelspreis Salon oder MwSt.) → an verbundene Shop-Varianten melden (Wunsch Inhaber 09.11.2026)
+        if (before.retailPriceCents !== values.retailPriceCents || before.vatRateBp !== values.vatRateBp)
+          await tx.insert(schema.shopPriceDirty).values({ productId: d.id }).onConflictDoUpdate({ target: schema.shopPriceDirty.productId, set: { at: new Date() } });
       } else {
         const [p] = await tx.insert(schema.products).values(values).returning({ id: schema.products.id });
         productId = p.id;
@@ -234,6 +238,8 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   } catch (e) { console.error("shopify push", e); }
   // geändertes Gewicht der schon verbundenen Größen/Farben im Hintergrund an die Shops (Versand nach Gewicht)
   pushWeightsLater(weightChanged);
+  // geänderter Preis → im Hintergrund an die Shops (nur wo er dort abweicht)
+  pushPricesLater();
   // Kategorie geändert → verbundene Shop-Produkte wandern in die passende Kollektion; geänderte Shop-Fotos abgleichen
   if (categoryChanged) syncProductTypesLater([productId!]);
   syncGalleryLater(productId!, galleryChanged);

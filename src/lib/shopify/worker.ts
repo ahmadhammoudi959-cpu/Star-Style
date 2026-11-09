@@ -3,10 +3,11 @@ import "server-only";
  * Hintergrund-Abgleich im Server-Prozess (eine Instanz auf Render):
  * - alle 20 s: geänderte Bestände an die Shops melden
  * - alle 5 min: Bestellungen abholen (falls ein Webhook verloren ging) und alle Bestände vergleichen;
- *   im Shop zu löschende Galerie-Fotos, bei denen das noch nicht geklappt hat, erneut versuchen
+ *   im Shop zu löschende Galerie-Fotos und geänderte Preise, bei denen das noch nicht geklappt hat, erneut versuchen
  */
 import { runCycle } from "./sync";
 import { retryGalleryDeletes } from "./gallery";
+import { pushDirtyPrices } from "./prices";
 
 let started = false, busy = false, ticks = 0;
 
@@ -21,6 +22,8 @@ export function startWorker() {
       await runCycle({ orders: full, reconcile: full });
       // im Shop zu löschende Fotos, bei denen es noch nicht geklappt hat (Wahl des Nutzers beim Entfernen)
       if (full) await retryGalleryDeletes().catch((e) => console.error("shopify gallery retry", e));
+      // geänderte Preise, die noch nicht im Shop angekommen sind (Shop war kurz nicht erreichbar)
+      if (full) await pushDirtyPrices().catch((e) => console.error("shopify prices retry", e));
     } catch (e) { console.error("shopify worker", e); }
     finally { busy = false; ticks++; }
   };

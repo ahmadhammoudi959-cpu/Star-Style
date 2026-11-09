@@ -287,3 +287,27 @@ export function decodePush(s: string | undefined): PushResult[] {
     return [r];
   });
 }
+
+/**
+ * Preis-Abgleich (Wunsch Inhaber 09.11.2026): geänderter Shop-Preis (Variantenpreis, sonst Artikelpreis; bei Bruttopreisen
+ * inkl. MwSt.) → an die verbundenen Shop-Varianten. Nur wo der Preis im Shop abweicht; gruppiert je Shop-Produkt,
+ * weil productVariantsBulkUpdate je Produkt arbeitet. Varianten ohne Preis (0) werden nie gemeldet.
+ */
+export type PriceRow = { shopVariantId: string; netCents: number; vatRateBp: number };
+export type ShopVariantPrice = { id: string; price: string; productId: string };
+export function planPriceUpdates(rows: PriceRow[], current: ShopVariantPrice[], taxesIncluded: boolean) {
+  const now = new Map(current.map((c) => [c.id, c]));
+  const byProduct = new Map<string, { id: string; price: string }[]>();
+  let unchanged = 0, missing = 0;
+  for (const r of rows) {
+    if (!(r.netCents > 0)) continue;
+    const c = now.get(r.shopVariantId);
+    if (!c) { missing++; continue; }
+    const want = money(shopPriceCents(r.netCents, r.vatRateBp, taxesIncluded));
+    if (Math.round(Number(c.price) * 100) === Math.round(Number(want) * 100)) { unchanged++; continue; }
+    const list = byProduct.get(c.productId) ?? [];
+    if (!list.some((x) => x.id === c.id)) list.push({ id: c.id, price: want });
+    byProduct.set(c.productId, list);
+  }
+  return { updates: [...byProduct].map(([productId, variants]) => ({ productId, variants })), unchanged, missing };
+}

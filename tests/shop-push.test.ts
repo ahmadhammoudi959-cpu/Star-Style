@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  buildProductSet, decodePush, descriptionHtml, encodePush, matchCreatedVariants, planVariantAdds, pushBlockers, resolveStoreType, shopPriceCents,
+  buildProductSet, decodePush, descriptionHtml, encodePush, matchCreatedVariants, planPriceUpdates, planVariantAdds, pushBlockers, resolveStoreType, shopPriceCents,
   storeTypesFrom, variantOptions, variantSku, type PushProduct, type PushVariant, type ShopProductShape,
 } from "../src/lib/shopify/product-push-map";
 
@@ -453,5 +453,34 @@ run("Artikel im Shop anlegen (Datenbank, Shopify simuliert)", async () => {
     const a = await newProduct(`PUSH-${tag}-F`, { general: false, brand: true });
     expect(await pushProductToShops(a.p.id)).toEqual([]);
     expect(calls.length).toBe(0);
+  });
+});
+
+describe("planPriceUpdates (Preis-Abgleich)", () => {
+  const cur = [
+    { id: "gid://v/1", price: "29.90", productId: "gid://p/A" },
+    { id: "gid://v/2", price: "20.00", productId: "gid://p/A" },
+    { id: "gid://v/3", price: "10.00", productId: "gid://p/B" },
+  ];
+  it("meldet nur abweichende Preise, brutto bei taxesIncluded, gruppiert je Shop-Produkt", () => {
+    const r = planPriceUpdates([
+      { shopVariantId: "gid://v/1", netCents: 2513, vatRateBp: 1900 }, // 25,13 netto = 29,90 brutto → gleich
+      { shopVariantId: "gid://v/2", netCents: 2513, vatRateBp: 1900 }, // 20,00 → 29,90
+      { shopVariantId: "gid://v/3", netCents: 1000, vatRateBp: 700 },  // 10,00 → 10,70
+    ], cur, true);
+    expect(r.unchanged).toBe(1);
+    expect(r.updates).toEqual([
+      { productId: "gid://p/A", variants: [{ id: "gid://v/2", price: "29.90" }] },
+      { productId: "gid://p/B", variants: [{ id: "gid://v/3", price: "10.70" }] },
+    ]);
+  });
+  it("netto-Shop: Preis ohne MwSt.; ohne Preis oder ohne Shop-Variante nichts", () => {
+    const r = planPriceUpdates([
+      { shopVariantId: "gid://v/1", netCents: 2513, vatRateBp: 1900 },
+      { shopVariantId: "gid://v/2", netCents: 0, vatRateBp: 1900 },
+      { shopVariantId: "gid://v/9", netCents: 500, vatRateBp: 1900 },
+    ], cur, false);
+    expect(r.updates).toEqual([{ productId: "gid://p/A", variants: [{ id: "gid://v/1", price: "25.13" }] }]);
+    expect(r.missing).toBe(1);
   });
 });

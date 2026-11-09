@@ -576,6 +576,15 @@ export const stockDirty = pgTable("stock_dirty", {
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Artikel, deren Shop-Preis (Großhandelspreis Salon = retail_price_cents, MwSt.) sich geändert hat und an die verbundenen
+ * Shop-Varianten gemeldet werden muss (Wunsch Inhaber 09.11.2026). Zeile bleibt, bis es geklappt hat (Worker alle 5 min).
+ */
+export const shopPriceDirty = pgTable("shop_price_dirty", {
+  productId: text("product_id").primaryKey().references(() => products.id, { onDelete: "cascade" }),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ───────────────────────── Relationen ─────────────────────────
 export const productsRelations = relations(products, ({ one, many }) => ({
   supplier: one(suppliers, { fields: [products.supplierId], references: [suppliers.id] }),

@@ -9,6 +9,7 @@ import {
   bulkPushStatus, getStoreTypes, pushProductToShop, setCategoryMapping, startBulkPush, unlistProduct, type BulkState, type PushResult,
 } from "@/lib/shopify/product-push";
 import { pushWeights } from "@/lib/shopify/weights";
+import { pushPrices } from "@/lib/shopify/prices";
 import { linkVariant, processDirty, pushStock, syncOrders, syncProducts, testConnection, runCycle } from "@/lib/shopify/sync";
 import { registerWebhooks } from "@/lib/shopify/webhooks";
 import { importProducts } from "@/lib/shopify/import";
@@ -175,5 +176,13 @@ export async function pushWeightsAction(channel: string): Promise<ShopResult> {
   await requireSession();
   const ch = CH(channel);
   void pushWeights(undefined, ch).then(() => revalidatePath(`/shops/${ch}`)).catch((e) => console.error("shopify weights", e));
+  return { ok: "started" };
+}
+
+/** Alle Preise (Großhandelspreis Salon) noch einmal mit diesem Shop abgleichen – im Hintergrund, Ergebnis im Protokoll */
+export async function pushPricesAction(channel: string): Promise<ShopResult> {
+  await requireSession();
+  const ch = CH(channel);
+  void pushPrices(undefined, ch).then(() => revalidatePath(`/shops/${ch}`)).catch((e) => console.error("shopify prices", e));
   return { ok: "started" };
 }

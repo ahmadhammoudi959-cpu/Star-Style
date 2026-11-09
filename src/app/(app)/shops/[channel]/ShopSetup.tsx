@@ -1,6 +1,6 @@
 "use client";
 import { useActionState, useState, useTransition } from "react";
-import { activateAction, importProductsAction, loadProductsAction, pushAllAction, pushWeightsAction, saveShopAction, setLocationAction, syncNowAction, testShopAction, webhooksAction, type ShopResult } from "../actions";
+import { activateAction, importProductsAction, loadProductsAction, pushAllAction, pushPricesAction, pushWeightsAction, saveShopAction, setLocationAction, syncNowAction, testShopAction, webhooksAction, type ShopResult } from "../actions";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon, type IconName } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
@@ -85,6 +85,10 @@ export function ShopControls({ t, s }: { t: Dict; s: ShopData }) {
       <div>
         <Btn icon="upload" label={t.shop.sendWeights} disabled={!ready} onClick={() => run(() => pushWeightsAction(s.channel), () => t.shop.weightsStarted)} />
         <p className="mt-1 px-1 text-xs leading-relaxed text-ink-soft">{t.shop.sendWeightsHint}</p>
+      </div>
+      <div>
+        <Btn icon="upload" label={t.shop.sendPrices} disabled={!ready} onClick={() => run(() => pushPricesAction(s.channel), () => t.shop.pricesStarted)} />
+        <p className="mt-1 px-1 text-xs leading-relaxed text-ink-soft">{t.shop.sendPricesHint}</p>
       </div>
       <div>
         <Btn icon="mail" label={t.shop.webhooks} disabled={!ready} onClick={() => run(() => webhooksAction(s.channel), (r) => (t.shop.ev.registered).replace("{p}", r.ok ?? "0"))} />

@@ -120,6 +120,13 @@
       "when": 1793807798599,
       "tag": "0016_live_since",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794233295687,
+      "tag": "0017_shop_price_dirty",
+      "breakpoints": true
     }
   ]
 }
