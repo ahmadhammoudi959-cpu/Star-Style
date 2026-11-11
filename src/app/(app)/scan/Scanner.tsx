@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Thumb } from "@/components/Thumb";
-import { formatCents } from "@/lib/money";
+import { formatCents, grossFromNet } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { checkDigitOk } from "@/lib/barcode";
 import { formatWeight } from "@/lib/weight";
@@ -306,7 +306,7 @@ function ResultCard({ t, intl, r, onAgain }: { t: Dict; intl: string; r: ScanRes
   const lastSale = v ? v.lastSale : r.variants.map((x) => x.lastSale).filter(Boolean).sort().pop() ?? null;
   const expiry = (v ? [v] : r.variants).filter((x) => x.nextExpiry).sort((a, b) => a.nextExpiry!.localeCompare(b.nextExpiry!))[0];
   const priceOf = v ?? r.variants[0];
-  const gross = (c: number) => Math.round((c * (10000 + p.vatRateBp)) / 10000);
+  const gross = (c: number) => grossFromNet(c, p.vatRateBp); // wie im Shop
 
   return (
     <section id="scan-result" aria-live="polite" className="card animate-rise overflow-hidden">

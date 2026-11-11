@@ -456,6 +456,28 @@ run("Artikel im Shop anlegen (Datenbank, Shopify simuliert)", async () => {
   });
 });
 
+describe("planPriceUpdates: runde Shop-Preise bleiben (Fehler 09.11.2026)", () => {
+  it("490,00 € im Shop bleibt, 489,99 € wird wieder 490,00 €, 12,37 € (gleich rund wie 12,36 €, gleicher Nettopreis) bleibt", () => {
+    const cur = [
+      { id: "gid://v/a", price: "490.00", productId: "gid://p/A" },
+      { id: "gid://v/b", price: "489.99", productId: "gid://p/B" },
+      { id: "gid://v/c", price: "790.01", productId: "gid://p/C" },
+      { id: "gid://v/d", price: "12.37", productId: "gid://p/D" },
+    ];
+    const r = planPriceUpdates([
+      { shopVariantId: "gid://v/a", netCents: 41176, vatRateBp: 1900 },
+      { shopVariantId: "gid://v/b", netCents: 41176, vatRateBp: 1900 },
+      { shopVariantId: "gid://v/c", netCents: 66387, vatRateBp: 1900 },
+      { shopVariantId: "gid://v/d", netCents: 1039, vatRateBp: 1900 },
+    ], cur, true);
+    expect(r.unchanged).toBe(2);
+    expect(r.updates).toEqual([
+      { productId: "gid://p/B", variants: [{ id: "gid://v/b", price: "490.00" }] },
+      { productId: "gid://p/C", variants: [{ id: "gid://v/c", price: "790.00" }] },
+    ]);
+  });
+});
+
 describe("planPriceUpdates (Preis-Abgleich)", () => {
   const cur = [
     { id: "gid://v/1", price: "29.90", productId: "gid://p/A" },

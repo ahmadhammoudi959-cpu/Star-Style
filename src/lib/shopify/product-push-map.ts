@@ -6,6 +6,7 @@
  */
 import { COLOR } from "./product-map";
 import { productFiles } from "./gallery-map";
+import { grossFromNet, netFromGross, priceRoundness } from "../money";
 
 export type PushVariant = {
   id: string; size: string; color: string; barcode: string | null;
@@ -32,9 +33,9 @@ const PLACEHOLDER = "Standard";
 export const shopWeight = (grams: number | null | undefined) =>
   grams && grams > 0 ? { measurement: { weight: { unit: "GRAMS", value: grams } } } : {};
 
-/** Netto-Cent → Shop-Preis-Cent (Shops mit Bruttopreisen: inkl. MwSt.) */
+/** Netto-Cent → Shop-Preis-Cent (Shops mit Bruttopreisen: inkl. MwSt., der „runde“ Bruttopreis – siehe grossFromNet) */
 export function shopPriceCents(netCents: number, vatRateBp: number, taxesIncluded: boolean): number {
-  return taxesIncluded ? Math.round((netCents * (10000 + vatRateBp)) / 10000) : netCents;
+  return taxesIncluded ? grossFromNet(netCents, vatRateBp) : netCents;
 }
 
 const money = (cents: number) => (cents / 100).toFixed(2);
@@ -303,8 +304,13 @@ export function planPriceUpdates(rows: PriceRow[], current: ShopVariantPrice[], 
     if (!(r.netCents > 0)) continue;
     const c = now.get(r.shopVariantId);
     if (!c) { missing++; continue; }
-    const want = money(shopPriceCents(r.netCents, r.vatRateBp, taxesIncluded));
-    if (Math.round(Number(c.price) * 100) === Math.round(Number(want) * 100)) { unchanged++; continue; }
+    const wantCents = shopPriceCents(r.netCents, r.vatRateBp, taxesIncluded), cur = Math.round(Number(c.price) * 100);
+    // Stimmt schon, wenn der Shop-Preis netto derselbe ist und mindestens so rund (z. B. 490,00 € statt 489,99 € bleibt)
+    const same = taxesIncluded
+      ? netFromGross(cur, r.vatRateBp) === r.netCents && priceRoundness(cur) >= priceRoundness(wantCents)
+      : cur === wantCents;
+    if (same) { unchanged++; continue; }
+    const want = money(wantCents);
     const list = byProduct.get(c.productId) ?? [];
     if (!list.some((x) => x.id === c.id)) list.push({ id: c.id, price: want });
     byProduct.set(c.productId, list);
