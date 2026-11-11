@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useState } from "react";
 import { activateAction, importProductsAction, loadProductsAction, pushAllAction, pushPricesAction, pushWeightsAction, saveShopAction, setLocationAction, syncNowAction, testShopAction, webhooksAction, type ShopResult } from "../actions";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon, type IconName } from "@/components/Icon";
@@ -41,15 +41,27 @@ export function ShopForm({ t, s }: { t: Dict; s: ShopData }) {
 }
 
 export function ShopControls({ t, s }: { t: Dict; s: ShopData }) {
-  const [pending, start] = useTransition();
+  // Eigener „läuft“-Zustand statt useTransition: hing der Übergang im Browser, blieben Spinner und graue Knöpfe für immer
+  // (Abgleich ausschalten, 12.11.2026). So ist die Steuerung wieder frei, sobald die Antwort da ist – auch bei Fehlern.
+  const [pending, setPending] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [locations, setLocations] = useState<{ id: string; name: string }[]>([]);
   const [active, setActive] = useState(s.active);
-  const run = (fn: () => Promise<ShopResult>, okText: (r: ShopResult) => string) => start(async () => {
-    const r = await fn();
-    setMsg(r.error ? { ok: false, text: errText(t, r)! } : { ok: true, text: okText(r) });
-    if (r.locations) setLocations(r.locations);
-  });
+  const run = async (fn: () => Promise<ShopResult>, okText: (r: ShopResult) => string, onDone?: (ok: boolean) => void) => {
+    setPending(true); setMsg(null);
+    let ok = false;
+    try {
+      const r = await fn();
+      ok = !r.error;
+      setMsg(r.error ? { ok: false, text: errText(t, r)! } : { ok: true, text: okText(r) });
+      if (r.locations) setLocations(r.locations);
+    } catch {
+      setMsg({ ok: false, text: errText(t, { error: "other", detail: "" })! });
+    } finally {
+      setPending(false);
+      onDone?.(ok);
+    }
+  };
   const Btn = ({ icon, label, onClick, tone = "btn-ghost", disabled }: { icon: IconName; label: string; onClick: () => void; tone?: string; disabled?: boolean }) => (
     <button type="button" disabled={pending || disabled} onClick={onClick} className={`${tone} group w-full justify-start`}><Icon name={icon} className="h-4 w-4" />{label}</button>
   );
@@ -59,7 +71,7 @@ export function ShopControls({ t, s }: { t: Dict; s: ShopData }) {
       <Btn icon="check" label={t.shop.test} disabled={!ready} onClick={() => run(() => testShopAction(s.channel), (r) => t.shop.testOk.replace("{name}", r.ok ?? ""))} />
       {(locations.length > 0 || s.locationId) && (
         <Field label={t.shop.location} hint={t.shop.locationHint}>
-          <select className="input" value={s.locationId} onChange={(e) => { const l = locations.find((x) => x.id === e.target.value); if (l) run(() => setLocationAction(s.channel, l.id, l.name), () => t.shop.saved); }}>
+          <select className="input" value={s.locationId} onChange={(e) => { const l = locations.find((x) => x.id === e.target.value); if (l) void run(() => setLocationAction(s.channel, l.id, l.name), () => t.shop.saved, (ok) => { if (ok) window.location.reload(); }); }}>
             {!s.locationId && <option value="">—</option>}
             {s.locationId && !locations.some((l) => l.id === s.locationId) && <option value={s.locationId}>{s.locationName}</option>}
             {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -75,7 +87,7 @@ export function ShopControls({ t, s }: { t: Dict; s: ShopData }) {
         <label className="flex cursor-pointer items-start gap-2 text-sm font-semibold">
           <input type="checkbox" checked={active} disabled={pending || !ready} onChange={(e) => {
             const on = e.target.checked; setActive(on);
-            start(async () => { const r = await activateAction(s.channel, on); if (r.error) { setActive(!on); setMsg({ ok: false, text: errText(t, r)! }); } else setMsg({ ok: true, text: t.shop.saved }); });
+            void run(() => activateAction(s.channel, on), () => t.shop.saved, (ok) => { if (!ok) setActive(!on); });
           }} className="mt-0.5 h-5 w-5 accent-brand-600" />
           <span>{t.shop.activate}<span className="block text-xs font-normal text-ink-soft">{t.shop.activateHint}</span></span>
         </label>

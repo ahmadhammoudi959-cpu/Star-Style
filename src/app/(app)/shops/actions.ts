@@ -24,7 +24,13 @@ const fail = (e: unknown): ShopResult => {
   console.error(e);
   return { error: "other", detail: m.slice(0, 200) };
 };
-const done = (channel: ShopChannel, ok = "saved"): ShopResult => { revalidatePath("/shops"); revalidatePath(`/shops/${channel}`); return { ok }; };
+/**
+ * Ergebnis für die Shop-Steuerung. Bewusst OHNE revalidatePath: die Steuerung zeigt das Ergebnis selbst an, und mit
+ * revalidatePath kam der neue Seitenbaum in der Antwort mit – dessen Übernahme blieb im Browser ab und zu hängen
+ * (Abgleich-Schalter: Spinner für immer, alle Knöpfe grau, obwohl gespeichert war; Inhaber 12.11.2026, lokal nachgestellt).
+ * Alle Seiten sind dynamisch, beim nächsten Aufruf stimmt alles.
+ */
+const done = (_channel: ShopChannel, ok = "saved"): ShopResult => ({ ok });
 
 export async function saveShopAction(_: ShopResult | undefined, fd: FormData): Promise<ShopResult> {
   await requireSession();
@@ -175,7 +181,8 @@ export async function refreshCategoriesAction(channel: string): Promise<ShopResu
 export async function pushWeightsAction(channel: string): Promise<ShopResult> {
   await requireSession();
   const ch = CH(channel);
-  void pushWeights(undefined, ch).then(() => revalidatePath(`/shops/${ch}`)).catch((e) => console.error("shopify weights", e));
+  // im Hintergrund – kein revalidatePath danach (außerhalb der Anfrage nicht erlaubt: Fehler im Render-Protokoll 12.11.2026)
+  void pushWeights(undefined, ch).catch((e) => console.error("shopify weights", e));
   return { ok: "started" };
 }
 
@@ -183,6 +190,6 @@ export async function pushWeightsAction(channel: string): Promise<ShopResult> {
 export async function pushPricesAction(channel: string): Promise<ShopResult> {
   await requireSession();
   const ch = CH(channel);
-  void pushPrices(undefined, ch).then(() => revalidatePath(`/shops/${ch}`)).catch((e) => console.error("shopify prices", e));
+  void pushPrices(undefined, ch).catch((e) => console.error("shopify prices", e));
   return { ok: "started" };
 }
