@@ -56,17 +56,24 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
   const gross = totals?.grossCents ?? 0;
 
   // Zahlung bei Ausstellung + Ratenplan (nur Rechnungen)
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
   const [payMode, setPayMode] = useState<"none" | "full" | "partial">(initial.initialPaymentCents ? "partial" : "none");
   const [partial, setPartial] = useState(initial.initialPaymentCents ? toInput(initial.initialPaymentCents) : "");
   const [payMethod, setPayMethod] = useState<"CASH" | "BANK" | "CARD" | "ONLINE">(initial.initialPaymentMethod ?? "CASH");
   const [planOn, setPlanOn] = useState(Boolean(initial.installments?.length));
-  const [planRows, setPlanRows] = useState<PlanRow[]>(toPlanRows(initial.installments ?? []));
+  // Gespeicherter Plan beginnt mit der Anzahlung (so deckt die Zahlung bei Ausstellung genau die erste Zeile) – hier steht sie getrennt über den Raten
+  const [planRows, setPlanRows] = useState<PlanRow[]>(() => {
+    const inst = initial.installments ?? [], down = initial.initialPaymentCents ?? 0;
+    return toPlanRows(down > 0 && inst[0]?.amountCents === down ? inst.slice(1) : inst);
+  });
   const initialPaid = payMode === "full" ? gross : payMode === "partial" ? Math.min(parseMoney(partial) ?? 0, gross) : 0;
-  const plan = planOn ? fromPlanRows(planRows) : [];
-  const planErr = !planOn ? null : planRows.length ? planProblem(planRows, gross) : "planInvalid"; // gleiche Prüfung wie der Server
+  // Anzahlung + Raten (Wunsch Inhaber 12.11.2026): in Raten geteilt wird nur der Rest; die Anzahlung ist die erste Zeile des Plans
+  const planShown = payMode !== "full"; // voll bezahlt → nichts in Raten
+  const downRow = payMode === "partial" && initialPaid > 0 ? { dueDate: today, amountCents: initialPaid } : null;
+  const plan = planOn && planShown && planRows.length ? [...(downRow ? [downRow] : []), ...fromPlanRows(planRows)] : [];
+  const planErr = !planOn || !planShown ? null : planRows.length ? planProblem(planRows, gross, downRow) : "planInvalid"; // gleiche Prüfung wie der Server
   const planOk = !planErr;
   const overLimit = kind === "invoice" && customer?.creditLimitCents != null && (customer.openCents ?? 0) + gross - initialPaid > customer.creditLimitCents;
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
 
   const pick = (o: PickerOption) => {
     const s = o as SaleOption;
@@ -239,10 +246,15 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
                   </Field>
                 </div>
               )}
-              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
-                <input type="checkbox" checked={planOn} onChange={(e) => setPlanOn(e.target.checked)} className="h-5 w-5 accent-sky-600" />{t.pay.planOn}
-              </label>
-              {planOn && <PlanEditor t={t} grossCents={gross} rows={planRows} setRows={setPlanRows} today={today} intl={intl} />}
+              {planShown && (
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                  <input type="checkbox" checked={planOn} onChange={(e) => setPlanOn(e.target.checked)} className="h-5 w-5 accent-sky-600" />{t.pay.planOn}
+                </label>
+              )}
+              {planOn && planShown && (
+                <PlanEditor t={t} grossCents={gross} rows={planRows} setRows={setPlanRows} today={today} intl={intl}
+                  paid={downRow ? { cents: downRow.amountCents, date: today, label: `${t.pay.paidAtIssue} · ${t.pay.methods[payMethod]}`, locked: true } : null} />
+              )}
             </div>
           )}
         </div>

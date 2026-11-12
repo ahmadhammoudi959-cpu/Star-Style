@@ -1,7 +1,7 @@
 "use client";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { addPaymentAction, cancelPaymentAction, dunningAction, savePlanAction } from "../../pay-actions";
-import { PlanEditor, fromPlanRows, planProblem, toPlanRows } from "../../PlanEditor";
+import { PlanEditor, fromPlanRows, planProblem, toPlanRows, type PlanPaid } from "../../PlanEditor";
 import { Icon } from "@/components/Icon";
 import { formatCents } from "@/lib/money";
 import type { Dict } from "@/i18n/de";
@@ -51,7 +51,11 @@ export function CancelPayment({ t, invoiceId, paymentId }: { t: Dict; invoiceId:
   );
 }
 
-export function PlanForm({ t, invoiceId, grossCents, plan, today, intl }: { t: Dict; invoiceId: string; grossCents: number; plan: { dueDate: string; amountCents: number }[]; today: string; intl: string }) {
+export function PlanForm({ t, invoiceId, grossCents, plan, today, intl, paid }: {
+  t: Dict; invoiceId: string; grossCents: number; plan: { dueDate: string; amountCents: number }[]; today: string; intl: string;
+  /** schon bezahlt: neuer Plan teilt nur den Rest in Raten */
+  paid?: PlanPaid | null;
+}) {
   const [state, action, pending] = useActionState(savePlanAction, undefined);
   const [rows, setRows] = useState(toPlanRows(plan));
   const p = fromPlanRows(rows);
@@ -61,7 +65,7 @@ export function PlanForm({ t, invoiceId, grossCents, plan, today, intl }: { t: D
     <form action={action} className="space-y-3">
       <input type="hidden" name="invoiceId" value={invoiceId} />
       <input type="hidden" name="plan" value={JSON.stringify(p)} />
-      <PlanEditor t={t} grossCents={grossCents} rows={rows} setRows={setRows} today={today} intl={intl} />
+      <PlanEditor t={t} grossCents={grossCents} rows={rows} setRows={setRows} today={today} intl={intl} paid={paid} />
       <div className="flex gap-2">
         <button disabled={pending || !!problem || !changed} className="btn-primary flex-1">{t.pay.savePlan}</button>
         {rows.length > 0 && <button type="button" disabled={pending} onClick={() => setRows([])} className="btn-ghost">{t.pay.removePlan}</button>}

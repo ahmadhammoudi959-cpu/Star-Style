@@ -58,6 +58,20 @@ export function trafficLight(s: PaymentState, today: string): "green" | "yellow"
   return "green";
 }
 
+/**
+ * Ratenplan, wenn schon etwas bezahlt ist oder bei Ausstellung bezahlt wird (Anzahlung, Wunsch Inhaber 12.11.2026):
+ * Diese Zahlung ist die erste Zeile (am Tag der Zahlung), in Raten geteilt wird nur der Rest – die erste Rate einen
+ * Abstand nach heute. „Anzahl Raten“ und „erste Rate“ beziehen sich auf den Rest. Ohne Zahlung wie splitInstallments.
+ * Summe immer = Gesamtbetrag; so deckt die Zahlung genau die erste Zeile (Zahlungen gehen der Reihe nach auf die Raten).
+ */
+export function planAfterPayment(totalCents: number, paidCents: number, paidDate: string, firstCents: number, count: number, today: string,
+  everyDays: number, addDays: (d: string, n: number) => string) {
+  const paid = Math.min(Math.max(paidCents, 0), totalCents);
+  if (paid <= 0) return splitInstallments(totalCents, firstCents, count, today, everyDays, addDays);
+  const start = addDays(paidDate > today ? paidDate : today, everyDays);
+  return [{ dueDate: paidDate, amountCents: paid }, ...splitInstallments(totalCents - paid, firstCents, count, start, everyDays, addDays)];
+}
+
 /** Gleichmäßiger Ratenplan; Rundungsrest auf die letzte Rate. */
 export function splitInstallments(totalCents: number, firstCents: number, count: number, firstDate: string, everyDays: number, addDays: (d: string, n: number) => string) {
   const rows: { dueDate: string; amountCents: number }[] = [];

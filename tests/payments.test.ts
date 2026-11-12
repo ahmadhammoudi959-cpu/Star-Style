@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/db";
-import { paymentState, splitInstallments, trafficLight } from "../src/lib/payment-status";
+import { paymentState, planAfterPayment, splitInstallments, trafficLight } from "../src/lib/payment-status";
 import { addDaysIso } from "../src/lib/dates";
 import { receiveGoods } from "../src/lib/stock";
 import { issueInvoice, saveInvoiceDraft, startCorrection } from "../src/lib/sales";
@@ -57,6 +57,31 @@ describe("Zahlungsstand (rein)", () => {
       expect(sum(r)).toBe(total);
       expect(r.every((x) => x.amountCents > 0)).toBe(true);
       expect(r.map((x) => x.dueDate)).toEqual([...r.map((x) => x.dueDate)].sort());
+    }
+  });
+
+  it("Anzahlung + Raten: nur der Rest wird geteilt (Beispiel Inhaber 12.11.2026: 291,20 € − 91 € bar, 3 Raten)", () => {
+    const sum = (r: { amountCents: number }[]) => r.reduce((s, x) => s + x.amountCents, 0);
+    const r = planAfterPayment(291_20, 91_00, "2026-11-12", 0, 3, "2026-11-12", 30, addDaysIso);
+    expect(r).toEqual([
+      { dueDate: "2026-11-12", amountCents: 91_00 }, // Anzahlung = erste Zeile, wird bei Ausstellung bezahlt
+      { dueDate: "2026-12-12", amountCents: 66_73 }, { dueDate: "2027-01-11", amountCents: 66_73 }, { dueDate: "2027-02-10", amountCents: 66_74 },
+    ]);
+    // Zahlungsstand nach Ausstellung: Anzahlung deckt genau die erste Zeile, nächste Rate 66,73 € in 30 Tagen
+    const s = paymentState({ grossCents: 291_20, dueDate: "2027-02-10", issueDate: "2026-11-12", installments: r, payments: [{ amountCents: 91_00 }] }, "2026-11-12");
+    expect(s).toMatchObject({ status: "PARTIAL", openCents: 200_20, overdueCents: 0, nextDueDate: "2026-12-12", nextDueCents: 66_73 });
+    // erste Rate des Rests (300 € − 100 € Anzahlung, erste Rate 50 €, 3 Raten)
+    expect(planAfterPayment(300_00, 100_00, "2026-11-12", 50_00, 3, "2026-11-12", 30, addDaysIso).map((x) => x.amountCents)).toEqual([100_00, 50_00, 75_00, 75_00]);
+    // ohne Zahlung wie bisher (erste Rate heute)
+    expect(planAfterPayment(400_00, 0, "2026-11-12", 100_00, 3, "2026-11-12", 30, addDaysIso)).toEqual(splitInstallments(400_00, 100_00, 3, "2026-11-12", 30, addDaysIso));
+    // Rechnung von früher, Zahlung am 01.10.: Zeile am Zahltag, Raten ab heute + Abstand
+    expect(planAfterPayment(100_00, 40_00, "2026-10-01", 0, 2, "2026-11-12", 14, addDaysIso).map((x) => x.dueDate)).toEqual(["2026-10-01", "2026-11-26", "2026-12-10"]);
+    for (const [total, paid, first, n] of [[291_20, 91_00, 0, 3], [71_40, 71_39, 0, 5], [1_000_01, 333_33, 100_00, 4], [999_99, 1, 0, 36]]) {
+      const x = planAfterPayment(total, paid, "2026-11-12", first, n, "2026-11-12", 30, addDaysIso);
+      expect(sum(x)).toBe(total);
+      expect(x[0].amountCents).toBe(paid);
+      expect(x.every((y) => y.amountCents > 0)).toBe(true);
+      expect(x.map((y) => y.dueDate)).toEqual([...x.map((y) => y.dueDate)].sort());
     }
   });
 });
