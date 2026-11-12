@@ -8,6 +8,7 @@ import { OpenButton } from "@/components/OpenButton";
 import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { SupplierForm } from "../../../suppliers/SupplierForm";
+import { can, requireSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function ExpenseVendorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { t, intl } = await getI18n();
+  const edit = can(await requireSession(), "expenses.edit"); // ohne Recht nur ansehen
   const s = await db.query.suppliers.findFirst({ where: eq(schema.suppliers.id, id) });
   if (!s) notFound();
   if (s.kind === "GOODS") redirect(`/suppliers/${s.id}`);
@@ -25,7 +27,7 @@ export default async function ExpenseVendorPage({ params }: { params: Promise<{ 
     <div className="space-y-6">
       <div>
         <PageHeader title={s.name} subtitle={t.supplier.kinds.EXPENSE} back="/expenses/vendors" />
-        <SupplierForm t={t} initial={s} />
+        {edit ? <SupplierForm t={t} initial={s} /> : <fieldset disabled className="m-0 min-w-0 border-0 p-0 opacity-80"><SupplierForm t={t} initial={s} /></fieldset>}
       </div>
       <section className="card overflow-hidden animate-rise">
         <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-5">

@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireSession } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { addCategoryToStore, CategoryError, createCategory, deleteCategory, moveProductToCategory, type MoveResult } from "@/lib/categories";
 import { encodeStoreResults } from "@/lib/shopify/category-map";
 import type { StoreCategoryResult } from "@/lib/shopify/collections";
@@ -22,7 +22,7 @@ function refresh() {
 
 /** Neue Kategorie – auf Wunsch gleich in den angehakten Shops (Kollektion, veröffentlicht, ggf. ins Menü) */
 export async function createCategoryAction(_: CatState, fd: FormData): Promise<CatState> {
-  const session = await requireSession();
+  const session = await requirePerm("products.edit");
   const name = String(fd.get("name") ?? "");
   const channels = CHANNELS.filter((c) => fd.get(`in_${c}`) === "on");
   const groups = Object.fromEntries(channels.map((c) => [c, group(fd.get(`group_${c}`))]));
@@ -42,7 +42,7 @@ const code = (x: StoreCategoryResult) => ({ channel: x.channel, outcome: x.outco
 
 /** Kategorie nachträglich in einem Shop anlegen */
 export async function addToStoreAction(categoryId: string, channel: string, groupId: string | null) {
-  const session = await requireSession();
+  const session = await requirePerm("products.edit");
   if (!isChannel(channel) || typeof categoryId !== "string") return null;
   try {
     const r = await addCategoryToStore(categoryId, channel, group(groupId ?? "-"), session.uid);
@@ -58,7 +58,7 @@ export type MoveState = { ok: true; r: MoveResult } | { ok: false; error: string
 
 /** Artikel in diese Kategorie (oder eine andere / ohne) – im Shop wandert er mit */
 export async function moveProductAction(productId: string, categoryId: string | null): Promise<MoveState> {
-  const session = await requireSession();
+  const session = await requirePerm("products.edit");
   if (typeof productId !== "string" || (categoryId !== null && typeof categoryId !== "string")) return { ok: false, error: "error" };
   try {
     const r = await moveProductToCategory(productId, categoryId, session.uid);
@@ -73,7 +73,7 @@ export async function moveProductAction(productId: string, categoryId: string | 
 
 /** Leere Kategorie löschen (im Shop nur unsere eigene, leere Kollektion) */
 export async function deleteCategoryAction(_: CatState, fd: FormData): Promise<CatState> {
-  const session = await requireSession();
+  const session = await requirePerm("products.edit");
   let name = "";
   try {
     name = (await deleteCategory(String(fd.get("id") ?? ""), session.uid)).name;

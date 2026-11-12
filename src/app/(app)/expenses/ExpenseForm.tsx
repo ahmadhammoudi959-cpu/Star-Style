@@ -34,9 +34,12 @@ async function shrink(file: File): Promise<File> {
   } catch { return file; }
 }
 
-export function ExpenseForm({ t, intl, regions, initial, suppliers, locked, ai }: {
+export function ExpenseForm({ t, intl, regions, initial, suppliers, locked: monthLocked, ai, readOnly = false }: {
   t: Dict; intl: string; regions: RegionOption[]; initial: ExpenseFormData; suppliers: Supplier[]; locked: boolean; ai: boolean;
+  /** ohne Recht „Ausgaben erfassen“: nur ansehen */
+  readOnly?: boolean;
 }) {
+  const locked = monthLocked || readOnly;
   const fileRef = useRef<HTMLInputElement>(null);
   const [reading, startRead] = useTransition();
   const [aiMsg, setAiMsg] = useState<{ ok: boolean; text: string; warnings: string[] } | null>(null);
@@ -101,7 +104,8 @@ export function ExpenseForm({ t, intl, regions, initial, suppliers, locked, ai }
 
   return (
     <div className="space-y-4">
-      {locked && <div className="flex animate-rise items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 ring-1 ring-amber-200"><Icon name="lock" className="h-4 w-4" />{t.exp.lockedInfo}</div>}
+      {monthLocked && <div className="flex animate-rise items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 ring-1 ring-amber-200"><Icon name="lock" className="h-4 w-4" />{t.exp.lockedInfo}</div>}
+      {readOnly && !monthLocked && <div className="flex animate-rise items-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-ink-soft ring-1 ring-black/5"><Icon name="lock" className="h-4 w-4" />{t.users.readOnly}</div>}
       <form action={action} className="space-y-5">
         <ErrorBox message={err(state?.error)} />
         {initial.id && <input type="hidden" name="id" value={initial.id} />}

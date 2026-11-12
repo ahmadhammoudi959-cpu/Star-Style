@@ -26,30 +26,33 @@ export function InvoiceOp({ t, id, op, label, icon, tone = "btn-ghost", confirmT
   );
 }
 
-export function OfferOps({ t, id, status }: { t: Dict; id: string; status: string }) {
+/** offers = Angebote bearbeiten/Status setzen, invoices = in Rechnung umwandeln (Rechte, die Actions prüfen selbst noch einmal) */
+export function OfferOps({ t, id, status, can = { offers: true, invoices: true } }: { t: Dict; id: string; status: string; can?: { offers: boolean; invoices: boolean } }) {
   const [state, action, pending] = useActionState(offerStatusAction, undefined);
   const [cState, cAction, cPending] = useActionState(convertOfferAction, undefined);
   const [via, setVia] = useState("");
-  const err = state?.error || cState?.error ? t.common.error : undefined;
+  const code = state?.error || cState?.error;
+  const err = code ? (code === "noRight" ? t.sales.noRight : t.common.error) : undefined;
+  if (!can.offers && !can.invoices) return null;
   return (
     <div className="space-y-2">
       <ErrorBox message={err} />
-      {status === "DRAFT" && (
+      {can.offers && status === "DRAFT" && (
         <form action={action}><input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="SENT" />
           <Btn className="btn-ghost group" pending={pending}><Icon name="check" className="h-4 w-4" />{t.sales.send}</Btn></form>
       )}
-      {(status === "DRAFT" || status === "SENT") && (
+      {can.offers && (status === "DRAFT" || status === "SENT") && (
         <form action={action} className="space-y-2 rounded-xl bg-brand-50/60 p-3 ring-1 ring-brand-100">
           <input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="ACCEPTED" />
           <input name="acceptedVia" value={via} onChange={(e) => setVia(e.target.value)} placeholder={t.sales.acceptedVia} className="input" />
           <Btn className="btn-primary group" pending={pending}><Icon name="check" className="h-4 w-4" />{t.sales.accept}</Btn>
         </form>
       )}
-      {(status === "ACCEPTED" || status === "SENT" || status === "DRAFT") && (
+      {can.invoices && (status === "ACCEPTED" || status === "SENT" || status === "DRAFT") && (
         <form action={cAction}><input type="hidden" name="id" value={id} />
           <Btn className={status === "ACCEPTED" ? "btn-primary group" : "btn-ghost group"} pending={cPending}><Icon name="receipt" className="h-4 w-4" />{t.sales.toInvoice}</Btn></form>
       )}
-      {(status === "DRAFT" || status === "SENT") && (
+      {can.offers && (status === "DRAFT" || status === "SENT") && (
         <form action={action}><input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="REJECTED" />
           <Btn className="btn-danger group" pending={pending}><Icon name="trash" className="h-4 w-4" />{t.sales.reject}</Btn></form>
       )}

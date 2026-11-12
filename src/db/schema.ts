@@ -58,6 +58,14 @@ export const users = pgTable("users", {
   // +1 = alle Sitzungen (und „Gerät vertrauen“) ungültig: Passwort geändert, „alle Geräte abmelden“, Zwei-Schritt eingeschaltet
   sessionVersion: integer("session_version").notNull().default(1),
   passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
+  // Berechtigungen (Wunsch Inhaber 12.11.2026, src/lib/permissions.ts): Admin = alles + Mitarbeiter verwalten;
+  // sonst nur die angehakten Rechte. active = false → Anmeldung gesperrt, Sitzungen sofort ungültig.
+  isAdmin: boolean("is_admin").notNull().default(false),
+  permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
+  active: boolean("active").notNull().default(true),
+  // Einmal-Passwort vom Admin → beim nächsten Anmelden erst ein eigenes Passwort setzen
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
+  createdBy: text("created_by"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

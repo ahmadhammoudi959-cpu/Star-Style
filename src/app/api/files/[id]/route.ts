@@ -1,12 +1,17 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { getSession } from "@/lib/auth";
+import { getAuth } from "@/lib/auth";
+import { fileNeed } from "@/lib/file-access";
 
 const INLINE = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await getSession())) return new Response("Unauthorized", { status: 401 });
+  const a = await getAuth();
+  if (!a) return new Response("Unauthorized", { status: 401 });
   const { id } = await params;
+  // Berechtigung je nach Zweck der Datei (Foto = alle, Beleg/Rechnung/Monatsmappe = nur mit dem Recht dafür)
+  const need = a.admin ? "all" : await fileNeed(id);
+  if (a.mustChange || (need !== "all" && (need === "admin" || !need.some((p) => a.perms.has(p))))) return new Response("Forbidden", { status: 403 });
   const f = await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, id) });
   if (!f) return new Response("Not found", { status: 404 });
   const inline = INLINE.includes(f.mime);

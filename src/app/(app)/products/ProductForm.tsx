@@ -32,8 +32,12 @@ export const centsToInput = fmt;
 type ShopFlags = { BRAND_SHOP: boolean; GENERAL_SHOP: boolean };
 const CHANNELS: Channel[] = ["BRAND_SHOP", "GENERAL_SHOP"];
 
-export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
-  t: Dict; initial: ProductFormData; suppliers: { id: string; name: string }[]; categories: string[];
+/** Rechte der angemeldeten Person (Wunsch Inhaber 12.11.2026) – geprüft wird trotzdem in der Action */
+export type ProductRights = { edit: boolean; prices: boolean; cost: boolean; receive: boolean };
+const ALL_RIGHTS: ProductRights = { edit: true, prices: true, cost: true, receive: true };
+
+export function ProductForm({ t, initial, suppliers, categories, shopStatus, rights = ALL_RIGHTS }: {
+  t: Dict; initial: ProductFormData; suppliers: { id: string; name: string }[]; categories: string[]; rights?: ProductRights;
   shopStatus?: {
     connected: ShopFlags; linked: ShopFlags; linkedVariantIds?: Record<Channel, string[]>;
     storeTypes?: Record<Channel, StoreType[]>; categoryMap?: Record<Channel, Record<string, string>>;
@@ -119,6 +123,13 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
 
   return (
     <form ref={formRef} action={action} onSubmit={onSubmit} className="space-y-6">
+      {!rights.edit && (
+        <p className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-ink-soft ring-1 ring-black/5">
+          <Icon name="lock" className="h-4 w-4 shrink-0" />{t.users.readOnly}
+        </p>
+      )}
+      {/* ohne Recht „Artikel ändern“: alles nur ansehen (fieldset disabled sperrt alle Felder und Knöpfe darin) */}
+      <fieldset disabled={!rights.edit} className="m-0 min-w-0 space-y-6 border-0 p-0">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
       <input type="hidden" name="shopPush" value={intent} />
       {CHANNELS.map((c) => <input key={c} type="hidden" name={`storeType_${c}`} value={intent === "1" ? typeChoice[c] : ""} />)}
@@ -159,7 +170,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
           </select>
         </Field>
         <Field label={t.product.vat}>
-          <select name="vatRateBp" defaultValue={String(v.vatRateBp)} className="input">
+          <select name="vatRateBp" defaultValue={String(v.vatRateBp)} disabled={!rights.prices} className="input disabled:opacity-60">
             <option value="1900">19 %</option>
             <option value="700">7 %</option>
           </select>
@@ -167,15 +178,29 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
       </section>
 
       <section className="card grid grid-cols-2 gap-3 p-4 animate-rise sm:p-5 md:grid-cols-3 md:gap-4">
-        <Field label={t.product.purchase}>
-          <MoneyInput name="purchasePrice" value={prices.p} onChange={(p) => setPrices((x) => ({ ...x, p }))} />
-        </Field>
-        <Field label={t.product.wholesale} hint={margin.w != null ? `${t.product.margin}: ${margin.w} %` : undefined}>
-          <MoneyInput name="wholesalePrice" value={prices.w} onChange={(w) => setPrices((x) => ({ ...x, w }))} />
-        </Field>
-        <Field label={t.product.retail} hint={margin.r != null ? `${t.product.margin}: ${margin.r} %` : undefined}>
-          <MoneyInput name="retailPrice" value={prices.r} onChange={(r) => setPrices((x) => ({ ...x, r }))} />
-        </Field>
+        {/* Einkaufspreis + Spanne nur mit Recht „Einkaufspreis sehen“; Verkaufspreise ändern nur mit Recht „Preise“.
+            Gesperrte Felder werden nicht mitgeschickt → Platzhalter, der Server behält ohne Recht ohnehin den alten Wert */}
+        {!rights.cost && <input type="hidden" name="purchasePrice" value="" />}
+        {!rights.prices && (
+          <>
+            <input type="hidden" name="vatRateBp" value={String(v.vatRateBp)} />
+            <input type="hidden" name="wholesalePrice" value={prices.w} />
+            <input type="hidden" name="retailPrice" value={prices.r} />
+          </>
+        )}
+        {rights.cost && (
+          <Field label={t.product.purchase}>
+            <MoneyInput name="purchasePrice" value={prices.p} onChange={(p) => setPrices((x) => ({ ...x, p }))} />
+          </Field>
+        )}
+        <fieldset disabled={!rights.prices} className="contents">
+          <Field label={t.product.wholesale} hint={rights.cost && margin.w != null ? `${t.product.margin}: ${margin.w} %` : undefined}>
+            <MoneyInput name="wholesalePrice" value={prices.w} onChange={(w) => setPrices((x) => ({ ...x, w }))} />
+          </Field>
+          <Field label={t.product.retail} hint={rights.cost && margin.r != null ? `${t.product.margin}: ${margin.r} %` : undefined}>
+            <MoneyInput name="retailPrice" value={prices.r} onChange={(r) => setPrices((x) => ({ ...x, r }))} />
+          </Field>
+        </fieldset>
         <div className="col-span-2 flex flex-wrap items-center gap-x-6 gap-y-3 md:col-span-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
             <input type="checkbox" name="tracksExpiry" checked={tracksExpiry} onChange={(e) => setTracksExpiry(e.target.checked)} className="h-5 w-5 rounded accent-brand-600" />
@@ -205,7 +230,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
           <div>
             <h2 className="text-lg font-bold">{t.product.variants}</h2>
             <p className="text-xs text-ink-soft">{t.product.noVariantsHint}</p>
-            {variants.some((v) => !v.id) && <p className="mt-1 text-xs font-semibold text-brand-700">{t.product.initialHint}</p>}
+            {rights.receive && variants.some((v) => !v.id) && <p className="mt-1 text-xs font-semibold text-brand-700">{t.product.initialHint}</p>}
           </div>
           <button type="button" className="btn-ghost group"
             onClick={() => setVariants((vs) => [...vs, { key: crypto.randomUUID(), size: "", color: "", barcode: "", minStock: 0, weight: "", weightUnit: vs[vs.length - 1]?.weightUnit ?? "g" }])}>
@@ -233,7 +258,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
                   <Icon name="trash" className="h-4 w-4" />
                 </button>
               </div>
-              {!v.id && (
+              {!v.id && rights.receive && (
                 <div className="col-span-2 grid grid-cols-2 gap-3 md:grid-cols-4 lg:col-span-7">
                   <Field label={t.product.initialQty}>
                     <input className="input num border-brand-300 bg-white" type="number" min={0} inputMode="numeric" placeholder="0"
@@ -251,9 +276,12 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus }: {
         </div>
       </section>
 
-      <div className="sticky bottom-20 z-10 flex justify-end lg:bottom-4">
-        <SubmitButton className="btn-primary px-8 py-3 text-base shadow-lift">{t.common.save}</SubmitButton>
-      </div>
+      </fieldset>
+      {rights.edit && (
+        <div className="sticky bottom-20 z-10 flex justify-end lg:bottom-4">
+          <SubmitButton className="btn-primary px-8 py-3 text-base shadow-lift">{t.common.save}</SubmitButton>
+        </div>
+      )}
     </form>
   );
 }
@@ -263,7 +291,7 @@ function MoneyInput({ name, value, onChange }: { name: string; value: string; on
   return (
     <div className="relative" dir="ltr">
       <input name={name} value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" dir="ltr"
-        className={`input num pe-9 ${bad ? "border-red-400 ring-4 ring-red-100" : ""}`} placeholder="0,00" />
+        className={`input num pe-9 disabled:bg-slate-50 disabled:opacity-70 ${bad ? "border-red-400 ring-4 ring-red-100" : ""}`} placeholder="0,00" />
       <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-ink-soft">€</span>
     </div>
   );

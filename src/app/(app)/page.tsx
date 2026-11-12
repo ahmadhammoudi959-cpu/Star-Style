@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requireSession } from "@/lib/auth";
+import { can, requireSession } from "@/lib/auth";
+import { canOpen, type Perm } from "@/lib/permissions";
 import { getI18n } from "@/i18n";
 import { Icon, type IconName } from "@/components/Icon";
 import { alerts, dashboardStats } from "@/lib/queries";
@@ -15,19 +16,33 @@ import { setupSteps } from "@/lib/onboarding";
 import { fill } from "@/i18n";
 import { pendingSummary } from "@/lib/shopify/product-push";
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
   const session = await requireSession();
   const { t, intl } = await getI18n();
+  const { denied } = await searchParams;
   const today = todayIso();
-  const [stats, al, open, ins, setup, pend, fails, toShip] = await Promise.all([dashboardStats(today), alerts(today), openItems(), loadInsights(), setupSteps(), pendingSummary(), failuresSincePrevious(), shopOrdersToShip()]);
-  const ai = aiConfigured();
+  // Startseite je nach Rechten (Wunsch Inhaber 12.11.2026): nur was die Person öffnen darf, Geld-Zahlen nur mit „dashboard.money“
+  const may = (p: Perm) => can(session, p);
+  const opens = (href: string) => canOpen(session, href);
+  const money = may("dashboard.money"), seeStock = may("products.view");
+  const [stats, al, open, ins, setup, pend, fails, toShip] = await Promise.all([
+    seeStock || money ? dashboardStats(today) : null,
+    seeStock ? alerts(today) : { low: [], expiring: [] },
+    money ? openItems() : [],
+    may("insights") ? loadInsights() : null,
+    session.admin ? setupSteps() : null,
+    may("shops.manage") ? pendingSummary() : [],
+    failuresSincePrevious(session.uid, session.admin),
+    may("sales.shipping") ? shopOrdersToShip() : [],
+  ]);
+  const ai = aiConfigured() && may("ask");
   const debts = open.filter((r) => r.state.openCents > 0);
   const rOpen = debts.reduce((s, r) => s + r.state.openCents, 0);
   const rOverdue = debts.reduce((s, r) => s + r.state.overdueCents, 0);
   const rSoon = debts.filter((r) => r.light === "yellow").reduce((s, r) => s + r.state.nextDueCents, 0);
-  const lateList = debts.filter((r) => r.light === "red").slice(0, 5);
+  const lateList = opensSales(session) ? debts.filter((r) => r.light === "red").slice(0, 5) : [];
 
-  const actions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean }[] = [
+  const allActions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean }[] = [
     { href: "/scan", label: t.home.scan, hint: t.home.scanHint, icon: "scan", tone: "from-teal-500 to-emerald-700" },
     { href: "/sales/invoices/new", label: t.home.sell, hint: t.home.sellHint, icon: "cart", tone: "from-brand-500 to-brand-700" },
     { href: "/receive", label: t.home.receive, hint: t.home.receiveHint, icon: "truck", tone: "from-sky-500 to-sky-700" },
@@ -35,6 +50,8 @@ export default async function Home() {
     { href: "/write-offs", label: t.home.loss, hint: t.home.lossHint, icon: "alert", tone: "from-amber-500 to-orange-600" },
     { href: "/reports", label: t.home.reports, hint: t.home.reportsHint, icon: "chart", tone: "from-violet-500 to-indigo-700" },
   ];
+  const actions = allActions.filter((a) => opens(a.href));
+  const showAlerts = (money && lateList.length > 0) || seeStock;
 
   return (
     <div className="space-y-8">
@@ -43,8 +60,14 @@ export default async function Home() {
         <p className="text-ink-soft">{t.home.subtitle}</p>
       </div>
 
+      {denied === "1" && (
+        <p role="alert" className="flex animate-rise items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 ring-1 ring-amber-200">
+          <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0" />{t.home.denied}
+        </p>
+      )}
+
       {fails.n > 0 && (
-        <Link href="/settings#security" className="group card flex animate-rise flex-wrap items-center justify-between gap-3 p-4 ring-1 ring-amber-200 hover:shadow-lift">
+        <Link href="/account" className="group card flex animate-rise flex-wrap items-center justify-between gap-3 p-4 ring-1 ring-amber-200 hover:shadow-lift">
           <span className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700"><Icon name="shield" className="icon-pop h-5 w-5" /></span>
             <span className="text-sm font-semibold text-amber-900">{fill(fails.n === 1 ? t.security.alertOne : t.security.alert, { n: fails.n, time: formatDateTime(fails.last, intl) })}</span>
@@ -64,7 +87,7 @@ export default async function Home() {
         </Link>
       )}
 
-      {!setup.allDone && (
+      {setup && !setup.allDone && (
         <section className="card animate-rise overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/5 bg-gradient-to-l from-brand-50 to-white p-5">
             <div>
@@ -138,32 +161,38 @@ export default async function Home() {
         })}
       </div>
 
-      <div className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-        <Kpi icon="euro" label={t.pay.kpiOpen} value={formatCents(rOpen, intl)} sub={`${debts.length} ${t.pay.openInvoices}`} href="/receivables" wide />
-        <Kpi icon="alert" label={t.pay.totalOverdue} value={formatCents(rOverdue, intl)} tone={rOverdue ? "text-red-600" : undefined} href="/receivables?f=red" />
-        <Kpi icon="clock" label={t.pay.dueSoon} value={formatCents(rSoon, intl)} tone={rSoon ? "text-amber-600" : undefined} href="/receivables?f=yellow" />
-      </div>
+      {money && (
+        <div className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+          <Kpi icon="euro" label={t.pay.kpiOpen} value={formatCents(rOpen, intl)} sub={`${debts.length} ${t.pay.openInvoices}`} href={opens("/receivables") ? "/receivables" : undefined} wide />
+          <Kpi icon="alert" label={t.pay.totalOverdue} value={formatCents(rOverdue, intl)} tone={rOverdue ? "text-red-600" : undefined} href={opens("/receivables") ? "/receivables?f=red" : undefined} />
+          <Kpi icon="clock" label={t.pay.dueSoon} value={formatCents(rSoon, intl)} tone={rSoon ? "text-amber-600" : undefined} href={opens("/receivables") ? "/receivables?f=yellow" : undefined} />
+        </div>
+      )}
 
       {/* Lager: 2 × 2 (Handy bis Laptop), ab xl in einer Reihe. MHD getrennt: läuft bald ab / schon abgelaufen (Wunsch Inhaber 12.11.2026),
           jede Zahl öffnet genau diese Artikel in der Lagerliste */}
-      <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <Kpi icon="box" label={t.home.stockValue} value={formatCents(stats.stockValueCents, intl)} sub={`${stats.products} ${t.home.articles}`} />
+      {stats && (seeStock || money) && (
+      <div className={`stagger grid grid-cols-2 gap-3 sm:gap-4 ${seeStock && money ? "xl:grid-cols-4" : seeStock ? "sm:grid-cols-3" : ""}`}>
+        {money && <Kpi icon="box" label={t.home.stockValue} value={formatCents(stats.stockValueCents, intl)} sub={`${stats.products} ${t.home.articles}`} wide={!seeStock} />}
+        {seeStock && <>
         <Kpi icon="layers" label={t.home.lowStock} value={String(stats.low)} tone={stats.low ? "text-amber-600" : undefined} href="/stock?low=1" />
         <Kpi icon="clock" label={t.home.expiring} value={String(stats.expiring)} sub={stats.expiring ? fill(t.scan.pieces, { n: stats.expiringQty }) : undefined}
           tone={stats.expiring ? "text-orange-600" : undefined} ring={stats.expiring ? "ring-1 ring-orange-200" : undefined} href="/stock?exp=soon" />
         <Kpi icon="alert" label={t.home.expired} value={String(stats.expired)} sub={stats.expired ? fill(t.scan.pieces, { n: stats.expiredQty }) : undefined}
           tone={stats.expired ? "text-red-600" : undefined} ring={stats.expired ? "ring-2 ring-red-200" : undefined} href="/stock?exp=expired" />
+        </>}
       </div>
+      )}
 
-      <div className={`grid gap-4 ${ai ? "lg:grid-cols-2" : ""}`}>
-        <Link href="/insights" className="card card-hover group flex animate-rise items-center gap-4 p-5">
+      {(ins || ai) && <div className={`grid gap-4 ${ai && ins ? "lg:grid-cols-2" : ""}`}>
+        {ins && <Link href="/insights" className="card card-hover group flex animate-rise items-center gap-4 p-5">
           <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600"><Icon name="bulb" className="h-6 w-6" /></div>
           <div className="min-w-0 flex-1">
             <div className="font-bold">{t.ins.title}</div>
             <div className="text-sm text-ink-soft">{t.ins.summary.replace("{r}", String(ins.reorder.length)).replace("{e}", String(ins.expiry.length)).replace("{s}", String(ins.slow.length))}</div>
           </div>
           <Icon name="arrowRight" className="h-5 w-5 text-ink-soft rtl:rotate-180" />
-        </Link>
+        </Link>}
         {ai && (
           <Link href="/ask" className="card card-hover group flex animate-rise items-center gap-4 bg-gradient-to-br from-violet-600 to-indigo-700 p-5 text-white">
             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/15"><Icon name="spark" className="h-6 w-6" /></div>
@@ -171,9 +200,9 @@ export default async function Home() {
             <Icon name="arrowRight" className="h-5 w-5 rtl:rotate-180" />
           </Link>
         )}
-      </div>
+      </div>}
 
-      <section className="card p-5 animate-rise">
+      {showAlerts && <section className="card p-5 animate-rise">
         <h2 className="mb-3 flex items-center gap-2 text-lg font-bold"><Icon name="alert" className="h-5 w-5 text-amber-500" />{t.home.alerts}</h2>
         {al.low.length === 0 && al.expiring.length === 0 && lateList.length === 0 ? (
           <p className="flex items-center gap-2 text-sm text-ink-soft"><Icon name="check" className="h-4 w-4 text-brand-600" />{t.home.noAlerts}</p>
@@ -210,11 +239,12 @@ export default async function Home() {
             })}
           </ul>
         )}
-      </section>
+      </section>}
     </div>
   );
 }
 
+const opensSales = (a: Parameters<typeof canOpen>[0]) => canOpen(a, "/sales");
 const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase() + s.slice(1);
 
 /** wide = auf dem Handy über beide Spalten (die Summe), die anderen zwei stehen darunter nebeneinander */

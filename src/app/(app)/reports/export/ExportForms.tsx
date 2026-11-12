@@ -7,7 +7,7 @@ import type { Dict } from "@/i18n/de";
 
 export function CreatePackage({ t, month, canLock, mail, advisorEmail }: { t: Dict; month: string; canLock: boolean; mail: boolean; advisorEmail: string }) {
   const [state, action] = useActionState(createPackageAction, undefined);
-  const msg = state?.error === "notPast" ? t.rep.notPast : state?.error ? t.common.error : undefined;
+  const msg = state?.error === "notPast" ? t.rep.notPast : state?.error === "noRight" ? t.home.denied : state?.error ? t.common.error : undefined;
   return (
     <div className="space-y-4">
       <form action={action} className="space-y-4">

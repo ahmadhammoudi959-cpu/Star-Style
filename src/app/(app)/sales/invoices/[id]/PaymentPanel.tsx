@@ -6,6 +6,8 @@ import { formatDate, todayIso } from "@/lib/dates";
 import { paymentState, trafficLight } from "@/lib/payment-status";
 import type { Dict } from "@/i18n/de";
 import { AddPayment, CancelPayment, DunningButton, PlanForm } from "./PaymentForms";
+import { can, getAuth } from "@/lib/auth";
+import type { Perm } from "@/lib/permissions";
 
 const STATUS_TONE = { PAID: "bg-emerald-100 text-emerald-800", OPEN: "bg-slate-100 text-slate-700", PARTIAL: "bg-sky-100 text-sky-800", OVERDUE: "bg-red-100 text-red-800", CREDIT: "bg-violet-100 text-violet-800" } as const;
 const LIGHT = { green: "bg-brand-500", yellow: "bg-amber-400", red: "bg-red-500", none: "bg-slate-300" } as const;
@@ -13,6 +15,9 @@ const LIGHT = { green: "bg-brand-500", yellow: "bg-amber-400", red: "bg-red-500"
 export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: string; invoiceId: string }) {
   const inv = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, invoiceId), with: { payments: true, installments: true, dunnings: true } });
   if (!inv || inv.kind !== "INVOICE" || inv.status === "DRAFT") return null;
+  // Knöpfe nur mit dem passenden Recht (Zahlung erfassen/stornieren, Ratenplan, Mahnung) – die Actions prüfen selbst noch einmal
+  const auth = await getAuth();
+  const may = (p: Perm) => !!auth && can(auth, p);
   const today = todayIso();
   const cancelled = inv.status === "CANCELLED";
   if (cancelled && !inv.payments.some((p) => !p.cancelledAt)) return null;
@@ -76,7 +81,7 @@ export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: stri
                     <div className="flex items-center gap-3">
                       <span className={`num font-bold ${p.cancelledAt ? "line-through" : ""}`}>{formatCents(p.amountCents, intl)}</span>
                       <a href={`/api/pdf/receipt/${p.id}`} target="_blank" className="text-xs font-semibold text-brand-700 hover:underline">{t.pay.receipt}</a>
-                      {!p.cancelledAt && <CancelPayment t={t} invoiceId={inv.id} paymentId={p.id} />}
+                      {!p.cancelledAt && may("payments.cancel") && <CancelPayment t={t} invoiceId={inv.id} paymentId={p.id} />}
                     </div>
                   </div>
                   {(p.note || p.cancelReason) && <p className="mt-1 text-xs text-ink-soft">{p.cancelReason || p.note}</p>}
@@ -95,7 +100,7 @@ export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: stri
                   <span className="font-semibold">{t.pay.dunningLevels[d.level as 1 | 2 | 3]}</span>
                   <span className="text-ink-soft">{formatDate(d.date, intl)} · {t.pay.newDue}: {formatDate(d.newDueDate, intl)}{d.feeCents ? ` · ${t.pay.fee} ${formatCents(d.feeCents, intl)}` : ""}</span>
                   <span className="num font-semibold">{formatCents(d.openCents + d.feeCents, intl)}</span>
-                  <a href={`/api/pdf/dunning/${d.id}`} target="_blank" className="text-xs font-semibold text-brand-700 hover:underline">PDF</a>
+                  {may("receivables") && <a href={`/api/pdf/dunning/${d.id}`} target="_blank" className="text-xs font-semibold text-brand-700 hover:underline">PDF</a>}
                 </li>
               ))}
             </ul>
@@ -105,19 +110,19 @@ export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: stri
 
       {!cancelled && (
         <aside className="h-fit space-y-4">
-          {st.openCents > 0 && (
+          {st.openCents > 0 && may("payments.record") && (
             <div className="card animate-rise space-y-2 p-5">
               <h3 className="font-bold">{t.pay.add}</h3>
               <AddPayment t={t} invoiceId={inv.id} suggestCents={st.overdueCents || st.nextDueCents || st.openCents} today={today} />
             </div>
           )}
-          {st.overdueCents > 0 && (
+          {st.overdueCents > 0 && may("receivables") && (
             <div className="card animate-rise space-y-2 p-5">
               <h3 className="font-bold">{t.pay.dunning}</h3>
               <DunningButton t={t} invoiceId={inv.id} nextLevel={nextLevel} />
             </div>
           )}
-          {st.openCents > 0 && (
+          {st.openCents > 0 && may("payments.plans") && (
             <details className="card animate-rise group/d p-5">
               <summary className="-m-1 flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg p-1 font-bold outline-none focus-visible:ring-2 focus-visible:ring-brand-500 [&::-webkit-details-marker]:hidden"><span className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4 text-brand-600" />{t.pay.editPlan}</span><Icon name="arrowRight" className="h-4 w-4 rotate-90 text-ink-soft transition group-open/d:-rotate-90" /></summary>
               <div className="mt-3"><PlanForm t={t} invoiceId={inv.id} grossCents={inv.grossCents} plan={plan} today={today} intl={intl} paid={paidInfo} /></div>

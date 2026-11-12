@@ -2,13 +2,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { sendMail } from "@/lib/mail";
 import { validatePlan } from "@/lib/payments";
 import { archivedInvoicePdf, offerPdf } from "@/lib/pdf";
 import { formatDate } from "@/lib/dates";
-import { requireSession } from "@/lib/auth";
+import { can, requirePerm } from "@/lib/auth";
 import {
   cancelInvoice, deleteDraft, issueInvoice, offerToInvoice, saveInvoiceDraft, saveOffer, SalesError, setOfferStatus, startCorrection,
 } from "@/lib/sales";
@@ -37,11 +37,30 @@ function fail(e: unknown): DocState {
   return { error: "error" };
 }
 
+/** Rabatt nur mit eigenem Recht (Positions- oder Gesamtrabatt) */
+const hasDiscount = (d: { discountBp: number; lines: { discountBp: number }[] }) => d.discountBp > 0 || d.lines.some((l) => l.discountBp > 0);
+
+/** Preis unter dem Listenpreis der Preisgruppe des Kunden ist auch ein Rabatt (sonst ginge es über den Einzelpreis) */
+async function belowListPrice(customerId: string, ls: { variantId: string | null; unitPriceCents: number }[]): Promise<boolean> {
+  const ids = [...new Set(ls.map((l) => l.variantId).filter((x): x is string => !!x))];
+  if (!ids.length) return false;
+  const [c, vs] = await Promise.all([
+    db.query.customers.findFirst({ where: eq(schema.customers.id, customerId), columns: { priceGroup: true } }),
+    db.query.variants.findMany({ where: inArray(schema.variants.id, ids), with: { product: true } }),
+  ]);
+  const list = new Map(vs.map((v) => [v.id, c?.priceGroup === "RETAIL"
+    ? v.retailPriceCents ?? v.product.retailPriceCents : v.wholesalePriceCents ?? v.product.wholesalePriceCents]));
+  return ls.some((l) => l.variantId != null && list.has(l.variantId) && l.unitPriceCents < list.get(l.variantId)!);
+}
+const discountDenied = async (s: Parameters<typeof can>[0], d: { customerId: string; discountBp: number; lines: { variantId: string | null; unitPriceCents: number; discountBp: number }[] }) =>
+  !can(s, "sales.discount") && (hasDiscount(d) || (await belowListPrice(d.customerId, d.lines)));
+
 export async function saveOfferAction(_: DocState, fd: FormData): Promise<DocState> {
-  const s = await requireSession();
+  const s = await requirePerm("sales.offers");
   const p = OfferIn.safeParse(Object.fromEntries(fd));
   if (!p.success) return { error: p.error.issues[0]?.path[0] === "customerId" ? "noCustomer" : "required" };
   if (!p.data.lines.length) return { error: "noLines" };
+  if (await discountDenied(s, p.data)) return { error: "noRight" };
   let id: string;
   try { id = await saveOffer(p.data, s.uid); } catch (e) { return fail(e); }
   revalidatePath("/sales");
@@ -49,7 +68,7 @@ export async function saveOfferAction(_: DocState, fd: FormData): Promise<DocSta
 }
 
 export async function offerStatusAction(_: DocState, fd: FormData): Promise<DocState> {
-  const s = await requireSession();
+  const s = await requirePerm("sales.offers");
   const id = String(fd.get("id")), status = String(fd.get("status")) as "SENT" | "ACCEPTED" | "REJECTED";
   try { await setOfferStatus(id, status, String(fd.get("acceptedVia") ?? ""), s.uid); } catch (e) { return fail(e); }
   revalidatePath(`/sales/offers/${id}`); revalidatePath("/sales");
@@ -57,7 +76,7 @@ export async function offerStatusAction(_: DocState, fd: FormData): Promise<DocS
 }
 
 export async function convertOfferAction(_: DocState, fd: FormData): Promise<DocState> {
-  const s = await requireSession();
+  const s = await requirePerm("sales.invoices");
   let inv: string;
   try { inv = await offerToInvoice(String(fd.get("id")), s.uid); } catch (e) { return fail(e); }
   revalidatePath("/sales");
@@ -76,11 +95,14 @@ const InvoiceIn = z.object({
 });
 
 export async function saveInvoiceAction(_: DocState, fd: FormData): Promise<DocState> {
-  const s = await requireSession();
+  const s = await requirePerm("sales.invoices");
   const p = InvoiceIn.safeParse(Object.fromEntries(fd));
   if (!p.success) return { error: p.error.issues[0]?.path[0] === "customerId" ? "noCustomer" : "required" };
   if (!p.data.lines.length) return { error: "noLines" };
   const { intent, ...d } = p.data;
+  // Rabatt, Zahlung bei Ausstellung, Ratenplan und Korrektur einer ausgestellten Rechnung = eigene Rechte
+  if ((await discountDenied(s, d)) || (d.initialPaymentCents > 0 && !can(s, "payments.record"))
+    || (d.installments.length > 0 && !can(s, "payments.plans")) || (d.replacesInvoiceId && !can(s, "sales.correct"))) return { error: "noRight" };
   let id: string;
   try {
     if (d.installments.length) validatePlan(d.installments, d.installments.reduce((s, r) => s + r.amountCents, 0));
@@ -96,8 +118,14 @@ export async function saveInvoiceAction(_: DocState, fd: FormData): Promise<DocS
 }
 
 export async function invoiceAction(_: DocState, fd: FormData): Promise<DocState> {
-  const s = await requireSession();
+  const s = await requirePerm("sales.invoices", "sales.correct");
   const id = String(fd.get("id")), op = String(fd.get("op"));
+  if (!can(s, op === "cancel" || op === "correct" ? "sales.correct" : "sales.invoices")) return { error: "noRight" };
+  // Korrekturentwurf ausstellen storniert die alte Rechnung → auch dafür das Recht „ändern/stornieren“
+  if (op === "issue" && !can(s, "sales.correct")) {
+    const draft = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, id), columns: { replacesInvoiceId: true } });
+    if (draft?.replacesInvoiceId) return { error: "noRight" };
+  }
   let target = id;
   try {
     if (op === "issue") await issueInvoice(id, s.uid);
@@ -115,7 +143,7 @@ export async function invoiceAction(_: DocState, fd: FormData): Promise<DocState
 // ───────── E-Mail-Versand ─────────
 
 export async function emailDocAction(_: DocState, fd: FormData): Promise<DocState & { ok?: boolean }> {
-  const s = await requireSession();
+  const s = await requirePerm("sales.email");
   const kind = String(fd.get("kind")), id = String(fd.get("id"));
   const to = String(fd.get("to") ?? "").trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return { error: "required" };

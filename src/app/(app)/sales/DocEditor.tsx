@@ -25,8 +25,12 @@ export type EditorInitial = {
 type L = { key: string; variantId: string | null; description: string; qty: string; price: string; disc: string; vatRateBp: number; available?: number };
 const toInput = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
-export function DocEditor({ t, kind, customers, options, initial, intl }: {
-  t: Dict; kind: "offer" | "invoice"; customers: CustomerOpt[]; options: SaleOption[]; initial: EditorInitial; intl: string;
+/** Was die angemeldete Person im Editor darf (Wunsch Inhaber 12.11.2026); die Action prüft dasselbe noch einmal */
+export type EditorRights = { discount: boolean; payment: boolean; plan: boolean };
+const ALL_RIGHTS: EditorRights = { discount: true, payment: true, plan: true };
+
+export function DocEditor({ t, kind, customers, options, initial, intl, rights = ALL_RIGHTS }: {
+  t: Dict; kind: "offer" | "invoice"; customers: CustomerOpt[]; options: SaleOption[]; initial: EditorInitial; intl: string; rights?: EditorRights;
 }) {
   const [state, action, pending] = useActionState(kind === "offer" ? saveOfferAction : saveInvoiceAction, undefined);
   const [customerId, setCustomerId] = useState(initial.customerId);
@@ -66,12 +70,13 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
     const inst = initial.installments ?? [], down = initial.initialPaymentCents ?? 0;
     return toPlanRows(down > 0 && inst[0]?.amountCents === down ? inst.slice(1) : inst);
   });
-  const initialPaid = payMode === "full" ? gross : payMode === "partial" ? Math.min(parseMoney(partial) ?? 0, gross) : 0;
+  const initialPaid = !rights.payment ? 0 : payMode === "full" ? gross : payMode === "partial" ? Math.min(parseMoney(partial) ?? 0, gross) : 0;
   // Anzahlung + Raten (Wunsch Inhaber 12.11.2026): in Raten geteilt wird nur der Rest; die Anzahlung ist die erste Zeile des Plans
   const planShown = payMode !== "full"; // voll bezahlt → nichts in Raten
   const downRow = payMode === "partial" && initialPaid > 0 ? { dueDate: today, amountCents: initialPaid } : null;
-  const plan = planOn && planShown && planRows.length ? [...(downRow ? [downRow] : []), ...fromPlanRows(planRows)] : [];
-  const planErr = !planOn || !planShown ? null : planRows.length ? planProblem(planRows, gross, downRow) : "planInvalid"; // gleiche Prüfung wie der Server
+  const usePlan = rights.plan && planOn && planShown;
+  const plan = usePlan && planRows.length ? [...(downRow ? [downRow] : []), ...fromPlanRows(planRows)] : [];
+  const planErr = !usePlan ? null : planRows.length ? planProblem(planRows, gross, downRow) : "planInvalid"; // gleiche Prüfung wie der Server
   const planOk = !planErr;
   const overLimit = kind === "invoice" && customer?.creditLimitCents != null && (customer.openCents ?? 0) + gross - initialPaid > customer.creditLimitCents;
 
@@ -85,6 +90,15 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
     });
   };
   const upd = (k: string, p: Partial<L>) => setLines((ls) => ls.map((l) => (l.key === k ? { ...l, ...p } : l)));
+  // ohne Recht „Rabatt“ gilt der Listenpreis der Preisgruppe – anderer Kunde gewählt → Preise der Artikel neu setzen
+  const group = customer?.priceGroup;
+  useEffect(() => {
+    if (rights.discount || !group) return;
+    setLines((ls) => ls.map((l) => {
+      const o = l.variantId ? optById.get(l.variantId) : undefined;
+      return o ? { ...l, price: toInput(group === "RETAIL" ? o.retailPriceCents : o.wholesalePriceCents) } : l;
+    }));
+  }, [group, rights.discount, optById]);
   // Positionen finden: Kategorie, Suche oder alle Artikel im Fenster (Wunsch Inhaber 03.11.2026)
   const priceOf = (o: SaleOption) => formatCents(customer?.priceGroup === "RETAIL" ? o.retailPriceCents : o.wholesalePriceCents, intl);
   const qtyInDoc = (variantId: string) => lines.reduce((n, l) => n + (l.variantId === variantId ? parseInt(l.qty) || 0 : 0), 0);
@@ -192,8 +206,8 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
                   </div>
                 </div>
                 <Field label={t.common.qty} className="col-span-2 md:col-span-1"><input type="number" min={1} value={l.qty} onChange={(e) => upd(l.key, { qty: e.target.value })} className={`input num ${short ? "border-red-400" : ""}`} /></Field>
-                <Field label={t.sales.price} className="col-span-2 md:col-span-1"><input inputMode="decimal" dir="ltr" value={l.price} onChange={(e) => upd(l.key, { price: e.target.value })} className={`input num ${parseMoney(l.price) == null ? "border-red-400" : ""}`} /></Field>
-                <Field label={t.sales.lineDiscount} className="col-span-2 md:col-span-1"><input inputMode="decimal" dir="ltr" value={l.disc} onChange={(e) => upd(l.key, { disc: e.target.value })} className="input num" placeholder="0" /></Field>
+                <Field label={t.sales.price} className="col-span-2 md:col-span-1"><input inputMode="decimal" dir="ltr" value={l.price} readOnly={!rights.discount && !!l.variantId} onChange={(e) => upd(l.key, { price: e.target.value })} className={`input num read-only:bg-slate-50 ${parseMoney(l.price) == null ? "border-red-400" : ""}`} /></Field>
+                <Field label={t.sales.lineDiscount} className="col-span-2 md:col-span-1"><input inputMode="decimal" dir="ltr" value={l.disc} disabled={!rights.discount} onChange={(e) => upd(l.key, { disc: e.target.value })} className="input num disabled:bg-slate-50 disabled:opacity-60" placeholder="0" /></Field>
                 <Field label={t.sales.vat} className="col-span-2 md:col-span-1">
                   <select value={l.vatRateBp} disabled={!!l.variantId} onChange={(e) => upd(l.key, { vatRateBp: Number(e.target.value) })} className="input">
                     <option value={1900}>19 %</option><option value={700}>7 %</option><option value={0}>0 %</option>
@@ -214,7 +228,7 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
 
       <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="card grid h-fit gap-4 p-5 sm:grid-cols-2 animate-rise">
-          <Field label={t.sales.docDiscount}><input inputMode="decimal" dir="ltr" value={docDisc} onChange={(e) => setDocDisc(e.target.value)} className="input num" placeholder="0" /></Field>
+          <Field label={t.sales.docDiscount}><input inputMode="decimal" dir="ltr" value={docDisc} disabled={!rights.discount} onChange={(e) => setDocDisc(e.target.value)} className="input num disabled:bg-slate-50 disabled:opacity-60" placeholder="0" /></Field>
           {kind === "invoice" && (
             <>
               <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
@@ -223,9 +237,9 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
             </>
           )}
           <Field label={t.sales.notes} className="sm:col-span-2"><textarea name="notes" rows={2} defaultValue={initial.notes} className="input" /></Field>
-          {kind === "invoice" && (
+          {kind === "invoice" && (rights.payment || rights.plan) && (
             <div className="space-y-4 rounded-xl bg-sky-50/50 p-4 ring-1 ring-sky-100 sm:col-span-2">
-              <div>
+              {rights.payment && <div>
                 <span className="label">{t.pay.atIssue}</span>
                 <div className="flex flex-wrap gap-2">
                   {(["none", "full", "partial"] as const).map((m) => (
@@ -233,8 +247,8 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
                       className={`btn px-3 py-2 ${payMode === m ? "bg-sky-600 text-white shadow-card" : "bg-white ring-1 ring-black/10 hover:bg-sky-50"}`}>{t.pay[m]}</button>
                   ))}
                 </div>
-              </div>
-              {payMode !== "none" && (
+              </div>}
+              {rights.payment && payMode !== "none" && (
                 <div className="grid animate-rise grid-cols-2 gap-3">
                   {payMode === "partial"
                     ? <Field label={t.pay.amount}><input value={partial} onChange={(e) => setPartial(e.target.value)} inputMode="decimal" dir="ltr" className="input num" placeholder="0,00" /></Field>
@@ -246,12 +260,12 @@ export function DocEditor({ t, kind, customers, options, initial, intl }: {
                   </Field>
                 </div>
               )}
-              {planShown && (
+              {rights.plan && planShown && (
                 <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
                   <input type="checkbox" checked={planOn} onChange={(e) => setPlanOn(e.target.checked)} className="h-5 w-5 accent-sky-600" />{t.pay.planOn}
                 </label>
               )}
-              {planOn && planShown && (
+              {rights.plan && planOn && planShown && (
                 <PlanEditor t={t} grossCents={gross} rows={planRows} setRows={setPlanRows} today={today} intl={intl}
                   paid={downRow ? { cents: downRow.amountCents, date: today, label: `${t.pay.paidAtIssue} · ${t.pay.methods[payMethod]}`, locked: true } : null} />
               )}

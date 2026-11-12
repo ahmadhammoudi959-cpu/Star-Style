@@ -1,7 +1,7 @@
 "use server";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { requireSession } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { audit } from "@/lib/stock";
 import { designDiff, parseDesign } from "@/lib/doc-design";
 
@@ -11,7 +11,7 @@ import { designDiff, parseDesign } from "@/lib/doc-design";
  * (sonst kann der Übergang im Browser hängen bleiben, siehe CLAUDE.md „Hängender Übergang“).
  */
 export async function saveDocDesign(json: string): Promise<{ ok: true } | { error: "saveError" }> {
-  const session = await requireSession();
+  const session = await requirePerm("design");
   if (typeof json !== "string" || json.length > 64_000) return { error: "saveError" };
   let raw: unknown;
   try { raw = JSON.parse(json); } catch { return { error: "saveError" }; }

@@ -11,6 +11,7 @@ import { CategorySelect } from "@/components/CategorySelect";
 import { OpenButton } from "@/components/OpenButton";
 import { SearchPick } from "@/components/SearchPick";
 import { pendingSummary } from "@/lib/shopify/product-push";
+import { can, requireSession } from "@/lib/auth";
 import { fill } from "@/i18n";
 import { LIST_STEP, listLimit, ShowMore } from "@/components/ShowMore";
 
@@ -24,7 +25,9 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const { t, intl } = await getI18n();
   const like = q.trim() ? `%${q.trim().toLowerCase()}%` : null;
   const category = cat.trim() || null;
-  const [cats, pend] = await Promise.all([productCategories(), pendingSummary()]);
+  const session = await requireSession();
+  const edit = can(session, "products.edit"), manageShops = can(session, "shops.manage");
+  const [cats, pend] = await Promise.all([productCategories(), manageShops ? pendingSummary() : []]);
   const rows: Row[] = (await db.execute<Record<string, unknown>>(sql`
     select p.id, p.image_file_id, p.sku, p.name_de, p.name_nl, p.category, p.wholesale_price_cents, p.active,
            count(v.id) filter (where v.active)::int as variants,
@@ -49,7 +52,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title={t.product.title} actions={<Link href="/products/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.product.new}</Link>} />
+      <PageHeader title={t.product.title} actions={edit && <Link href="/products/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.product.new}</Link>} />
       {pend.map((x) => (
         <Link key={x.channel} href={`/shops/${x.channel}#pending`} className="card card-hover group mb-3 flex animate-rise items-center gap-3 p-3 text-sm ring-1 ring-accent-500/20">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-50 text-accent-600"><Icon name="upload" className="icon-pop h-5 w-5" /></span>
@@ -70,7 +73,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       {rows.length === 0 ? (
         <div className="card p-10 text-center text-ink-soft animate-rise">
           {q.trim() || category ? t.picker.empty : t.product.empty}
-          {!q.trim() && !category && <Link href="/shops" className="mt-3 block font-semibold text-brand-700 hover:underline">{t.product.importLink}</Link>}
+          {manageShops && !q.trim() && !category && <Link href="/shops" className="mt-3 block font-semibold text-brand-700 hover:underline">{t.product.importLink}</Link>}
         </div>
       ) : (
         <>

@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireSession } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { deleteExpense, ExpenseError, saveExpense } from "@/lib/expenses";
 import { storeUpload } from "@/lib/files";
 import { parseMoney } from "@/lib/money";
@@ -25,7 +25,7 @@ const Input = z.object({
 });
 
 export async function saveExpenseAction(_: ExpenseState, fd: FormData): Promise<ExpenseState> {
-  const s = await requireSession();
+  const s = await requirePerm("expenses.edit");
   const raw = Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === "string"));
   const p = Input.safeParse(raw);
   if (!p.success) {
@@ -55,7 +55,7 @@ export async function saveExpenseAction(_: ExpenseState, fd: FormData): Promise<
 }
 
 export async function deleteExpenseAction(_: ExpenseState, fd: FormData): Promise<ExpenseState> {
-  const s = await requireSession();
+  const s = await requirePerm("expenses.edit");
   const id = String(fd.get("id"));
   const month = String(fd.get("month") ?? "");
   try { await deleteExpense(id, s.uid); } catch (e) {

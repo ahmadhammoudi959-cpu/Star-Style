@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { can, requireSession } from "@/lib/auth";
 import { desc, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { getI18n } from "@/i18n";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 const CHANNELS = ["BRAND_SHOP", "GENERAL_SHOP"] as const;
 
 export default async function ShopsPage() {
+  const manage = can(await requireSession(), "shops.manage");
   const { t } = await getI18n();
   const [shops, counts, events] = await Promise.all([
     db.select().from(schema.shops),
@@ -47,7 +49,7 @@ export default async function ShopsPage() {
               {s?.lastError && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" dir="ltr">{s.lastError}</p>}
               <div className="flex flex-wrap gap-2">
                 <Link href={`/shops/${ch}`} className="btn-primary group"><Icon name="settings" className="h-4 w-4" />{s?.domain ? t.shop.settings : t.shop.setup}</Link>
-                {s?.domain && <Link href={`/shops/${ch}/mapping`} className="btn-ghost group"><Icon name="layers" className="h-4 w-4" />{t.shop.mapping}</Link>}
+                {manage && s?.domain && <Link href={`/shops/${ch}/mapping`} className="btn-ghost group"><Icon name="layers" className="h-4 w-4" />{t.shop.mapping}</Link>}
               </div>
             </section>
           );

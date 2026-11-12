@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
-import { requireSession } from "@/lib/auth";
+import { can, requirePerm } from "@/lib/auth";
 import { parseMoney } from "@/lib/money";
 import { audit, receiveGoodsTx } from "@/lib/stock";
 import { storeImage } from "@/lib/files";
@@ -72,7 +72,7 @@ export async function saveProduct(prev: ProductFormState, fd: FormData): Promise
 }
 
 async function saveProductInner(_: ProductFormState, fd: FormData): Promise<ProductFormState> {
-  const session = await requireSession();
+  const session = await requirePerm("products.edit");
   const { image: _img, ...fields } = Object.fromEntries(fd);
   const parsed = ProductSchema.safeParse(fields);
   if (!parsed.success) {
@@ -110,10 +110,17 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
     return { error: msg === "fileTooLarge" ? "fileTooLarge" : "imageType" };
   }
 
+  // Preise (und MwSt.-Satz, er ändert den Shop-Preis) nur mit Recht „Preise ändern“, Einkaufspreis nur mit Recht
+  // „Einkaufspreis sehen“, Anfangsbestand nur mit Recht „Wareneingang“ – sonst bleiben die bisherigen Werte
+  const prev = d.id ? await db.query.products.findFirst({ where: eq(schema.products.id, d.id) }) : undefined;
+  const canPrices = can(session, "products.prices"), canCost = can(session, "products.cost");
+  if (!can(session, "stock.receive")) for (const v of d.variants) v.initialQty = 0;
   const values = {
     sku, nameDe: d.nameDe, nameNl: d.nameNl, descriptionDe: d.descriptionDe, descriptionNl: d.descriptionNl,
-    category: d.category, supplierId: d.supplierId || null, vatRateBp: d.vatRateBp,
-    purchasePriceCents: d.purchasePrice, wholesalePriceCents: d.wholesalePrice, retailPriceCents: d.retailPrice,
+    category: d.category, supplierId: d.supplierId || null, vatRateBp: canPrices || !prev ? d.vatRateBp : prev.vatRateBp,
+    purchasePriceCents: canCost ? d.purchasePrice : (prev?.purchasePriceCents ?? 0),
+    wholesalePriceCents: canPrices ? d.wholesalePrice : (prev?.wholesalePriceCents ?? 0),
+    retailPriceCents: canPrices ? d.retailPrice : (prev?.retailPriceCents ?? 0),
     tracksExpiry: d.tracksExpiry, inBrandShop: d.inBrandShop, inGeneralShop: d.inGeneralShop,
     ...(imageFileId !== undefined ? { imageFileId } : {}),
   };
@@ -261,7 +268,7 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
 
 /** Ein Foto für die Shop-Galerie sofort speichern (im Browser schon verkleinert) → ID für das Formular */
 export async function uploadShopPhoto(fd: FormData): Promise<{ id?: string; error?: string }> {
-  await requireSession();
+  await requirePerm("products.edit");
   try {
     const id = await storeImage(fd.get("file") as File | null);
     return id ? { id } : { error: "imageType" };
@@ -274,7 +281,7 @@ const isChannel = (c: unknown): c is ShopChannel => c === "BRAND_SHOP" || c === 
 
 /** „Fotos aus dem Shop holen“: vorhandene Fotos eines verbundenen Artikels als Galerie übernehmen */
 export async function adoptShopPhotos(productId: string, channel: string): Promise<AdoptResult> {
-  const session = await requireSession();
+  const session = await requirePerm("products.edit");
   if (!isChannel(channel) || typeof productId !== "string") return { ok: false, error: "failed" };
   const r = await adoptShopGallery(productId, channel, session.uid);
   if (r.ok) revalidatePath(`/products/${productId}`);
@@ -283,7 +290,7 @@ export async function adoptShopPhotos(productId: string, channel: string): Promi
 
 /** „Erneut senden“, wenn Fotos nicht in den Shop gekommen sind */
 export async function resendShopPhotos(productId: string, channel: string): Promise<GallerySync> {
-  await requireSession();
+  await requirePerm("products.edit");
   if (!isChannel(channel) || typeof productId !== "string") return { status: "failed" };
   const r = await syncGallery(productId, channel);
   revalidatePath(`/products/${productId}`);
@@ -292,7 +299,7 @@ export async function resendShopPhotos(productId: string, channel: string): Prom
 
 /** Test- oder Fehleintrag endgültig löschen (nur wenn nie verkauft, angeboten oder als Verlust gebucht) */
 export async function deleteProductAction(_: ProductFormState, fd: FormData): Promise<ProductFormState> {
-  const session = await requireSession();
+  const session = await requirePerm("products.edit");
   try {
     await deleteProduct(String(fd.get("id") ?? ""), session.uid);
   } catch (e) {
@@ -305,7 +312,7 @@ export async function deleteProductAction(_: ProductFormState, fd: FormData): Pr
 }
 
 export async function setProductActive(id: string, active: boolean) {
-  const session = await requireSession();
+  const session = await requirePerm("products.edit");
   await db.transaction(async (tx) => {
     await tx.update(schema.products).set({ active }).where(eq(schema.products.id, id));
     await audit(tx, { entity: "product", entityId: id, action: active ? "activate" : "deactivate", userId: session.uid });

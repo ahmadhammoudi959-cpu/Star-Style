@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireSession } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { receiveGoods, StockError } from "@/lib/stock";
 import { parseWeight } from "@/lib/weight";
 import { setVariantWeights } from "@/lib/variants";
@@ -27,7 +27,7 @@ const Input = z.object({
 });
 
 export async function submitReceipt(_: ReceiveState, fd: FormData): Promise<ReceiveState> {
-  const session = await requireSession();
+  const session = await requirePerm("stock.receive");
   const parsed = Input.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: "required" };
   const d = parsed.data;

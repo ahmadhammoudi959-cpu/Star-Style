@@ -6,6 +6,8 @@ import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { openItems } from "@/lib/receivables";
 import { OpenButton } from "@/components/OpenButton";
+import { requireSession } from "@/lib/auth";
+import { canOpen } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 const LIGHT = { green: "bg-brand-500", yellow: "bg-amber-400", red: "bg-red-500", none: "bg-violet-400" } as const;
@@ -13,6 +15,9 @@ const LIGHT = { green: "bg-brand-500", yellow: "bg-amber-400", red: "bg-red-500"
 export default async function ReceivablesPage({ searchParams }: { searchParams: Promise<{ view?: string; f?: string }> }) {
   const { view = "invoice", f = "all" } = await searchParams;
   const { t, intl } = await getI18n();
+  // Links zu Kunde/Kundenkonto nur, wenn die Person diese Seiten öffnen darf
+  const session = await requireSession();
+  const cust = canOpen(session, "/customers/x"), stmt = canOpen(session, "/customers/x/statement");
   const all = await openItems();
   const debts = all.filter((r) => r.state.openCents > 0);
   const totalOpen = debts.reduce((s, r) => s + r.state.openCents, 0);
@@ -59,15 +64,15 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
           <tbody>{groups.map((g) => (
             <tr key={g.id}>
               <td className="w-6"><span className={`block h-3 w-3 rounded-full ${LIGHT[g.light]}`} /></td>
-              <td><Link href={`/customers/${g.id}`} className="font-semibold hover:text-brand-700">{g.name}</Link></td>
+              <td>{cust ? <Link href={`/customers/${g.id}`} className="font-semibold hover:text-brand-700">{g.name}</Link> : <span className="font-semibold">{g.name}</span>}</td>
               <td className="num text-end">{g.count}</td>
               <td className="num text-end">{g.worst || ""}</td>
               <td className="num text-end font-semibold text-red-600">{g.overdue ? formatCents(g.overdue, intl) : ""}</td>
               <td className={`num text-end font-bold ${g.open < 0 ? "text-violet-700" : ""}`}>{formatCents(g.open, intl)}</td>
               <td className="text-end">
                 <div className="flex justify-end gap-2">
-                  <Link href={`/customers/${g.id}/statement`} className="btn-ghost group whitespace-nowrap px-3 py-1.5 text-xs"><Icon name="receipt" className="h-4 w-4" />{t.pay.statement}</Link>
-                  <OpenButton href={`/customers/${g.id}`} label={t.product.open} />
+                  {stmt && <Link href={`/customers/${g.id}/statement`} className="btn-ghost group whitespace-nowrap px-3 py-1.5 text-xs"><Icon name="receipt" className="h-4 w-4" />{t.pay.statement}</Link>}
+                  {cust && <OpenButton href={`/customers/${g.id}`} label={t.product.open} />}
                 </div>
               </td>
             </tr>
@@ -85,8 +90,8 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
                   {g.overdue > 0 && <span className="font-semibold text-red-600">{t.pay.overdue}: <span className="num">{formatCents(g.overdue, intl)}</span></span>}
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Link href={`/customers/${g.id}/statement`} className="btn-ghost group px-2.5 py-1.5 text-xs"><Icon name="receipt" className="h-4 w-4" />{t.pay.statement}</Link>
-                  <OpenButton href={`/customers/${g.id}`} label={t.product.open} className="px-2.5 py-1.5 text-xs" />
+                  {stmt && <Link href={`/customers/${g.id}/statement`} className="btn-ghost group px-2.5 py-1.5 text-xs"><Icon name="receipt" className="h-4 w-4" />{t.pay.statement}</Link>}
+                  {cust && <OpenButton href={`/customers/${g.id}`} label={t.product.open} className="px-2.5 py-1.5 text-xs" />}
                 </div>
               </div>
             ))}
@@ -99,7 +104,7 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
             <tr key={r.invoiceId} className={r.light === "red" ? "bg-red-50/50" : ""}>
               <td className="w-6"><span className={`block h-3 w-3 rounded-full ${LIGHT[r.light]}`} title={t.pay.status[r.state.status]} /></td>
               <td><Link href={`/sales/invoices/${r.invoiceId}#payments`} className="num font-semibold hover:text-brand-700" dir="ltr">{r.number}</Link></td>
-              <td><Link href={`/customers/${r.customerId}`} className="hover:text-brand-700">{r.customerName}</Link></td>
+              <td>{cust ? <Link href={`/customers/${r.customerId}`} className="hover:text-brand-700">{r.customerName}</Link> : r.customerName}</td>
               <td className="num">{r.state.nextDueDate ? formatDate(r.state.nextDueDate, intl) : "—"}</td>
               <td className="num text-end font-semibold text-red-600">{r.state.daysOverdue || ""}</td>
               <td className="num text-end text-ink-soft">{formatCents(r.state.paidCents, intl)}</td>

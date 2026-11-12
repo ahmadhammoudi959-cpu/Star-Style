@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { apiDenied } from "@/lib/auth";
 import { getI18n } from "@/i18n";
 import { goodsReceiptPdf } from "@/lib/goods-receipt-pdf";
 
@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /** Wareneingang als PDF (Design wie die Rechnung, Sprache des Nutzers) */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await getSession())) return new Response("Unauthorized", { status: 401 });
+  const denied = await apiDenied("stock.receive"); if (denied) return denied;
   const { id } = await params;
   const { t, locale } = await getI18n();
   const out = await goodsReceiptPdf(id, t, locale);

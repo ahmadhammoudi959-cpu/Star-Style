@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { apiDenied } from "@/lib/auth";
 import { parseDesign, PREVIEW_KINDS, type PreviewKind } from "@/lib/doc-design";
 import { pdfToPng, previewPdf } from "@/lib/doc-preview";
 
@@ -12,7 +12,7 @@ export const runtime = "nodejs";
  * das neue Fenster, auch nicht auf dem iPhone. Ohne Nebenwirkung (nur Anzeige), darum reicht die Sitzung als Schutz.
  */
 export async function POST(req: Request) {
-  if (!(await getSession())) return new Response("Unauthorized", { status: 401 });
+  const denied = await apiDenied("design"); if (denied) return denied;
   const raw = await req.text();
   if (raw.length > 64_000) return new Response("Too large", { status: 413 });
   let body: { kind?: unknown; design?: unknown; format?: unknown };

@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { getSession } from "@/lib/auth";
+import { apiDenied } from "@/lib/auth";
 import { archivedInvoicePdf, invoicePdf } from "@/lib/pdf";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await getSession())) return new Response("Unauthorized", { status: 401 });
+  const denied = await apiDenied("sales.view"); if (denied) return denied;
   const { id } = await params;
   const type = new URL(req.url).searchParams.get("type");
   const inv = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, id) });

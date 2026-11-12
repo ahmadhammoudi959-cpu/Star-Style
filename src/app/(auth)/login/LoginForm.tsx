@@ -23,7 +23,7 @@ export function LoginForm({ t }: { t: Dict }) {
     }
   }, [codeState, L]);
 
-  const passwordError = state?.error === "locked" ? L.locked.replace("{min}", String(state.minutes ?? 15)) : state?.error ? L.invalid : undefined;
+  const passwordError = state?.error === "locked" ? L.locked.replace("{min}", String(state.minutes ?? 15)) : state?.error === "disabled" ? L.disabled : state?.error ? L.invalid : undefined;
 
   if (stage === "code") {
     return (

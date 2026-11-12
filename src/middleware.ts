@@ -1,10 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
-import { sessionCurrent } from "@/lib/session-check";
+import { loadAccess } from "@/lib/session-check";
+import { allowed, routeNeed } from "@/lib/permissions";
 
 /**
  * Türsteher für jede Anfrage:
- * 1. Ohne gültige Sitzung (Signatur + Sitzungs-Version aus der Datenbank) nur Anmeldung, Einrichtung, Health und Shop-Webhook.
+ * 1. Ohne gültige Sitzung (Signatur + Sitzungs-Version aus der Datenbank, Konto aktiv) nur Anmeldung, Einrichtung, Health und Shop-Webhook.
+ *    Mit Sitzung: jede Seite/API nur mit dem passenden Recht (`routeNeed` in permissions.ts, sonst Startseite bzw. 403);
+ *    Einmal-Passwort vom Admin → zuerst /password.
  * 2. Jede Seite bekommt eine Content-Security-Policy mit Einmal-Nonce: nur unsere eigenen Skripte laufen,
  *    keine fremden Seiten dürfen uns einbetten, Formulare gehen nur an uns.
  * Läuft in Node (nicht Edge), damit die Sitzungs-Version aus der Datenbank geprüft werden kann.
@@ -38,13 +41,31 @@ export async function middleware(req: NextRequest) {
   const isPublic = PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/"));
   if (!isPublic) {
     const s = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
-    if (!s || !(await sessionCurrent(s.uid, s.sv))) {
+    const a = s ? await loadAccess(s.uid, s.sv) : null;
+    if (!s || !a || !a.active || a.sv !== s.sv) {
       const url = req.nextUrl.clone();
       url.pathname = "/login";
       url.search = "";
       const res = NextResponse.redirect(url);
-      if (req.cookies.has(SESSION_COOKIE)) res.cookies.delete(SESSION_COOKIE); // abgelaufene oder abgemeldete Sitzung entfernen
+      if (req.cookies.has(SESSION_COOKIE)) res.cookies.delete(SESSION_COOKIE); // abgelaufene, abgemeldete oder gesperrte Sitzung entfernen
       return res;
+    }
+    const api = pathname.startsWith("/api/");
+    // Einmal-Passwort → erst ein eigenes Passwort (alles andere zu)
+    if (a.mustChange && !pathname.startsWith("/password")) {
+      if (api) return new NextResponse("Forbidden", { status: 403 });
+      const url = req.nextUrl.clone();
+      url.pathname = "/password";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    // Recht für diese Seite/API? Sonst Startseite mit Hinweis (bzw. 403)
+    if (!allowed(a, routeNeed(pathname))) {
+      if (api) return new NextResponse("Forbidden", { status: 403 });
+      const url = req.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "?denied=1";
+      return NextResponse.redirect(url);
     }
   }
   if (pathname.startsWith("/api/")) return NextResponse.next(); // Dateien/PDFs setzen eigene Kopfzeilen

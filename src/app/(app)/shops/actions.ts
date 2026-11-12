@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { requireSession } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { encrypt } from "@/lib/crypto";
 import { getShop, normalizeDomain, ShopifyError, type ShopChannel } from "@/lib/shopify/client";
 import {
@@ -34,7 +34,7 @@ const fail = (e: unknown): ShopResult => {
 const done = (_channel: ShopChannel, ok = "saved"): ShopResult => ({ ok });
 
 export async function saveShopAction(_: ShopResult | undefined, fd: FormData): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   const channel = CH(fd.get("channel"));
   const domainRaw = String(fd.get("domain") ?? "").trim();
   if (!domainRaw) return { error: "notConfigured" };
@@ -57,7 +57,7 @@ export async function saveShopAction(_: ShopResult | undefined, fd: FormData): P
 }
 
 export async function testShopAction(channel: string): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   try {
     const r = await testConnection(CH(channel));
     return { ok: r.name, locations: r.locations.map((l) => ({ id: l.id, name: l.name })) };
@@ -65,14 +65,14 @@ export async function testShopAction(channel: string): Promise<ShopResult> {
 }
 
 export async function setLocationAction(channel: string, locationId: string, name: string): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   await db.update(schema.shops).set({ locationId, locationName: name, }).where(eq(schema.shops.channel, CH(channel)));
   await db.update(schema.shopVariants).set({ lastPushedQty: null }).where(eq(schema.shopVariants.channel, CH(channel)));
   return done(CH(channel));
 }
 
 export async function activateAction(channel: string, on: boolean): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   const ch = CH(channel);
   const s = await db.query.shops.findFirst({ where: eq(schema.shops.channel, ch) });
   if (!s?.domain) return { error: "notConfigured" };
@@ -83,13 +83,13 @@ export async function activateAction(channel: string, on: boolean): Promise<Shop
 }
 
 export async function loadProductsAction(channel: string): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   try { const r = await syncProducts(CH(channel)); return { ...done(CH(channel)), ok: `${r.total}|${r.matched}|${r.open}` }; } catch (e) { return fail(e); }
 }
 
 /** Fehlende Produkte aus dem Shop als Artikel anlegen (Bestand 0) und gleich zuordnen */
 export async function importProductsAction(channel: string): Promise<ShopResult> {
-  const session = await requireSession();
+  const session = await requirePerm("shops.manage");
   const ch = CH(channel);
   try {
     const r = await importProducts(ch, { userId: session.uid });
@@ -103,12 +103,12 @@ export async function importProductsAction(channel: string): Promise<ShopResult>
 }
 
 export async function webhooksAction(channel: string): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   try { const n = await registerWebhooks(CH(channel)); return { ...done(CH(channel)), ok: String(n) }; } catch (e) { return fail(e); }
 }
 
 export async function syncNowAction(channel: string): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   const ch = CH(channel);
   try {
     await processDirty();
@@ -119,12 +119,12 @@ export async function syncNowAction(channel: string): Promise<ShopResult> {
 }
 
 export async function pushAllAction(channel: string): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   try { const s = await pushStock(CH(channel), { force: true }); return { ...done(CH(channel)), ok: `${s.pushed}|${s.errors}` }; } catch (e) { return fail(e); }
 }
 
 export async function linkAction(channel: string, rowId: string, variantId: string | null): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   await linkVariant(CH(channel), rowId, variantId);
   revalidatePath(`/shops/${channel}/mapping`);
   return { ok: "saved" };
@@ -136,12 +136,12 @@ const refreshPending = (channel: ShopChannel) => { revalidatePath(`/shops/${chan
 
 /** „Alle bereiten hochladen“: läuft im Hintergrund, Stand über bulkStatusAction */
 export async function startBulkPushAction(channel: string): Promise<ShopResult & { bulk?: BulkState }> {
-  const session = await requireSession();
+  const session = await requirePerm("shops.manage");
   try { return { ok: "started", bulk: await startBulkPush(CH(channel), session.uid) }; } catch (e) { return fail(e); }
 }
 
 export async function bulkStatusAction(channel: string): Promise<BulkState | null> {
-  await requireSession();
+  await requirePerm("shops.view");
   const st = bulkPushStatus(CH(channel));
   if (st && !st.running) refreshPending(CH(channel));
   return st;
@@ -149,7 +149,7 @@ export async function bulkStatusAction(channel: string): Promise<BulkState | nul
 
 /** Einen Artikel hochladen; Ergebnis wie nach dem Speichern im Artikel */
 export async function pushOneAction(channel: string, productId: string): Promise<{ result: PushResult | null }> {
-  const session = await requireSession();
+  const session = await requirePerm("shops.manage");
   const result = await pushProductToShop(CH(channel), productId, session.uid);
   refreshPending(CH(channel));
   return { result };
@@ -157,7 +157,7 @@ export async function pushOneAction(channel: string, productId: string): Promise
 
 /** „Nicht für diesen Shop“ – nur das Häkchen entfernen */
 export async function unlistAction(channel: string, productId: string): Promise<ShopResult> {
-  const session = await requireSession();
+  const session = await requirePerm("shops.manage");
   await unlistProduct(CH(channel), productId, session.uid);
   refreshPending(CH(channel));
   return { ok: "saved" };
@@ -165,14 +165,14 @@ export async function unlistAction(channel: string, productId: string): Promise<
 
 /** Unsere Kategorie → Kategorie des Shops (leer = Zuordnung entfernen) */
 export async function mapCategoryAction(channel: string, category: string, type: string): Promise<ShopResult> {
-  const session = await requireSession();
+  const session = await requirePerm("shops.manage");
   const ok = await setCategoryMapping(CH(channel), category, type || null, session.uid);
   refreshPending(CH(channel));
   return ok ? { ok: "saved" } : { error: "other", detail: "category" };
 }
 
 export async function refreshCategoriesAction(channel: string): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   const shop = await getShop(CH(channel));
   if (!shop?.domain) return { error: "notConfigured" };
   try { const types = await getStoreTypes(shop, 0, true); refreshPending(CH(channel)); return { ok: String(types.length) }; } catch (e) { return fail(e); }
@@ -180,7 +180,7 @@ export async function refreshCategoriesAction(channel: string): Promise<ShopResu
 
 /** Alle Gewichte (Versand nach Gewicht) noch einmal an diesen Shop – im Hintergrund, Ergebnis im Protokoll */
 export async function pushWeightsAction(channel: string): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   const ch = CH(channel);
   // im Hintergrund – kein revalidatePath danach (außerhalb der Anfrage nicht erlaubt: Fehler im Render-Protokoll 12.11.2026)
   void pushWeights(undefined, ch).catch((e) => console.error("shopify weights", e));
@@ -189,7 +189,7 @@ export async function pushWeightsAction(channel: string): Promise<ShopResult> {
 
 /** Alle Preise (Großhandelspreis Salon) noch einmal mit diesem Shop abgleichen – im Hintergrund, Ergebnis im Protokoll */
 export async function pushPricesAction(channel: string): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   const ch = CH(channel);
   void pushPrices(undefined, ch).catch((e) => console.error("shopify prices", e));
   return { ok: "started" };
@@ -200,7 +200,7 @@ export async function pushPricesAction(channel: string): Promise<ShopResult> {
  * (wenige Aufrufe), ok = „geändert|entfernt|gleich|Fehler“, error = Problem mit dem Markt (noMarket, noPriceList, needScope …).
  */
 export async function pushResellerPricesAction(channel: string): Promise<ShopResult> {
-  await requireSession();
+  await requirePerm("shops.manage");
   try {
     const [r] = await pushResellerPrices(undefined, CH(channel));
     if (!r) return { ok: "0|0|0|0" };

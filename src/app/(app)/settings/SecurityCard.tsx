@@ -9,11 +9,13 @@ import {
   newRecoveryCodesAction, startTwoFactorAction, type SecResult,
 } from "./security-actions";
 
-export type LogKey = "success" | "recovery" | "needCode" | "invalid" | "code" | "locked" | "changed" | "emailChanged";
+export type LogKey = "success" | "recovery" | "needCode" | "invalid" | "code" | "locked" | "changed" | "emailChanged" | "disabled";
 export type SecurityView = {
   email: string; twoOn: boolean; twoSince: string | null; codesLeft: number;
   passwordChanged: string | null; dbInternal: boolean;
-  log: { at: string; ok: boolean; key: LogKey; device: string; ip: string }[];
+  /** Admin: Prüfliste des Systems und alle Anmeldungen (mit Konto); Mitarbeiter: nur das eigene Konto */
+  admin: boolean;
+  log: { at: string; ok: boolean; key: LogKey; device: string; ip: string; who?: string }[];
 };
 
 type S = Dict["security"];
@@ -44,13 +46,13 @@ export function SecurityCard({ t, v }: { t: Dict; v: SecurityView }) {
           <p className="text-sm text-ink-soft">{S.hint}</p>
         </div>
       </div>
-      <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+      {v.admin && <ul className="mt-4 grid gap-2 sm:grid-cols-2">
         {checks.map((c) => (
           <li key={c.text} className={`flex min-w-0 items-start gap-2 rounded-xl px-3 py-2 text-sm font-semibold ring-1 ${c.ok ? "bg-emerald-50/70 text-emerald-900 ring-emerald-100" : "bg-amber-50 text-amber-900 ring-amber-200"}`}>
             <Icon name={c.ok ? "check" : "alert"} className="mt-0.5 h-4 w-4 shrink-0" /><span className="min-w-0">{c.text}</span>
           </li>
         ))}
-      </ul>
+      </ul>}
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <TwoFactor t={t} v={v} />
         <div className="space-y-5">
@@ -255,7 +257,8 @@ function Others({ t }: { t: Dict }) {
 
 function Log({ t, v }: { t: Dict; v: SecurityView }) {
   const L = t.security.log;
-  const tone = (ok: boolean, key: LogKey) => key === "locked" ? "bg-red-100 text-red-800" : ok ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900";
+  const tone = (ok: boolean, key: LogKey) => key === "locked" || key === "disabled" ? "bg-red-100 text-red-800" : ok ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900";
+  const who = v.log.some((r) => r.who);
   return (
     <div className="mt-5">
       <h3 className="mb-2 flex items-center gap-2 font-bold"><Icon name="history" className="h-5 w-5 text-brand-600" />{L.title}</h3>
@@ -265,16 +268,18 @@ function Log({ t, v }: { t: Dict; v: SecurityView }) {
             {v.log.map((r, i) => (
               <li key={i} className="rounded-xl bg-slate-50 px-3 py-2 text-sm ring-1 ring-black/[0.03]">
                 <div className="flex items-center justify-between gap-2"><span className={`badge ${tone(r.ok, r.key)}`}>{L.reasons[r.key]}</span><span className="num text-xs text-ink-soft">{r.at}</span></div>
+                {r.who && <div className="mt-1 truncate text-xs font-semibold" dir="ltr">{r.who}</div>}
                 <div className="mt-1 flex flex-wrap justify-between gap-x-3 text-xs text-ink-soft"><span>{r.device}</span><span dir="ltr" className="break-all">{r.ip}</span></div>
               </li>
             ))}
           </ul>
           <table className="tbl-fit hidden w-full text-sm md:table">
-            <thead><tr className="text-start text-xs text-ink-soft"><th className="py-1 text-start">{L.when}</th><th className="text-start">{L.result}</th><th className="text-start">{L.device}</th><th className="text-start">{L.ip}</th></tr></thead>
+            <thead><tr className="text-start text-xs text-ink-soft"><th className="py-1 text-start">{L.when}</th>{who && <th className="text-start">{L.who}</th>}<th className="text-start">{L.result}</th><th className="text-start">{L.device}</th><th className="text-start">{L.ip}</th></tr></thead>
             <tbody>
               {v.log.map((r, i) => (
                 <tr key={i} className="border-t border-black/5">
                   <td className="num whitespace-nowrap py-1.5">{r.at}</td>
+                  {who && <td className="break-all"><bdi dir="ltr">{r.who}</bdi></td>}
                   <td><span className={`badge ${tone(r.ok, r.key)}`}>{L.reasons[r.key]}</span></td>
                   <td>{r.device}</td>
                   <td className="break-all"><bdi dir="ltr">{r.ip}</bdi></td>

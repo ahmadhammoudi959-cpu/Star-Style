@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { formatDate, todayIso } from "@/lib/dates";
 import { lockedMonths } from "@/lib/periods";
+import { can, requireSession } from "@/lib/auth";
 import { collectMonth } from "@/lib/advisor";
 import { mailConfigured } from "@/lib/mail";
 import { MonthNav } from "../../expenses/MonthNav";
@@ -25,6 +26,7 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
     db.select().from(schema.advisorExports).where(eq(schema.advisorExports.month, month)).orderBy(desc(schema.advisorExports.createdAt)).limit(10),
   ]);
   const locked = locks.has(month);
+  const mayLock = can(await requireSession(), "reports.lock"); // Monat abschließen/wieder öffnen = eigenes Recht
   const monthExpenses = d.expenses.filter((e) => e.date >= d.from && e.date <= d.to);
   const missing = monthExpenses.filter((e) => !e.fileId).length;
   const mail = mailConfigured();
@@ -35,7 +37,7 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
       <div className="flex flex-wrap items-center gap-3 animate-rise">
         <MonthNav month={month} base="/reports/export" months={t.rep.months} locked={locked} />
         <span className={`badge ${locked ? "bg-amber-100 text-amber-800" : "bg-brand-50 text-brand-700"}`}>{locked ? t.rep.locked : t.rep.openMonth}</span>
-        {locked && <UnlockButton t={t} month={month} />}
+        {locked && mayLock && <UnlockButton t={t} month={month} />}
       </div>
 
       {d.warnings.includes("missingDatevNumbers") && (
@@ -59,7 +61,7 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
           </ul>
         </section>
         <aside className="card animate-rise h-fit p-5">
-          <CreatePackage t={t} month={month} canLock={!locked && month < current} mail={mail} advisorEmail={d.company?.advisorEmail ?? ""} />
+          <CreatePackage t={t} month={month} canLock={mayLock && !locked && month < current} mail={mail} advisorEmail={d.company?.advisorEmail ?? ""} />
         </aside>
       </div>
 

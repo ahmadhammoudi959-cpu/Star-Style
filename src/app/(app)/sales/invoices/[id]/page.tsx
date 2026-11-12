@@ -15,18 +15,24 @@ import { mailConfigured } from "@/lib/mail";
 import { StatusBadge } from "../../StatusBadge";
 import { PaymentPanel } from "./PaymentPanel";
 import { ShippingPanel } from "./ShippingPanel";
+import { can, requireSession } from "@/lib/auth";
+import { canOpen, type Perm } from "@/lib/permissions";
 
 export default async function InvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ customer?: string; ship?: string }> }) {
   const { id } = await params;
   const { customer: preset, ship: shipNotice } = await searchParams;
   const { t, intl } = await getI18n();
+  const session = await requireSession();
+  const may = (p: Perm) => can(session, p);
+  // was die Person im Editor darf (Rabatt, Zahlung bei Ausstellung, Ratenplan) – geprüft wird zusätzlich in der Action
+  const editorRights = { discount: may("sales.discount"), payment: may("payments.record"), plan: may("payments.plans") };
 
   if (id === "new") {
     const [customers, options] = await Promise.all([customerOptions(), saleOptions()]);
     return (
       <div>
         <PageHeader title={t.sales.newInvoice} back="/sales" />
-        <DocEditor t={t} kind="invoice" customers={customers} options={options} intl={intl}
+        <DocEditor t={t} kind="invoice" customers={customers} options={options} intl={intl} rights={editorRights}
           initial={{ customerId: preset ?? "", date: todayIso(), channel: "STORE", discountBp: 0, notes: "", retentionOfTitle: true, lines: [] }} />
       </div>
     );
@@ -43,6 +49,16 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   ]);
   const title = inv.kind === "CANCELLATION" ? `Storno ${inv.number}` : inv.number ? `${t.sales.invoice} ${inv.number}` : `${t.sales.status.DRAFT}`;
 
+  // Entwurf bearbeiten: Rechnungen schreiben (Korrektur-Entwurf einer ausgestellten Rechnung: Rechnung ändern)
+  if (inv.status === "DRAFT" && !(inv.replacesInvoiceId ? may("sales.correct") : may("sales.invoices"))) {
+    return (
+      <div>
+        <PageHeader title={title} subtitle={inv.customer.name} back="/sales"
+          actions={<><StatusBadge t={t} status="DRAFT" /><a href={`/api/pdf/invoice/${inv.id}`} target="_blank" className="btn-ghost group"><Icon name="receipt" className="h-4 w-4" />{t.sales.pdf}</a></>} />
+        <p className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-ink-soft ring-1 ring-black/5"><Icon name="lock" className="h-4 w-4 shrink-0" />{t.users.readOnly}</p>
+      </div>
+    );
+  }
   if (inv.status === "DRAFT") {
     const [customers, options] = await Promise.all([customerOptions(), saleOptions(inv.offerId ?? undefined)]);
     return (
@@ -51,7 +67,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           actions={<><StatusBadge t={t} status="DRAFT" />
             <a href={`/api/pdf/invoice/${inv.id}`} target="_blank" className="btn-ghost group"><Icon name="receipt" className="h-4 w-4" />{t.sales.pdf}</a>
             <div className="w-40"><InvoiceOp t={t} id={inv.id} op="delete" label={t.common.delete} icon="trash" tone="btn-danger" confirmText={t.common.delete + "?"} /></div></>} />
-        <DocEditor t={t} kind="invoice" customers={customers} options={options} intl={intl} initial={{
+        <DocEditor t={t} kind="invoice" customers={customers} options={options} intl={intl} rights={editorRights} initial={{
           id: inv.id, customerId: inv.customerId, date: todayIso(), channel: inv.channel, deliveryDate: inv.deliveryDate ?? "", discountBp: inv.discountBp,
           notes: inv.notes,
           initialPaymentCents: inv.initialPaymentCents, initialPaymentMethod: inv.initialPaymentMethod,
@@ -62,7 +78,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
     );
   }
 
-  const pendingFixable = inv.status === "ISSUED" && inv.taxMode === "EU_PENDING_VATID" && determineTaxMode(inv.customer) === "EU_REVERSE_CHARGE";
+  const pendingFixable = may("sales.correct") && inv.status === "ISSUED" && inv.taxMode === "EU_PENDING_VATID" && determineTaxMode(inv.customer) === "EU_REVERSE_CHARGE";
   return (
     <div>
       <PageHeader title={title} subtitle={inv.custName} back="/sales" actions={<StatusBadge t={t} status={inv.status} />} />
@@ -98,10 +114,10 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         </div>
         <aside className="card h-fit space-y-2 p-5 animate-rise">
           <a href={`/api/pdf/invoice/${inv.id}`} target="_blank" className="btn-primary group w-full justify-start"><Icon name="receipt" className="h-4 w-4" />{t.sales.pdf}</a>
-          {mailConfigured() && <EmailForm t={t} kind="invoice" id={inv.id} defaultTo={inv.customer.email} />}
+          {mailConfigured() && may("sales.email") && <EmailForm t={t} kind="invoice" id={inv.id} defaultTo={inv.customer.email} />}
           {inv.sentAt && <p className="px-1 text-xs text-ink-soft">✓ {t.sales.status.SENT}: {formatDate(inv.sentAt.toISOString(), intl)}</p>}
-          {inv.kind === "INVOICE" && <a href={`/api/pdf/invoice/${inv.id}?type=delivery`} target="_blank" className="btn-ghost group w-full justify-start"><Icon name="truck" className="h-4 w-4" />{t.sales.deliveryNote}</a>}
-          {inv.status === "ISSUED" && inv.kind === "INVOICE" && <>
+          {inv.kind === "INVOICE" && may("sales.delivery") && <a href={`/api/pdf/invoice/${inv.id}?type=delivery`} target="_blank" className="btn-ghost group w-full justify-start"><Icon name="truck" className="h-4 w-4" />{t.sales.deliveryNote}</a>}
+          {inv.status === "ISSUED" && inv.kind === "INVOICE" && may("sales.correct") && <>
             <InvoiceOp t={t} id={inv.id} op="correct" label={t.sales.correct} icon="edit" />
             <p className="px-1 text-xs text-ink-soft">{t.sales.correctHint}</p>
             <InvoiceOp t={t} id={inv.id} op="cancel" label={t.sales.cancel} icon="trash" tone="btn-danger" confirmText={t.sales.cancelConfirm} />
@@ -111,7 +127,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             {cancels && <Ref label={t.sales.cancellationOf} id={cancels.id} n={cancels.number} />}
             {cancelledBy && <Ref label="Storno" id={cancelledBy.id} n={cancelledBy.number} />}
             {replacedBy && <Ref label={t.sales.replacedBy} id={replacedBy.id} n={replacedBy.number} />}
-            <Ref label={t.sales.customer} id={inv.customerId} n={inv.custName} href={`/customers/${inv.customerId}`} />
+            {canOpen(session, `/customers/${inv.customerId}`) && <Ref label={t.sales.customer} id={inv.customerId} n={inv.custName} href={`/customers/${inv.customerId}`} />}
           </div>
         </aside>
       </div>

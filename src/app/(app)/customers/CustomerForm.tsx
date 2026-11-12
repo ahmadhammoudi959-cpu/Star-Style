@@ -12,7 +12,8 @@ export type CustomerData = {
   shopReseller?: boolean;
 };
 
-export function CustomerForm({ t, initial }: { t: Dict; initial: CustomerData }) {
+/** credit = Kreditlimit/Zahlungsziel, reseller = Großhandelspreise im Shop freischalten (ohne Recht: Feld weg, Server behält den alten Wert) */
+export function CustomerForm({ t, initial, rights = { credit: true, reseller: true } }: { t: Dict; initial: CustomerData; rights?: { credit: boolean; reseller: boolean } }) {
   const [state, action] = useActionState(saveCustomer, undefined);
   const [type, setType] = useState(initial.type);
   const [country, setCountry] = useState(initial.country);
@@ -63,10 +64,12 @@ export function CustomerForm({ t, initial }: { t: Dict; initial: CustomerData })
           <option value="WHOLESALE">{t.customer.WHOLESALE}</option><option value="RETAIL">{t.customer.RETAIL}</option>
         </select>
       </Field>
-      <Field label={`${t.customer.creditLimit} (€, ${t.common.optional})`}><input name="creditLimit" defaultValue={v("creditLimit")} inputMode="decimal" className="input num" dir="ltr" /></Field>
-      <Field label={`${t.customer.paymentDays} (${t.common.optional})`}><input name="paymentTermDays" type="number" min={0} defaultValue={v("paymentTermDays")} className="input num" /></Field>
+      {rights.credit && <>
+        <Field label={`${t.customer.creditLimit} (€, ${t.common.optional})`}><input name="creditLimit" defaultValue={v("creditLimit")} inputMode="decimal" className="input num" dir="ltr" /></Field>
+        <Field label={`${t.customer.paymentDays} (${t.common.optional})`}><input name="paymentTermDays" type="number" min={0} defaultValue={v("paymentTermDays")} className="input num" /></Field>
+      </>}
       {/* جملة الجملة-Kunde sieht im allgemeinen Shop seine Preise – verbunden über die E-Mail (Wunsch Inhaber 12.11.2026) */}
-      {group === "WHOLESALE" && (
+      {rights.reseller && group === "WHOLESALE" && (
         <label className={`col-span-2 flex items-start gap-2 rounded-xl p-3 text-sm ring-1 ${emailOk ? "cursor-pointer bg-brand-50/60 ring-brand-100" : "bg-slate-50 ring-black/5"}`}>
           <input type="checkbox" name="shopReseller" checked={reseller && emailOk} disabled={!emailOk} onChange={(e) => setReseller(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-brand-600" />
           <span className="min-w-0">

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Scanner } from "./Scanner";
+import { can, requireSession } from "@/lib/auth";
 
 // eigene App-Datei: „Zum Startbildschirm hinzufügen“ auf dieser Seite → Symbol, das direkt den Scanner öffnet
 export const metadata: Metadata = {
@@ -12,10 +13,12 @@ export const metadata: Metadata = {
 
 export default async function ScanPage() {
   const { t, intl } = await getI18n();
+  const session = await requireSession();
+  const links = { view: can(session, "products.view"), create: can(session, "products.edit") };
   return (
     <div>
       <PageHeader title={t.scan.title} subtitle={t.scan.subtitle} />
-      <Scanner t={t} intl={intl} />
+      <Scanner t={t} intl={intl} links={links} />
     </div>
   );
 }

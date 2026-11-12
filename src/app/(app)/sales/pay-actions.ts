@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireSession } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { cancelPayment, createDunning, PaymentError, recordPayment, setInstallments } from "@/lib/payments";
 import { parseMoney } from "@/lib/money";
 
@@ -19,7 +19,7 @@ function done(invoiceId: string): PayState {
 }
 
 export async function addPaymentAction(_: PayState, fd: FormData): Promise<PayState> {
-  const s = await requireSession();
+  const s = await requirePerm("payments.record");
   const p = z.object({ invoiceId: z.string().min(1), date, amount: z.string(), method: z.enum(["CASH", "BANK", "CARD", "ONLINE"]), note: z.string().max(500).default("") })
     .safeParse(Object.fromEntries(fd));
   if (!p.success) return { error: "required" };
@@ -30,14 +30,14 @@ export async function addPaymentAction(_: PayState, fd: FormData): Promise<PaySt
 }
 
 export async function cancelPaymentAction(_: PayState, fd: FormData): Promise<PayState> {
-  const s = await requireSession();
+  const s = await requirePerm("payments.cancel");
   const invoiceId = String(fd.get("invoiceId"));
   try { await cancelPayment(String(fd.get("paymentId")), String(fd.get("reason") ?? ""), s.uid); } catch (e) { return fail(e); }
   return done(invoiceId);
 }
 
 export async function savePlanAction(_: PayState, fd: FormData): Promise<PayState> {
-  const s = await requireSession();
+  const s = await requirePerm("payments.plans");
   const invoiceId = String(fd.get("invoiceId"));
   let raw: unknown;
   try { raw = JSON.parse(String(fd.get("plan") ?? "[]")); } catch { return { error: "planInvalid" }; }
@@ -48,7 +48,7 @@ export async function savePlanAction(_: PayState, fd: FormData): Promise<PayStat
 }
 
 export async function dunningAction(_: PayState, fd: FormData): Promise<PayState> {
-  const s = await requireSession();
+  const s = await requirePerm("receivables");
   const invoiceId = String(fd.get("invoiceId"));
   try { await createDunning(invoiceId, s.uid); } catch (e) { return fail(e); }
   return done(invoiceId);

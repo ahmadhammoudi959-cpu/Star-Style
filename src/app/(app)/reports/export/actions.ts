@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { requireSession } from "@/lib/auth";
+import { requirePerm, can } from "@/lib/auth";
 import { createAndStorePackage } from "@/lib/advisor";
 import { lockMonth, unlockMonth } from "@/lib/periods";
 import { mailConfigured, sendMail } from "@/lib/mail";
@@ -12,10 +12,11 @@ export type ExportState = { error?: string; ok?: { fileId: string; name: string;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export async function createPackageAction(_: ExportState, fd: FormData): Promise<ExportState> {
-  const s = await requireSession();
+  const s = await requirePerm("reports.export");
   const month = String(fd.get("month"));
   if (!MONTH.test(month)) return { error: "month" };
   const lock = fd.get("lock") === "on";
+  if (lock && !can(s, "reports.lock")) return { error: "noRight" }; // Monat abschließen = eigenes Recht
   if (lock && month >= todayIso().slice(0, 7)) return { error: "notPast" };
   try {
     const pkg = await createAndStorePackage(month, s.name, s.uid);
@@ -29,7 +30,7 @@ export async function createPackageAction(_: ExportState, fd: FormData): Promise
 }
 
 export async function sendPackageAction(_: { error?: string; ok?: boolean } | undefined, fd: FormData) {
-  await requireSession();
+  await requirePerm("reports.export");
   if (!mailConfigured()) return { error: "mail" };
   const to = String(fd.get("to") ?? "").trim();
   const fileId = String(fd.get("fileId"));
@@ -50,7 +51,7 @@ export async function sendPackageAction(_: { error?: string; ok?: boolean } | un
 }
 
 export async function unlockAction(fd: FormData) {
-  await requireSession();
+  await requirePerm("reports.lock");
   const month = String(fd.get("month"));
   if (MONTH.test(month)) await unlockMonth(month);
   revalidatePath("/reports/export"); revalidatePath("/expenses");

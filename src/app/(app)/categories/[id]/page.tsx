@@ -12,6 +12,7 @@ import { categoryProducts, getCategory, storeContexts, storeNavs, syncCategoryTa
 import { categoryStoreState, decodeStoreResults } from "@/lib/shopify/category-map";
 import { AddProducts, AddToStore, DeleteCategory, MoveSelect, NoMenuAccess, StoreResultNotes } from "../CategoryForms";
 import { StoreChip } from "../StoreChip";
+import { can, requireSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
   const { id } = await params;
   const { r, created } = await searchParams;
   const { t } = await getI18n();
+  const edit = can(await requireSession(), "products.edit"); // ohne Recht nur ansehen
   const cat = await getCategory(id);
   if (!cat) notFound();
   await syncCategoryTable();
@@ -33,7 +35,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
   return (
     <div>
       <PageHeader title={cat.name} subtitle={fill(t.cat.count, { n: active })} back="/categories"
-        actions={<Link href={`/products/new?category=${encodeURIComponent(cat.name)}`} className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.cat.newProduct}</Link>} />
+        actions={edit && <Link href={`/products/new?category=${encodeURIComponent(cat.name)}`} className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.cat.newProduct}</Link>} />
       {created && !results.length && (
         <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-100">
           <Icon name="check" className="h-4 w-4" />{t.common.saved}
@@ -55,22 +57,24 @@ export default async function CategoryPage({ params, searchParams }: { params: P
                     <span className="font-semibold">{t.shop.names[s.channel]}</span>
                     <StoreChip t={t} st={st} />
                   </div>
-                  {st.state !== "same" && <AddToStore t={t} categoryId={cat.id} nav={nav} own={st.state === "mapped"} />}
+                  {edit && st.state !== "same" && <AddToStore t={t} categoryId={cat.id} nav={nav} own={st.state === "mapped"} />}
                 </div>
               );
             })}
           </div>
-          <NoMenuAccess t={t} navs={navs} />
+          {edit && <NoMenuAccess t={t} navs={navs} />}
         </section>
       )}
 
-      <section className="card relative z-20 mb-6 space-y-3 p-5 animate-rise">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-bold"><Icon name="plus" className="icon-pop h-5 w-5 text-brand-600" />{t.cat.addProducts}</h2>
-          <p className="max-w-2xl text-sm text-ink-soft">{t.cat.addHint}</p>
-        </div>
-        <AddProducts t={t} categoryId={cat.id} options={options} />
-      </section>
+      {edit && (
+        <section className="card relative z-20 mb-6 space-y-3 p-5 animate-rise">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-bold"><Icon name="plus" className="icon-pop h-5 w-5 text-brand-600" />{t.cat.addProducts}</h2>
+            <p className="max-w-2xl text-sm text-ink-soft">{t.cat.addHint}</p>
+          </div>
+          <AddProducts t={t} categoryId={cat.id} options={options} />
+        </section>
+      )}
 
       <section className="card overflow-hidden animate-rise">
         <h2 className="flex items-center gap-2 p-5 pb-0 text-lg font-bold"><Icon name="box" className="icon-pop h-5 w-5 text-brand-600" />{t.cat.products}</h2>
@@ -89,7 +93,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
                     </div>
                   </div>
                 </div>
-                <MoveSelect t={t} productId={p.id} current={cat.id} categories={all} />
+                {edit ? <MoveSelect t={t} productId={p.id} current={cat.id} categories={all} /> : <span />}
                 <OpenButton href={`/products/${p.id}`} label={t.product.open} className="px-3 py-2 text-xs" />
               </li>
             ))}
@@ -97,7 +101,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
         )}
       </section>
 
-      {products.length === 0 && <DeleteCategory t={t} id={cat.id} name={cat.name} />}
+      {edit && products.length === 0 && <DeleteCategory t={t} id={cat.id} name={cat.name} />}
     </div>
   );
 }

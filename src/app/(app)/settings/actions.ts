@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
-import { requireSession } from "@/lib/auth";
+import { requireAdmin, requirePerm } from "@/lib/auth";
 import { audit } from "@/lib/stock";
 import { storeUpload } from "@/lib/files";
 import { ResetError, resetTestData, startLive, undoLive } from "@/lib/test-reset";
@@ -28,7 +28,7 @@ const S = z.object({
 });
 
 export async function saveSettings(_: SettingsState, fd: FormData): Promise<SettingsState> {
-  const session = await requireSession();
+  const session = await requirePerm("settings");
   const p = S.safeParse(Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === "string")));
   if (!p.success) return { error: p.error.issues.some((i) => i.path[0] === "datevConsultant" || i.path[0] === "datevClient") ? "datev" : "required" };
   const data: typeof p.data & { logoFileId?: string | null } = { ...p.data };
@@ -47,7 +47,7 @@ export async function saveSettings(_: SettingsState, fd: FormData): Promise<Sett
 }
 
 export async function saveAccountsAction(_: SettingsState, fd: FormData): Promise<SettingsState> {
-  const session = await requireSession();
+  const session = await requirePerm("settings");
   const overrides: Record<string, number> = {};
   for (const [k, v] of fd.entries()) {
     if (!k.startsWith("acc_") || typeof v !== "string" || !v.trim()) continue;
@@ -64,7 +64,7 @@ export async function saveAccountsAction(_: SettingsState, fd: FormData): Promis
 
 /** „Testdaten zurücksetzen“ – beliebig oft im Testbetrieb (alle Artikel bleiben, siehe lib/test-reset.ts) */
 export async function resetTestDataAction(_: SettingsState, fd: FormData): Promise<SettingsState> {
-  const session = await requireSession();
+  const session = await requireAdmin();
   if (fd.get("confirm") !== "on") return { error: "needConfirm" };
   let outcome = "1";
   try {
@@ -81,7 +81,7 @@ export async function resetTestDataAction(_: SettingsState, fd: FormData): Promi
 
 /** „Aus Versehen gestartet → zurück in den Testbetrieb“ – nur in den ersten Tagen, löscht nichts (siehe lib/test-reset.ts) */
 export async function undoLiveAction(_: SettingsState, fd: FormData): Promise<SettingsState> {
-  const session = await requireSession();
+  const session = await requireAdmin();
   if (fd.get("confirm") !== "on") return { error: "needConfirm" };
   try {
     await undoLive(session.uid);
@@ -96,7 +96,7 @@ export async function undoLiveAction(_: SettingsState, fd: FormData): Promise<Se
 
 /** „Echtbetrieb starten“ – einmalig, löscht nichts; danach kein Zurücksetzen mehr (siehe lib/test-reset.ts) */
 export async function startLiveAction(_: SettingsState, fd: FormData): Promise<SettingsState> {
-  const session = await requireSession();
+  const session = await requireAdmin();
   if (fd.get("confirm") !== "on") return { error: "needConfirm" };
   let outcome = "1";
   try {

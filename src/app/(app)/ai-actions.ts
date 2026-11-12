@@ -1,5 +1,5 @@
 "use server";
-import { requireSession } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { getI18n } from "@/i18n";
 import { db } from "@/db";
 import { AiError, aiConfigured } from "@/lib/ai/client";
@@ -12,7 +12,7 @@ const errCode = (e: unknown) => (e instanceof AiError ? e.code : "other");
 const AI_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
 
 export async function readReceiptAction(fd: FormData): Promise<{ ok: ReceiptSuggestion } | { error: string }> {
-  await requireSession();
+  await requirePerm("expenses.edit");
   if (!aiConfigured()) return { error: "notConfigured" };
   const file = fd.get("file");
   if (!(file instanceof File) || file.size === 0) { console.warn("readReceipt: keine Datei in der Anfrage angekommen"); return { error: "pickFirst" }; }
@@ -23,7 +23,7 @@ export async function readReceiptAction(fd: FormData): Promise<{ ok: ReceiptSugg
 }
 
 export async function askAction(history: { role: "user" | "assistant"; text: string }[]): Promise<{ answer: string } | { error: string }> {
-  await requireSession();
+  await requirePerm("ask");
   if (!aiConfigured()) return { error: "notConfigured" };
   const clean = history.filter((h) => (h.role === "user" || h.role === "assistant") && typeof h.text === "string" && h.text.trim()).map((h) => ({ role: h.role, text: h.text.slice(0, 2000) }));
   if (!clean.length || clean[clean.length - 1].role !== "user") return { error: "other" };
@@ -36,7 +36,7 @@ export async function askAction(history: { role: "user" | "assistant"; text: str
 }
 
 export async function summaryAction(month: string): Promise<{ text: string } | { error: string }> {
-  await requireSession();
+  await requirePerm("reports.view");
   if (!aiConfigured()) return { error: "notConfigured" };
   if (!/^\d{4}-\d{2}$/.test(month)) return { error: "other" };
   const { locale } = await getI18n();

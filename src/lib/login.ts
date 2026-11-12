@@ -127,19 +127,25 @@ export async function completeLogin(user: User, ctx: Ctx, device: string, step: 
 
 export type AttemptRow = { at: string; ok: boolean; reason: string; step: string; ip: string; userAgent: string; email: string };
 
-export async function recentAttempts(limit = 15): Promise<AttemptRow[]> {
+/** Letzte Anmeldungen: alle (Admin) oder nur die eines Kontos (Mitarbeiter sehen nur ihre eigenen) */
+export async function recentAttempts(limit = 15, userId?: string): Promise<AttemptRow[]> {
   const r = await db.execute<{ at: string; ok: boolean; reason: string; step: string; ip: string; user_agent: string; email: string }>(sql`
-    select at, ok, reason, step, ip, user_agent, email from login_attempts order by at desc limit ${limit}`);
+    select at, ok, reason, step, ip, user_agent, email from login_attempts
+    where ${userId ? sql`user_id = ${userId}` : sql`true`} order by at desc limit ${limit}`);
   return r.rows.map((x) => ({ at: new Date(x.at).toISOString(), ok: x.ok, reason: x.reason, step: x.step, ip: x.ip, userAgent: x.user_agent, email: x.email }));
 }
 
-/** Fehlversuche seit der vorletzten Anmeldung (also auch während der jetzigen Sitzung) – für den Hinweis auf der Startseite */
-export async function failuresSincePrevious(): Promise<{ n: number; last: string | null }> {
+/**
+ * Fehlversuche seit der vorletzten eigenen Anmeldung (also auch während der jetzigen Sitzung) – für den Hinweis auf der Startseite.
+ * Admin: alle Fehlversuche (auch mit unbekannten E-Mails); Mitarbeiter: nur die an ihrem eigenen Konto.
+ */
+export async function failuresSincePrevious(userId: string, all: boolean): Promise<{ n: number; last: string | null }> {
   const r = await db.execute<{ n: number; last: string | null }>(sql`
-    with s as (select at from login_attempts where reason = 'success' order by at desc limit 2),
+    with s as (select at from login_attempts where reason = 'success' and user_id = ${userId} order by at desc limit 2),
          since as (select case when (select count(*) from s) = 2 then (select min(at) from s) else '-infinity'::timestamptz end as at)
     select count(*)::int as n, max(at) as last from login_attempts
-    where reason in ('invalid', 'code', 'locked') and at > (select at from since) and at > now() - interval '30 days'`);
+    where reason in ('invalid', 'code', 'locked') and at > (select at from since) and at > now() - interval '30 days'
+      and ${all ? sql`true` : sql`user_id = ${userId}`}`);
   const row = r.rows[0];
   return { n: Number(row?.n ?? 0), last: row?.last ? new Date(row.last).toISOString() : null };
 }

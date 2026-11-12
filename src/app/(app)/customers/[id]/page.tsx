@@ -16,13 +16,17 @@ import { shopCompanyOf } from "@/lib/shopify/b2b";
 import { getShop } from "@/lib/shopify/client";
 import { shopAdminUrl } from "@/lib/shopify/admin";
 import { ResellerRetry } from "../ResellerRetry";
+import { can, requireSession } from "@/lib/auth";
 
 export default async function CustomerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const { id } = await params;
   const { saved } = await searchParams;
   const { t, intl } = await getI18n();
+  const session = await requireSession();
+  const rights = { credit: can(session, "customers.credit"), reseller: can(session, "customers.reseller") };
+  const money = can(session, "customers.statement"), sales = can(session, "sales.view");
   const empty: CustomerData = { type: "COMPANY", name: "", contact: "", email: "", phone: "", street: "", zip: "", city: "", country: "DE", vatId: "", vatIdStatus: "NONE", priceGroup: "WHOLESALE", creditLimit: "", paymentTermDays: "", notes: "" };
-  if (id === "new") return <div><PageHeader title={t.customer.new} back="/customers" /><CustomerForm t={t} initial={empty} /></div>;
+  if (id === "new") return <div><PageHeader title={t.customer.new} back="/customers" /><CustomerForm t={t} initial={empty} rights={rights} /></div>;
 
   const c = await db.query.customers.findFirst({ where: eq(schema.customers.id, id) });
   if (!c) notFound();
@@ -43,18 +47,18 @@ export default async function CustomerPage({ params, searchParams }: { params: P
   return (
     <div>
       <PageHeader title={c.name} subtitle={`${t.customer.number} ${c.number}`} back="/customers"
-        actions={<Link href={`/sales/offers/new?customer=${c.id}`} className="btn-primary group"><Icon name="cart" className="h-4 w-4" />{t.sales.newOffer}</Link>} />
+        actions={can(session, "sales.offers") && <Link href={`/sales/offers/new?customer=${c.id}`} className="btn-primary group"><Icon name="cart" className="h-4 w-4" />{t.sales.newOffer}</Link>} />
       {saved && <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700"><Icon name="check" className="h-4 w-4" />{t.common.saved}</div>}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
-          <CustomerForm t={t} initial={{
+          <CustomerForm t={t} rights={rights} initial={{
             id: c.id, type: c.type, name: c.name, contact: c.contact, email: c.email, phone: c.phone, street: c.street, zip: c.zip, city: c.city,
             country: c.country, vatId: c.vatId, vatIdStatus: c.vatIdStatus, priceGroup: c.priceGroup,
             creditLimit: c.creditLimitCents != null ? (c.creditLimitCents / 100).toFixed(2).replace(".", ",") : "",
             paymentTermDays: c.paymentTermDays != null ? String(c.paymentTermDays) : "", notes: c.notes,
             shopReseller: Boolean(link?.wanted),
           }} />
-          <section className="card overflow-hidden animate-rise">
+          {sales && <section className="card overflow-hidden animate-rise">
             <h2 className="px-5 pt-5 text-lg font-bold">{t.customer.documents}</h2>
             {docs.rows.length === 0 ? <p className="p-5 text-sm text-ink-soft">{t.sales.empty}</p> : (
               <div className="table-wrap mt-3"><table className="tbl">
@@ -70,13 +74,13 @@ export default async function CustomerPage({ params, searchParams }: { params: P
                 ))}</tbody>
               </table></div>
             )}
-          </section>
+          </section>}
         </div>
         <aside className="space-y-4">
-          {(c.priceGroup === "WHOLESALE" || (link && link.status !== "removed")) && <ResellerCard t={t} link={link} email={c.email}
+          {rights.reseller && (c.priceGroup === "WHOLESALE" || (link && link.status !== "removed")) && <ResellerCard t={t} link={link} email={c.email}
             customerId={c.id} wholesale={c.priceGroup === "WHOLESALE"}
             companyUrl={link?.companyId && generalShop?.domain ? shopAdminUrl(generalShop, `/companies/${link.companyId.split("/").pop()}`) : null} />}
-          <div className="card p-5 animate-rise">
+          {money && <div className="card p-5 animate-rise">
             <div className="text-sm text-ink-soft">{openC < 0 ? t.pay.credit : t.pay.openNow}</div>
             <div className={`num text-2xl font-bold ${overdueC ? "text-red-600" : openC < 0 ? "text-violet-700" : ""}`}>{formatCents(Math.abs(openC), intl)}</div>
             {overdueC > 0 && <div className="text-sm font-semibold text-red-600">{t.pay.totalOverdue}: {formatCents(overdueC, intl)}</div>}
@@ -87,7 +91,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
               </div>
             )}
             <Link href={`/customers/${c.id}/statement`} className="btn-ghost group mt-4 w-full"><Icon name="receipt" className="h-4 w-4" />{t.pay.statement}</Link>
-          </div>
+          </div>}
           <div className="card p-5 animate-rise">
             <div className="text-sm text-ink-soft">{t.customer.taxMode}</div>
             <div className="mb-3 text-lg font-bold">{t.taxMode[mode]}</div>

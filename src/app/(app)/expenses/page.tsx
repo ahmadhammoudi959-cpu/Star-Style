@@ -1,3 +1,4 @@
+import { can, requireSession } from "@/lib/auth";
 import Link from "next/link";
 import { and, between, desc, eq, ilike, or } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -30,7 +31,8 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     }),
     lockedMonths(),
   ]);
-  const locked = locks.has(month);
+  const edit = can(await requireSession(), "expenses.edit");
+  const locked = locks.has(month) || !edit; // ohne Recht wie ein abgeschlossener Monat: nur ansehen
   const sum = (k: "netCents" | "vatCents" | "grossCents") => rows.reduce((s, r) => s + r[k], 0);
   const missing = rows.filter((r) => !r.fileId).length;
   const unpaid = rows.filter((r) => !r.paid);
@@ -43,7 +45,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         {!locked && <Link href="/expenses/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.exp.new}</Link>}
       </>} />
       <div className="mb-5 flex flex-wrap items-center gap-3 animate-rise">
-        <MonthNav month={month} base="/expenses" months={t.rep.months} locked={locked} />
+        <MonthNav month={month} base="/expenses" months={t.rep.months} locked={locks.has(month)} />
       </div>
       {/* Auswählen statt tippen: Kategorie, oder Ausgabe direkt aus der Liste */}
       <form className="card relative z-10 mb-5 grid grid-cols-2 gap-2 p-3 animate-rise md:flex md:flex-row md:flex-wrap md:items-end md:gap-3 md:p-4">

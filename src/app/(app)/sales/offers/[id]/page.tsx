@@ -12,11 +12,15 @@ import { DocEditor } from "../../DocEditor";
 import { EmailForm, OfferOps } from "../../DocActions";
 import { mailConfigured } from "@/lib/mail";
 import { StatusBadge } from "../../StatusBadge";
+import { can, requireSession } from "@/lib/auth";
 
 export default async function OfferPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ customer?: string }> }) {
   const { id } = await params;
   const { customer: preset } = await searchParams;
   const { t, intl } = await getI18n();
+  const session = await requireSession();
+  const rights = { discount: can(session, "sales.discount"), payment: false, plan: false };
+  const mayOffers = can(session, "sales.offers"), mayInvoices = can(session, "sales.invoices");
   await expireOffers();
   const company = await db.query.companySettings.findFirst();
   const today = todayIso();
@@ -26,7 +30,7 @@ export default async function OfferPage({ params, searchParams }: { params: Prom
     return (
       <div>
         <PageHeader title={t.sales.newOffer} back="/sales?tab=offers" />
-        <DocEditor t={t} kind="offer" customers={customers} options={options} intl={intl}
+        <DocEditor t={t} kind="offer" customers={customers} options={options} intl={intl} rights={rights}
           initial={{ customerId: preset ?? "", date: today, validUntil: addDaysIso(today, company?.offerValidityDays ?? 14), discountBp: 0, notes: "", lines: [] }} />
       </div>
     );
@@ -35,7 +39,7 @@ export default async function OfferPage({ params, searchParams }: { params: Prom
   const o = await db.query.offers.findFirst({ where: eq(schema.offers.id, id), with: { lines: true, customer: true } });
   if (!o) notFound();
   const inv = o.status === "CONVERTED" ? await db.query.invoices.findFirst({ where: eq(schema.invoices.offerId, id) }) : null;
-  const editable = o.status === "DRAFT" || o.status === "SENT";
+  const editable = mayOffers && (o.status === "DRAFT" || o.status === "SENT");
   const [customers, options] = editable ? await Promise.all([customerOptions(), saleOptions(o.id)]) : [[], []];
 
   return (
@@ -45,7 +49,7 @@ export default async function OfferPage({ params, searchParams }: { params: Prom
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div>
           {editable ? (
-            <DocEditor t={t} kind="offer" customers={customers} options={options} intl={intl} initial={{
+            <DocEditor t={t} kind="offer" customers={customers} options={options} intl={intl} rights={rights} initial={{
               id: o.id, customerId: o.customerId, date: o.date, validUntil: o.validUntil, discountBp: o.discountBp, notes: o.notes,
               lines: o.lines.sort((a, b) => a.position - b.position).map((l) => ({ variantId: l.variantId, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, vatRateBp: l.vatRateBp })),
             }} />
@@ -62,8 +66,8 @@ export default async function OfferPage({ params, searchParams }: { params: Prom
           <div className="text-sm text-ink-soft">{t.sales.reservedUntil}</div>
           <div className="font-bold">{formatDate(o.validUntil, intl)}</div>
           {o.acceptedAt && <div className="text-sm text-brand-700">{t.sales.status.ACCEPTED}: {formatDate(o.acceptedAt.toISOString(), intl)} {o.acceptedVia && `· ${o.acceptedVia}`}</div>}
-          <OfferOps t={t} id={o.id} status={o.status} />
-          {mailConfigured() && <EmailForm t={t} kind="offer" id={o.id} defaultTo={o.customer.email} />}
+          <OfferOps t={t} id={o.id} status={o.status} can={{ offers: mayOffers, invoices: mayInvoices }} />
+          {mailConfigured() && can(session, "sales.email") && <EmailForm t={t} kind="offer" id={o.id} defaultTo={o.customer.email} />}
         </aside>
       </div>
     </div>

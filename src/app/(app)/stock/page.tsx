@@ -14,10 +14,13 @@ import { OpenButton } from "@/components/OpenButton";
 import { SearchPick } from "@/components/SearchPick";
 import { fill } from "@/i18n";
 import { LIST_STEP, listLimit, ShowMore } from "@/components/ShowMore";
+import { can, requireSession } from "@/lib/auth";
 
 export default async function StockPage({ searchParams }: { searchParams: Promise<{ q?: string; low?: string; cat?: string; exp?: string; n?: string }> }) {
   const { q = "", low, cat = "", exp: expParam, n } = await searchParams;
   const { t, intl } = await getI18n();
+  // Lagerwert (zum Einkaufspreis) nur mit Recht „Einkaufspreis sehen“
+  const cost = can(await requireSession(), "products.cost");
   const lowOnly = low === "1";
   // MHD-Filter: die Zahlen „Läuft bald ab“ / „Abgelaufen“ der Startseite öffnen genau diese Artikel
   const exp = parseExpiryFilter(expParam);
@@ -52,7 +55,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <PageHeader title={t.stock.title} subtitle={`${t.stock.value}: ${formatCents(total, intl)}`} />
+      <PageHeader title={t.stock.title} subtitle={cost ? `${t.stock.value}: ${formatCents(total, intl)}` : undefined} />
 
       {/* Filter: Kategorie, MHD und „nur wenig Bestand“ filtern sofort; Suche */}
       <form className="card relative z-10 mb-4 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2 p-3 animate-rise md:flex md:flex-row md:flex-wrap md:items-end md:gap-3 md:p-4">
@@ -88,7 +91,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                   <th className="w-px text-end">{t.product.available}</th>
                   <th className="w-[5.5rem] text-end">{t.product.minStock}</th>
                   <th className="w-px">{t.receive.expiry}</th>
-                  <th className="w-[6.5rem] text-end">{t.stock.value}</th>
+                  {cost && <th className="w-[6.5rem] text-end">{t.stock.value}</th>}
                   <th className="w-px"><span className="sr-only">{t.product.open}</span></th>
                 </tr></thead>
                 <tbody>
@@ -102,7 +105,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                       <td className="num text-end font-semibold">{r.stockQty - r.reserved}</td>
                       <td className="num text-end text-ink-soft">{r.minStock || "—"}</td>
                       <td>{expiry(r) ?? <span className="text-xs text-ink-soft">—</span>}</td>
-                      <td className="num text-end">{formatCents(r.valueCents, intl)}</td>
+                      {cost && <td className="num text-end">{formatCents(r.valueCents, intl)}</td>}
                       <td className="text-end"><OpenButton href={`/stock/${r.id}`} label={t.product.open} /></td>
                     </tr>
                   ))}
@@ -128,7 +131,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                   <Item label={t.product.available}><span className="num text-sm font-bold">{r.stockQty - r.reserved}</span></Item>
                   <Item label={t.product.minStock}><span className="num">{r.minStock || "—"}</span></Item>
                   <Item label={t.receive.expiry} wide>{expiry(r) ?? "—"}</Item>
-                  <Item label={t.stock.value} wide><span className="num">{formatCents(r.valueCents, intl)}</span></Item>
+                  {cost ? <Item label={t.stock.value} wide><span className="num">{formatCents(r.valueCents, intl)}</span></Item> : <Item label="" wide>{null}</Item>}
                 </dl>
               </div>
             ))}

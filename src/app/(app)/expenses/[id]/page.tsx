@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { todayIso } from "@/lib/dates";
 import { lockedMonths } from "@/lib/periods";
 import { ExpenseForm, type ExpenseFormData } from "../ExpenseForm";
+import { can, requireSession } from "@/lib/auth";
 import { aiConfigured } from "@/lib/ai/client";
 import { regionOptions } from "@/lib/regions";
 
@@ -15,6 +16,7 @@ export default async function ExpensePage({ params, searchParams }: { params: Pr
   const { id } = await params;
   const { copy } = await searchParams;
   const { t, intl, locale } = await getI18n();
+  const edit = can(await requireSession(), "expenses.edit");
   const [suppliers, locks] = await Promise.all([
     db.select({ name: schema.suppliers.name, country: schema.suppliers.country, vatId: schema.suppliers.vatId }).from(schema.suppliers).orderBy(asc(schema.suppliers.name)),
     lockedMonths(),
@@ -41,7 +43,7 @@ export default async function ExpensePage({ params, searchParams }: { params: Pr
   return (
     <div>
       <PageHeader title={id === "new" ? t.exp.new : t.exp.edit} subtitle={id === "new" ? undefined : e?.vendorName} back={`/expenses?month=${initial.date.slice(0, 7)}`} />
-      <ExpenseForm t={t} intl={intl} regions={regionOptions(locale)} initial={initial} suppliers={suppliers} locked={locked} ai={aiConfigured()} />
+      <ExpenseForm t={t} intl={intl} regions={regionOptions(locale)} initial={initial} suppliers={suppliers} locked={locked} readOnly={!edit} ai={aiConfigured()} />
     </div>
   );
 }

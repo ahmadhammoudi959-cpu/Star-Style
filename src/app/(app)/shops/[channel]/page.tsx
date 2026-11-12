@@ -10,6 +10,8 @@ import { bulkPushStatus, getStoreTypes, pendingProducts, type StoreType } from "
 import { resolveStoreType } from "@/lib/shopify/product-push-map";
 import { resellerSetup, resellerSummary, type SetupResult } from "@/lib/shopify/b2b";
 import { ResellerCard, type ResellerInfo } from "./ResellerCard";
+import { can, requireSession } from "@/lib/auth";
+import { Icon } from "@/components/Icon";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +19,8 @@ export default async function ShopPage({ params }: { params: Promise<{ channel: 
   const { channel } = await params;
   if (channel !== "BRAND_SHOP" && channel !== "GENERAL_SHOP") notFound();
   const { t } = await getI18n();
+  // „Shops ansehen“ ohne „Shops steuern“: nur Stand + Protokoll, keine Knöpfe/Zugangsdaten (Wunsch Inhaber 12.11.2026)
+  const manage = can(await requireSession(), "shops.manage");
   const [s, events] = await Promise.all([
     db.query.shops.findFirst({ where: eq(schema.shops.channel, channel) }),
     db.select().from(schema.shopEvents).where(and(eq(schema.shopEvents.channel, channel))).orderBy(desc(schema.shopEvents.createdAt)).limit(50),
@@ -26,7 +30,7 @@ export default async function ShopPage({ params }: { params: Promise<{ channel: 
   let types: StoreType[] = [];
   let pending: Awaited<ReturnType<typeof pendingProducts>> = [];
   let catRows: { category: string; n: number; auto: string | null; mapped: string | null }[] = [];
-  if (s && ready) {
+  if (s && ready && manage) {
     types = await Promise.race([getStoreTypes(s, 3600_000), new Promise<StoreType[]>((r) => setTimeout(() => r(s.storeTypes ?? []), 3000))]);
     pending = await pendingProducts(channel, { ...s, storeTypes: types });
     const flag = channel === "BRAND_SHOP" ? sql`in_brand_shop` : sql`in_general_shop`;
@@ -37,7 +41,7 @@ export default async function ShopPage({ params }: { params: Promise<{ channel: 
   // Großhandelspreise (جملة الجملة) über Shopify B2B – nur im allgemeinen Shop; nie länger als 3 s auf den Shop warten
   let reseller: ResellerInfo | null = null;
   const resellerCounts = await resellerSummary(channel);
-  if (s && ready && channel === "GENERAL_SHOP") {
+  if (s && ready && manage && channel === "GENERAL_SHOP") {
     const r = await Promise.race([resellerSetup(s).catch((): SetupResult => ({ problem: "error" })), new Promise<null>((res) => setTimeout(() => res(null), 3000))]);
     reseller = r == null ? null : "problem" in r ? { ok: false, problem: r.problem, detail: r.problem === "error" ? r.detail : undefined }
       : { ok: true, market: r.marketName, catalog: r.catalogTitle, taxesIncluded: r.taxesIncluded, allLocations: r.allLocations };
@@ -47,6 +51,17 @@ export default async function ShopPage({ params }: { params: Promise<{ channel: 
     stockBuffer: s?.stockBuffer ?? 0, importTestOrders: s?.importTestOrders ?? false, locationId: s?.locationId ?? "", locationName: s?.locationName ?? "",
     active: s?.active ?? false, webhooksAt: s?.webhooksAt?.toISOString() ?? null,
   };
+  if (!manage) return (
+    <div className="space-y-6">
+      <PageHeader title={t.shop.names[channel]} subtitle={data.domain || t.shop.notConnected} back="/shops" />
+      <section className="card flex animate-rise flex-wrap items-center gap-3 p-5">
+        <span className={`grid h-10 w-10 place-items-center rounded-xl ${data.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-ink-soft"}`}><Icon name="globe" className="icon-pop h-5 w-5" /></span>
+        <span className="font-bold">{!ready ? t.shop.notConnected : data.active ? t.shop.active : t.shop.paused}</span>
+        {data.locationName && <span className="badge bg-slate-100 text-ink-soft">{data.locationName}</span>}
+      </section>
+      <section className="card animate-rise p-5"><h2 className="mb-2 font-bold">{t.shop.events}</h2><EventList t={t} events={events} /></section>
+    </div>
+  );
   return (
     <div className="space-y-6">
       <PageHeader title={t.shop.names[channel]} subtitle={data.domain || t.shop.notConnected} back="/shops" />

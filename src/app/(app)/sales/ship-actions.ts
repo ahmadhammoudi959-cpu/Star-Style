@@ -5,7 +5,7 @@
  * Seite danach selbst neu (mit Hinweis ?ship=…). Alle Seiten sind dynamisch, nichts Veraltetes im Zwischenspeicher.
  */
 import { z } from "zod";
-import { requireSession } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { cancelShipment, createShipment, editShipment, retryShipment, ShipmentError, syncShipment } from "@/lib/shipments";
 
 /** shop = Stand im Shop nach dem Speichern (sent / pending / failed / none …) für den Hinweis unter dem Knopf */
@@ -31,7 +31,7 @@ async function pushNow(id: string): Promise<string> {
 }
 
 export async function createShipmentAction(_: ShipState, fd: FormData): Promise<ShipState> {
-  const s = await requireSession();
+  const s = await requirePerm("sales.shipping");
   const p = fields.safeParse(Object.fromEntries(fd));
   if (!p.success) return { error: "required" };
   let id: string;
@@ -47,7 +47,7 @@ export async function createShipmentAction(_: ShipState, fd: FormData): Promise<
 }
 
 export async function editShipmentAction(_: ShipState, fd: FormData): Promise<ShipState> {
-  const s = await requireSession();
+  const s = await requirePerm("sales.shipping");
   const p = fields.extend({ id: z.string().min(1).max(64) }).safeParse(Object.fromEntries(fd));
   if (!p.success) return { error: "required" };
   try {
@@ -60,7 +60,7 @@ export async function editShipmentAction(_: ShipState, fd: FormData): Promise<Sh
 }
 
 export async function cancelShipmentAction(_: ShipState, fd: FormData): Promise<ShipState> {
-  const s = await requireSession();
+  const s = await requirePerm("sales.shipping");
   const id = String(fd.get("id") ?? ""), invoiceId = String(fd.get("invoiceId") ?? "");
   if (!id || !invoiceId) return { error: "required" };
   try { await cancelShipment(id, s.uid); } catch (e) { return fail(e); }
@@ -69,7 +69,7 @@ export async function cancelShipmentAction(_: ShipState, fd: FormData): Promise<
 }
 
 export async function retryShipmentAction(_: ShipState, fd: FormData): Promise<ShipState> {
-  const s = await requireSession();
+  const s = await requirePerm("sales.shipping");
   const id = String(fd.get("id") ?? ""), invoiceId = String(fd.get("invoiceId") ?? "");
   if (!id || !invoiceId) return { error: "required" };
   let shop: string, notify = false;

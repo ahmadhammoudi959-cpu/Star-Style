@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireSession } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { bookWriteOff, StockError } from "@/lib/stock";
 import { storeUpload } from "@/lib/files";
 import { schema } from "@/db";
@@ -18,7 +18,7 @@ const Input = z.object({
 });
 
 export async function submitWriteOff(_: WriteOffState, fd: FormData): Promise<WriteOffState> {
-  const session = await requireSession();
+  const session = await requirePerm("stock.writeoff");
   const p = Input.safeParse({ date: fd.get("date"), reason: fd.get("reason"), note: fd.get("note") ?? "", lines: fd.get("lines") });
   if (!p.success) return { error: "required" };
   try {

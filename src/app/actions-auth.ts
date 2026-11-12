@@ -33,6 +33,11 @@ export async function login(_: FormState, fd: FormData): Promise<FormState> {
     await recordAttempt({ userId: user?.id, email, ctx, device, step: "password", ok: false, reason: "invalid" });
     return { error: "invalid" };
   }
+  // vom Admin gesperrtes Konto (Mitarbeiter) – erst nach richtigem Passwort sagen, sonst verrät es, welche E-Mails es gibt
+  if (!user.active) {
+    await recordAttempt({ userId: user.id, email, ctx, device, step: "password", ok: false, reason: "disabled" });
+    return { error: "disabled" };
+  }
   // Zwei-Schritt eingeschaltet und Gerät nicht „vertraut“ → Code verlangen
   if (user.totpEnabledAt && user.totpSecret && !(await trustedDevice(user))) {
     await recordAttempt({ userId: user.id, email, ctx, device, step: "password", ok: true, reason: "needCode" });
@@ -40,7 +45,7 @@ export async function login(_: FormState, fd: FormData): Promise<FormState> {
     return { step: "code" };
   }
   await completeLogin(user, ctx, device, "password");
-  redirect("/");
+  redirect(user.mustChangePassword ? "/password" : "/"); // Einmal-Passwort vom Admin → gleich eigenes Passwort wählen
 }
 
 /** Zweiter Schritt: Code aus der App (oder Ersatz-Code) */
@@ -49,7 +54,7 @@ export async function verifyCode(_: FormState, fd: FormData): Promise<FormState>
   const pending = await verifyPending(c.get(PENDING_COOKIE)?.value);
   if (!pending) return { error: "expired" };
   const user = await db.query.users.findFirst({ where: eq(schema.users.id, pending.uid) });
-  if (!user || user.sessionVersion !== pending.sv || !user.totpEnabledAt || !user.totpSecret) {
+  if (!user || !user.active || user.sessionVersion !== pending.sv || !user.totpEnabledAt || !user.totpSecret) {
     c.delete(PENDING_COOKIE);
     return { error: "expired" };
   }
@@ -72,7 +77,7 @@ export async function verifyCode(_: FormState, fd: FormData): Promise<FormState>
   }
   c.delete(PENDING_COOKIE);
   await completeLogin(user, ctx, device, how, fd.get("remember") === "1");
-  redirect("/");
+  redirect(user.mustChangePassword ? "/password" : "/");
 }
 
 export async function logout() {
@@ -118,7 +123,7 @@ export async function setup(_: FormState, fd: FormData): Promise<FormState> {
     await tx.insert(schema.companySettings).values({
       id: "company", name: d.companyName, owner: d.name, vatId: d.vatId, street: d.street, zip: d.zip, city: d.city,
     }).onConflictDoNothing();
-    const [u] = await tx.insert(schema.users).values({ name: d.name, email: d.email, passwordHash: hash, locale, passwordChangedAt: new Date() }).returning();
+    const [u] = await tx.insert(schema.users).values({ name: d.name, email: d.email, passwordHash: hash, locale, passwordChangedAt: new Date(), isAdmin: true }).returning();
     return u;
   });
   if (!user) return { error: "alreadyDone" };

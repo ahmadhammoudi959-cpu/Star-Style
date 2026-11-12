@@ -10,6 +10,7 @@ import Link from "next/link";
 import { NavProgress } from "@/components/NavProgress";
 import { liveStatus } from "@/lib/test-reset";
 import { formatDate } from "@/lib/dates";
+import { canOpen } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +20,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Zeichen „Testbetrieb“ / „Echtbetrieb seit …“ (Wunsch Inhaber 04.11.2026): ab dem Zurücksetzen sind alle Daten echt
   const live = await liveStatus();
   const liveText = live.live ? (live.since ? t.reset.badgeLive.replace("{date}", formatDate(live.since.toISOString(), intl)) : t.reset.badgeLiveShort) : t.reset.badgeTest;
-  const liveHref = live.live ? "/settings#live" : "/settings#reset";
+  const liveHref = session.admin ? (live.live ? "/settings#live" : "/settings#reset") : null; // nur der Admin kann dort etwas tun
   const liveTip = live.live ? liveText : t.reset.badgeTestHint;
-  const items: NavItem[] = [
+  const allItems: NavItem[] = [
     { href: "/", label: t.nav.home, icon: "home" },
     { href: "/sales", label: t.nav.sales, icon: "cart" },
     { href: "/receivables", label: t.nav.receivables, icon: "euro" },
@@ -39,17 +40,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/shops", label: t.nav.shops, icon: "globe" },
     { href: "/suppliers", label: t.nav.suppliers, icon: "truck" },
     { href: "/design", label: t.nav.design, icon: "palette" },
+    { href: "/settings/users", label: t.nav.users, icon: "users" },
     { href: "/settings", label: t.nav.settings, icon: "settings" },
+    { href: "/account", label: t.nav.account, icon: "key" },
   ];
-  // Nummern der ersten Schritte am Menü, solange noch nicht alles erledigt ist
-  const setup = await setupSteps();
-  if (!setup.allDone) for (const s of setup.steps) {
+  // Menü je nach Rechten (Wunsch Inhaber 12.11.2026): nur Seiten, die diese Person öffnen darf
+  const items = allItems.filter((it) => canOpen(session, it.href));
+  // Nummern der ersten Schritte am Menü (nur Admin), solange noch nicht alles erledigt ist
+  const setup = session.admin ? await setupSteps() : null;
+  if (setup && !setup.allDone) for (const s of setup.steps) {
     const it = items.find((i) => i.href === s.nav);
     if (it && (!s.done || setup.showGuide)) it.step = { n: s.n, next: s.key === setup.next };
   }
   // Handy unten: Start, Verkauf, Scanner (hervorgehoben, Mitte), Lager, „Menü“ = alle Seiten der Seitenleiste
-  const pick = (href: string) => items.find((i) => i.href === href)!;
-  const mobile: NavItem[] = [pick("/"), pick("/sales"), { ...pick("/scan"), label: t.nav.scanShort, highlight: true }, pick("/stock")];
+  const pick = (href: string) => items.find((i) => i.href === href);
+  const scan = pick("/scan");
+  const mobile = [pick("/"), pick("/sales"), scan && { ...scan, label: t.nav.scanShort, highlight: true }, pick("/stock")].filter((x): x is NavItem => !!x);
   const menuFooter = (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="min-w-0 truncate text-sm font-semibold text-ink-soft" dir="auto">{session.name}</div>
@@ -70,10 +76,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <img src="/brand/logo-light.png" alt={t.app.name} className="h-auto w-44 transition duration-300 hover:scale-[1.03] short:w-36" />
             <div className="mt-2 h-0.5 w-full rounded-full bg-gradient-to-r from-brand-500 via-white/20 to-accent-500" />
             <div className="mt-2 text-xs text-white/60 short:hidden">{t.app.tagline}</div>
-            <Link href={liveHref} title={liveTip} data-live={live.live ? "1" : "0"}
+            <MaybeLink href={liveHref} title={liveTip} data-live={live.live ? "1" : "0"}
               className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.6875rem] font-bold ring-1 transition hover:scale-[1.03] ${live.live ? "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30" : "bg-amber-300/15 text-amber-200 ring-amber-300/40"}`}>
               <span className={`h-2 w-2 shrink-0 rounded-full ${live.live ? "bg-emerald-400" : "animate-pulse bg-amber-400"}`} />{liveText}
-            </Link>
+            </MaybeLink>
           </div>
           <SideNav items={items} soonLabel={t.home.comingSoon} />
         </div>
@@ -89,10 +95,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-2 font-bold lg:hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/logo.png" alt={t.app.name} className="h-8 w-auto" />
-            <Link href={liveHref} title={liveTip}
+            <MaybeLink href={liveHref} title={liveTip}
               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.625rem] font-bold ring-1 ${live.live ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-amber-200"}`}>
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${live.live ? "bg-emerald-500" : "animate-pulse bg-amber-500"}`} />{live.live ? t.reset.badgeLiveShort : t.reset.badgeTest}
-            </Link>
+            </MaybeLink>
           </div>
           <div className="hidden lg:block" />
           <div className="flex items-center gap-2">
@@ -106,4 +112,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <BottomNav items={mobile} all={items.map((it) => (it.href === "/scan" ? { ...it, highlight: true } : it))} menuLabel={t.nav.menu} closeLabel={t.common.close} footer={menuFooter} />
     </div>
   );
+}
+
+/** Link nur, wenn es ein Ziel gibt (Mitarbeiter sehen das Zeichen ohne Link) */
+function MaybeLink({ href, children, ...rest }: { href: string | null; children: React.ReactNode; title?: string; className?: string; "data-live"?: string }) {
+  return href ? <Link href={href} {...rest}>{children}</Link> : <span {...rest}>{children}</span>;
 }

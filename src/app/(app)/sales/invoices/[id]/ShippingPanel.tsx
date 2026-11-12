@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/dates";
 import { carrierLabel, isDeliveryState, shippingState, trackingUrl, type ShippingState } from "@/lib/shipping";
 import type { Dict } from "@/i18n/de";
 import { ClearShipNotice, NewShipment, ShipmentActions } from "./ShippingForms";
+import { can, getAuth } from "@/lib/auth";
 
 const TONE: Record<ShippingState, string> = {
   none: "bg-amber-100 text-amber-900", partial: "bg-sky-100 text-sky-800", done: "bg-emerald-100 text-emerald-800", nothing: "bg-slate-100 text-slate-700",
@@ -46,6 +47,9 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
   const lines = [...inv.lines].sort((a, b) => a.position - b.position);
   const st = shippingState(lines, ships);
   const shop = inv.channel !== "STORE" && Boolean(inv.externalOrderId);
+  // Versand eintragen/ändern nur mit Recht „Versand“ (die Actions prüfen selbst noch einmal)
+  const auth = await getAuth();
+  const ship = !!auth && can(auth, "sales.shipping");
   const canAdd = inv.status === "ISSUED" && st.state !== "done";
   // schon benutzte Speditionen als Vorschlag
   const names = canAdd || ships.length
@@ -107,7 +111,7 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
                   )}
                   {s.items.length > 0 && <p className="mt-1.5 text-xs text-ink-soft [overflow-wrap:anywhere]">{s.items.map((i) => `${i.qty} × ${i.description || "?"}`).join(" · ")}</p>}
                   {line && <p className={`mt-2 flex items-start gap-1.5 text-xs font-semibold ${line.tone}`}><Icon name={line.icon} className="mt-px h-3.5 w-3.5 shrink-0" /><span className="[overflow-wrap:anywhere]">{line.text}</span></p>}
-                  {!cancelled && inv.status === "ISSUED" && s.shopStatus !== "cancel" && (
+                  {ship && !cancelled && inv.status === "ISSUED" && s.shopStatus !== "cancel" && (
                     <ShipmentActions t={t} invoiceId={inv.id} shop={shop} failed={s.shopStatus === "failed"} names={names}
                       s={{ id: s.id, carrier: s.carrier, carrierName: s.carrierName, trackingNumbers: s.trackingNumbers, trackingUrl: s.trackingUrl }} />
                   )}
@@ -117,7 +121,7 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
           </ul>
         )}
       </div>
-      {inv.status === "ISSUED" && (
+      {inv.status === "ISSUED" && (ship || !canAdd) && (
         <aside className="card h-fit animate-rise p-5">
           {canAdd ? (
             <>

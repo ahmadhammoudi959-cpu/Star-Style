@@ -8,6 +8,7 @@ import { listCategories, storeContexts, storeNavs, type CategoryInfo } from "@/l
 import type { ShopChannel } from "@/lib/shopify/client";
 import type { Dict } from "@/i18n/de";
 import { NewCategory } from "./CategoryForms";
+import { can, requireSession } from "@/lib/auth";
 import { StoreChip } from "./StoreChip";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function CategoriesPage({ searchParams }: { searchParams: Promise<{ q?: string; deleted?: string }> }) {
   const { q = "", deleted } = await searchParams;
   const { t } = await getI18n();
+  const edit = can(await requireSession(), "products.edit");
   const stores = await storeContexts();
   const [list, navs] = await Promise.all([listCategories(stores), storeNavs(stores)]);
   const s = q.trim().toLowerCase();
@@ -30,7 +32,7 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
           <Icon name="check" className="h-4 w-4" />{fill(t.cat.deleted, { c: deleted })}
         </div>
       )}
-      <NewCategory t={t} navs={navs} />
+      {edit && <NewCategory t={t} navs={navs} />}
 
       <form className="card relative z-10 mb-4 flex flex-col gap-3 p-4 animate-rise md:flex-row md:items-end">
         <div className="md:w-80">

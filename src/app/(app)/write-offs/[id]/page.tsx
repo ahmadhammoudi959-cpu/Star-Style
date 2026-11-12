@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { formatCents } from "@/lib/money";
+import { can, requireSession } from "@/lib/auth";
 import { formatDate } from "@/lib/dates";
 import { variantLabel } from "@/lib/queries";
 import { PrintButton } from "@/components/PrintButton";
@@ -12,6 +13,7 @@ import { PrintButton } from "@/components/PrintButton";
 export default async function WriteOffDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { t, intl } = await getI18n();
+  const cost = can(await requireSession(), "products.cost"); // Einkaufspreise nur mit Recht
   const wo = await db.query.writeOffs.findFirst({
     where: eq(schema.writeOffs.id, id),
     with: { lines: { with: { variant: { with: { product: true } } } } },
@@ -36,17 +38,17 @@ export default async function WriteOffDetail({ params }: { params: Promise<{ id:
         </header>
         <p className="mb-4 text-sm"><b>Grund:</b> {(await import("@/i18n/de")).default.writeOff.reasons[wo.reason]}{wo.note && <> · {wo.note}</>}</p>
         <div className="table-wrap"><table className="tbl">
-          <thead><tr><th>Artikel</th><th>Art.-Nr.</th><th className="!text-end">Menge</th><th className="!text-end">EK/Stück</th><th className="!text-end">Wert</th></tr></thead>
+          <thead><tr><th>Artikel</th><th>Art.-Nr.</th><th className="!text-end">Menge</th>{cost && <><th className="!text-end">EK/Stück</th><th className="!text-end">Wert</th></>}</tr></thead>
           <tbody>{wo.lines.map((l) => (
             <tr key={l.id}>
               <td>{variantLabel(l.variant.product.nameDe, l.variant.size, l.variant.color)}</td>
               <td className="num">{l.variant.product.sku}</td>
               <td className="num text-end">{l.qty}</td>
-              <td className="num text-end">{formatCents(l.unitCostCents)}</td>
-              <td className="num text-end">{formatCents(l.qty * l.unitCostCents)}</td>
+              {cost && <td className="num text-end">{formatCents(l.unitCostCents)}</td>}
+              {cost && <td className="num text-end">{formatCents(l.qty * l.unitCostCents)}</td>}
             </tr>
           ))}</tbody>
-          <tfoot><tr><td colSpan={4} className="px-3 py-3 text-end font-bold">Gesamtwert (Einkauf netto)</td><td className="num px-3 py-3 text-end font-bold">{formatCents(total)}</td></tr></tfoot>
+          {cost && <tfoot><tr><td colSpan={4} className="px-3 py-3 text-end font-bold">Gesamtwert (Einkauf netto)</td><td className="num px-3 py-3 text-end font-bold">{formatCents(total)}</td></tr></tfoot>}
         </table></div>
         {wo.photoFileId && (
           <div className="mt-6">

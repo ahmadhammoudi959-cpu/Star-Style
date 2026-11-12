@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { getSession } from "@/lib/auth";
+import { apiDenied } from "@/lib/auth";
 import { dunningPdf } from "@/lib/pdf";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await getSession())) return new Response("Unauthorized", { status: 401 });
+  const denied = await apiDenied("receivables"); if (denied) return denied;
   const { id } = await params;
   const d = await db.query.dunnings.findFirst({ where: eq(schema.dunnings.id, id), with: { invoice: true } });
   if (!d) return new Response("Not found", { status: 404 });

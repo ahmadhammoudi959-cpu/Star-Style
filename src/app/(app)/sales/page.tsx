@@ -1,3 +1,4 @@
+import { can, requireSession } from "@/lib/auth";
 import Link from "next/link";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -18,6 +19,7 @@ import type { ShippingState } from "@/lib/shipping";
 export default async function SalesPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; customer?: string; status?: string; ship?: string }> }) {
   const { tab = "invoices", q = "", customer = "", status = "", ship: shipParam = "" } = await searchParams;
   const { t, intl } = await getI18n();
+  const session = await requireSession();
   await expireOffers();
   const like = q.trim() ? `%${q.trim().toLowerCase()}%` : null;
   const cust = customer || null;
@@ -89,8 +91,8 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
   return (
     <div>
       <PageHeader title={t.sales.title} actions={<>
-        <Link href="/sales/offers/new" className="btn-ghost group"><Icon name="plus" className="h-4 w-4" />{t.sales.newOffer}</Link>
-        <Link href="/sales/invoices/new" className="btn-primary group"><Icon name="receipt" className="h-4 w-4" />{t.sales.newInvoice}</Link>
+        {can(session, "sales.offers") && <Link href="/sales/offers/new" className="btn-ghost group"><Icon name="plus" className="h-4 w-4" />{t.sales.newOffer}</Link>}
+        {can(session, "sales.invoices") && <Link href="/sales/invoices/new" className="btn-primary group"><Icon name="receipt" className="h-4 w-4" />{t.sales.newInvoice}</Link>}
       </>} />
       <div className="mb-4 flex flex-wrap items-center gap-3 animate-rise">
         <div className="inline-flex rounded-xl bg-white p-1 shadow-card ring-1 ring-black/5">

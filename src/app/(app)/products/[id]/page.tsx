@@ -15,12 +15,15 @@ import { weightInputParts } from "@/lib/weight";
 import { galleriesOf } from "@/lib/shopify/gallery";
 import { decodePriceNotes } from "@/lib/shopify/product-push-map";
 import { formatCents } from "@/lib/money";
+import { can, requireSession } from "@/lib/auth";
 
 const toInput = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
 export default async function EditProduct({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; push?: string; price?: string }> }) {
   const { id } = await params;
   const { saved, push, price } = await searchParams;
+  const session = await requireSession();
+  const rights = { edit: can(session, "products.edit"), prices: can(session, "products.prices"), cost: can(session, "products.cost"), receive: can(session, "stock.receive") };
   const { t } = await getI18n();
   const p = await db.query.products.findFirst({ where: eq(schema.products.id, id) });
   if (!p) notFound();
@@ -34,14 +37,14 @@ export default async function EditProduct({ params, searchParams }: { params: Pr
       {saved && <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700 ring-1 ring-brand-100"><Icon name="check" className="h-4 w-4" />{t.common.saved}</div>}
       <PushNotes t={t} results={decodePush(push)} />
       <PriceNotes t={t} s={price} />
-      <ProductForm t={t} suppliers={suppliers} categories={categories} shopStatus={shopStatus} initial={{
+      <ProductForm t={t} suppliers={suppliers} categories={categories} shopStatus={shopStatus} rights={rights} initial={{
         id: p.id, sku: p.sku, nameDe: p.nameDe, nameNl: p.nameNl, descriptionDe: p.descriptionDe, descriptionNl: p.descriptionNl,
         category: p.category, supplierId: p.supplierId ?? "", vatRateBp: p.vatRateBp,
-        purchasePrice: toInput(p.purchasePriceCents), wholesalePrice: toInput(p.wholesalePriceCents), retailPrice: toInput(p.retailPriceCents),
+        purchasePrice: rights.cost ? toInput(p.purchasePriceCents) : "", wholesalePrice: toInput(p.wholesalePriceCents), retailPrice: toInput(p.retailPriceCents),
         tracksExpiry: p.tracksExpiry, inBrandShop: p.inBrandShop, inGeneralShop: p.inGeneralShop, imageFileId: p.imageFileId, galleries,
         variants: vs.map((v) => ({ id: v.id, size: v.size, color: v.color, barcode: v.barcode ?? "", minStock: v.minStock, stockQty: v.stockQty, imageFileId: v.imageFileId, ...weightInputParts(v.weightGrams) })),
       }} />
-      {deletable && <DeleteProduct t={t} id={p.id} />}
+      {deletable && rights.edit && <DeleteProduct t={t} id={p.id} />}
     </div>
   );
 }

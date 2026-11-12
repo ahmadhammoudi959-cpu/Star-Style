@@ -2,10 +2,10 @@
 import { verifyCustomerVat } from "@/lib/customer-vat";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
-import { requireSession } from "@/lib/auth";
+import { can, requirePerm } from "@/lib/auth";
 import { parseMoney } from "@/lib/money";
 import { audit } from "@/lib/stock";
 import { splitVatId } from "@/lib/vat-check";
@@ -37,7 +37,7 @@ const C = z.object({
 });
 
 export async function saveCustomer(_: CustomerState, fd: FormData): Promise<CustomerState> {
-  const session = await requireSession();
+  const session = await requirePerm("customers");
   const fail = (error: string): CustomerState => ({ error, values: Object.fromEntries(KEEP.map((k) => [k, String(fd.get(k) ?? "")])) });
   const p = C.safeParse(Object.fromEntries(fd));
   if (!p.success) return fail("required");
@@ -47,8 +47,11 @@ export async function saveCustomer(_: CustomerState, fd: FormData): Promise<Cust
   if (d.country === "DE" && d.zip && !/^\d{5}$/.test(d.zip)) return fail("zipDe");
   if (d.vatId && !splitVatId(d.vatId)) return fail("vatFormat");
   if (d.vatId.startsWith("DE") && !/^DE\d{9}$/.test(d.vatId)) return fail("vatDe");
-  const reseller = shopReseller && d.priceGroup === "WHOLESALE";
-  if (reseller && !validEmail(d.email)) return fail("resellerEmail");
+  // Häkchen „Shop-Preise جملة الجملة“ nur mit eigenem Recht – sonst bleibt der bisherige Stand (Daten werden trotzdem nachgezogen)
+  const canReseller = can(session, "customers.reseller");
+  const prevLink = id && !canReseller ? await db.query.shopCompanies.findFirst({ where: and(eq(schema.shopCompanies.customerId, id), eq(schema.shopCompanies.channel, "GENERAL_SHOP")) }) : undefined;
+  const reseller = (canReseller ? shopReseller : !!prevLink?.wanted) && d.priceGroup === "WHOLESALE";
+  if (reseller && canReseller && !validEmail(d.email)) return fail("resellerEmail");
   const limit = creditLimit.trim() ? parseMoney(creditLimit) : null;
   if (creditLimit.trim() && limit == null) return fail("required");
   const days = paymentTermDays.trim() ? Number(paymentTermDays) : null;
@@ -61,7 +64,9 @@ export async function saveCustomer(_: CustomerState, fd: FormData): Promise<Cust
     if (!before || before.vatId !== d.vatId) vatIdStatus = "NONE"; // neue Nummer → neu prüfen
     if (vatPending && !d.vatId) vatIdStatus = "PENDING";
     if (!vatPending && vatIdStatus === "PENDING") vatIdStatus = "NONE";
-    const values = { ...d, vatIdStatus, creditLimitCents: limit, paymentTermDays: days };
+    // Kreditlimit und Zahlungsziel nur mit Recht „Kreditlimit“ – sonst bleiben die alten Werte
+    const credit = can(session, "customers.credit");
+    const values = { ...d, vatIdStatus, creditLimitCents: credit ? limit : (before?.creditLimitCents ?? null), paymentTermDays: credit ? days : (before?.paymentTermDays ?? null) };
     if (id) {
       await tx.update(schema.customers).set(values).where(eq(schema.customers.id, id));
       await audit(tx, { entity: "customer", entityId: id, action: "update", before, after: values, userId: session.uid });
@@ -82,7 +87,7 @@ export async function saveCustomer(_: CustomerState, fd: FormData): Promise<Cust
 
 /** „Erneut versuchen“ an der Kundenseite (nach einer Ablehnung durch den Shop) */
 export async function retryResellerAction(customerId: string): Promise<{ status: string }> {
-  await requireSession();
+  await requirePerm("customers.reseller");
   await db.update(schema.shopCompanies).set({ status: "pending", error: "", tries: 0, updatedAt: new Date() }).where(eq(schema.shopCompanies.customerId, customerId));
   const r = await syncShopCompanyNow(customerId);
   return { status: r?.status ?? "pending" };
@@ -91,7 +96,7 @@ export async function retryResellerAction(customerId: string): Promise<{ status:
 export type CheckState = { error?: string; ok?: boolean } | undefined;
 
 export async function runVatCheck(_: CheckState, fd: FormData): Promise<CheckState> {
-  const session = await requireSession();
+  const session = await requirePerm("customers");
   const id = String(fd.get("customerId") ?? "");
   const c = await db.query.customers.findFirst({ where: eq(schema.customers.id, id) });
   if (!c || !c.vatId) return { error: "required" };

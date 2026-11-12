@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
-import { requireSession } from "@/lib/auth";
+import { requirePerm, can } from "@/lib/auth";
 import { audit } from "@/lib/stock";
 
 export type SupplierState = { error?: string } | undefined;
@@ -26,10 +26,13 @@ const S = z.object({
 });
 
 export async function saveSupplier(_: SupplierState, fd: FormData): Promise<SupplierState> {
-  const session = await requireSession();
+  const session = await requirePerm("suppliers", "expenses.edit");
   const p = S.safeParse(Object.fromEntries(fd));
   if (!p.success) return { error: "required" };
   const { id, ...v } = p.data;
+  // Warenlieferant = Recht „Lieferanten“, Firma aus Ausgaben = Recht „Ausgaben bearbeiten“ (gleiches Formular)
+  const before = id ? await db.query.suppliers.findFirst({ where: eq(schema.suppliers.id, id) }) : undefined;
+  for (const k of new Set([v.kind, before?.kind ?? v.kind])) if (!can(session, k === "EXPENSE" ? "expenses.edit" : "suppliers")) redirect("/?denied=1");
   await db.transaction(async (tx) => {
     if (id) {
       const before = await tx.query.suppliers.findFirst({ where: eq(schema.suppliers.id, id) });

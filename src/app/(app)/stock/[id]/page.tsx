@@ -12,10 +12,15 @@ import { daysBetween, formatDate, todayIso } from "@/lib/dates";
 import { variantLabel } from "@/lib/queries";
 import { EXPIRY_BADGE, expiryState } from "@/lib/expiry";
 import { AdjustForm } from "./AdjustForm";
+import { can, requireSession } from "@/lib/auth";
+import { canOpen } from "@/lib/permissions";
 
 export default async function VariantStock({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { t, intl } = await getI18n();
+  // Einkaufspreise nur mit Recht; Inventur nur mit Recht; Links zu Belegen nur, wenn die Person sie öffnen darf
+  const session = await requireSession();
+  const cost = can(session, "products.cost"), count = can(session, "stock.count");
   const v = await db.query.variants.findFirst({ where: eq(schema.variants.id, id), with: { product: true } });
   if (!v) notFound();
   const [bs, moves, res] = await Promise.all([
@@ -32,14 +37,16 @@ export default async function VariantStock({ params }: { params: Promise<{ id: s
     WRITE_OFF: "bg-red-100 text-red-800", ADJUSTMENT: "bg-amber-100 text-amber-800", CANCEL: "bg-gray-100 text-gray-700",
   };
   // Bewegung → Beleg dahinter (Verlustprotokoll, Wareneingang)
-  const refLink = (refType: string | null, refId: string | null) =>
-    !refId ? null : refType === "writeoff" ? { href: `/write-offs/${refId}`, label: t.writeOff.protocol }
+  const refLink = (refType: string | null, refId: string | null) => {
+    const r = !refId ? null : refType === "writeoff" ? { href: `/write-offs/${refId}`, label: t.writeOff.protocol }
       : refType === "receipt" ? { href: `/receive/${refId}`, label: t.receive.openReceipt } : null;
+    return r && canOpen(session, r.href) ? r : null;
+  };
 
   return (
     <div>
       <PageHeader title={variantLabel(v.product.nameDe, v.size, v.color)} back="/stock"
-        actions={<Link href={`/products/${v.productId}`} className="btn-primary group"><Icon name="edit" className="h-4 w-4" />{t.product.edit}</Link>} />
+        actions={<Link href={`/products/${v.productId}`} className="btn-primary group"><Icon name={can(session, "products.edit") ? "edit" : "eye"} className="h-4 w-4" />{can(session, "products.edit") ? t.product.edit : t.product.open}</Link>} />
       {/* Das Produkt auf einen Blick: Foto, Nummern, Kategorie */}
       <section className="card mb-4 flex flex-col gap-4 p-4 animate-rise sm:flex-row sm:items-center">
         <Thumb id={v.imageFileId ?? v.product.imageFileId} size={96} />
@@ -55,7 +62,7 @@ export default async function VariantStock({ params }: { params: Promise<{ id: s
           </div>
         </div>
       </section>
-      <div className="stagger grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className={`stagger grid grid-cols-2 gap-4 ${cost ? "md:grid-cols-4" : ""}`}>
         <div className={`card p-5 ${v.stockQty < 0 ? "ring-2 ring-red-200" : low ? "ring-2 ring-amber-200" : ""}`}>
           <div className="text-sm text-ink-soft">{t.product.stock}</div>
           <div className={`num text-3xl font-bold ${v.stockQty < 0 ? "text-red-600" : low ? "text-amber-600" : ""}`}>{v.stockQty}</div>
@@ -66,17 +73,17 @@ export default async function VariantStock({ params }: { params: Promise<{ id: s
           <div className="num text-3xl font-bold">{v.stockQty - reserved}</div>
           {reserved > 0 && <div className="text-xs text-ink-soft">{t.product.reserved}: {reserved}</div>}
         </div>
-        <div className="card p-5"><div className="text-sm text-ink-soft">{t.stock.avgCost}</div><div className="num text-2xl font-bold">{formatCents(v.avgCostCents, intl)}</div></div>
-        <div className="card p-5"><div className="text-sm text-ink-soft">{t.stock.value}</div><div className="num text-2xl font-bold">{formatCents(Math.max(v.stockQty, 0) * v.avgCostCents, intl)}</div></div>
+        {cost && <div className="card p-5"><div className="text-sm text-ink-soft">{t.stock.avgCost}</div><div className="num text-2xl font-bold">{formatCents(v.avgCostCents, intl)}</div></div>}
+        {cost && <div className="card p-5"><div className="text-sm text-ink-soft">{t.stock.value}</div><div className="num text-2xl font-bold">{formatCents(Math.max(v.stockQty, 0) * v.avgCostCents, intl)}</div></div>}
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className={`mt-6 grid gap-6 ${count ? "lg:grid-cols-[minmax(0,1fr)_320px]" : ""}`}>
         <div className="space-y-6">
           <section className="card overflow-hidden animate-rise">
             <h2 className="px-5 pt-5 text-lg font-bold">{t.stock.batches}</h2>
             {bs.length === 0 ? <p className="p-5 text-sm text-ink-soft">{t.common.nothingYet}</p> : (
               <div className="table-wrap mt-3"><table className="tbl">
-                <thead><tr><th>{t.receive.batchNo}</th><th>{t.receive.expiry}</th><th className="text-end">{t.common.qty}</th><th className="text-end">{t.receive.unitCost}</th></tr></thead>
+                <thead><tr><th>{t.receive.batchNo}</th><th>{t.receive.expiry}</th><th className="text-end">{t.common.qty}</th>{cost && <th className="text-end">{t.receive.unitCost}</th>}</tr></thead>
                 <tbody>{bs.map((b) => {
                   const d = b.expiryDate ? daysBetween(today, b.expiryDate) : null;
                   return (
@@ -85,7 +92,7 @@ export default async function VariantStock({ params }: { params: Promise<{ id: s
                       <td>{b.expiryDate ? <span className={`badge ${EXPIRY_BADGE[expiryState(today, b.expiryDate)]}`}>
                         {formatDate(b.expiryDate, intl)} · {d! < 0 ? t.stock.expired : d === 0 ? t.stock.expiresToday : fill(t.stock.expiresIn, { d: d! })}</span> : t.common.none}</td>
                       <td className="num text-end font-semibold">{b.qtyLeft}</td>
-                      <td className="num text-end">{formatCents(b.unitCostCents, intl)}</td>
+                      {cost && <td className="num text-end">{formatCents(b.unitCostCents, intl)}</td>}
                     </tr>
                   );
                 })}</tbody>
@@ -96,7 +103,7 @@ export default async function VariantStock({ params }: { params: Promise<{ id: s
             <h2 className="flex items-center gap-2 px-5 pt-5 text-lg font-bold"><Icon name="history" className="h-5 w-5 text-brand-600" />{t.stock.movements}</h2>
             {moves.length === 0 ? <p className="p-5 text-sm text-ink-soft">{t.common.nothingYet}</p> : (
               <div className="table-wrap mt-3"><table className="tbl">
-                <thead><tr><th>{t.common.date}</th><th>{t.common.actions}</th><th className="text-end">{t.common.qty}</th><th className="text-end">{t.receive.unitCost}</th><th>{t.common.note}</th></tr></thead>
+                <thead><tr><th>{t.common.date}</th><th>{t.common.actions}</th><th className="text-end">{t.common.qty}</th>{cost && <th className="text-end">{t.receive.unitCost}</th>}<th>{t.common.note}</th></tr></thead>
                 <tbody>{moves.map((m) => {
                   const ref = refLink(m.refType, m.refId);
                   return (
@@ -104,7 +111,7 @@ export default async function VariantStock({ params }: { params: Promise<{ id: s
                       <td className="num whitespace-nowrap">{formatDate(m.createdAt.toISOString(), intl)}</td>
                       <td><span className={`badge ${typeColor[m.type]}`}>{t.stock.type[m.type]}</span></td>
                       <td className={`num text-end font-semibold ${m.qty < 0 ? "text-red-600" : "text-brand-700"}`} dir="ltr">{m.qty > 0 ? `+${m.qty}` : m.qty}</td>
-                      <td className="num text-end">{formatCents(m.unitCostCents, intl)}</td>
+                      {cost && <td className="num text-end">{formatCents(m.unitCostCents, intl)}</td>}
                       <td className="text-ink-soft">{ref ? <Link className="font-semibold text-brand-700 underline" href={ref.href}>{ref.label}</Link> : (t.writeOff.reasons as Record<string, string>)[m.note] ?? m.note}</td>
                     </tr>
                   );
@@ -113,10 +120,12 @@ export default async function VariantStock({ params }: { params: Promise<{ id: s
             )}
           </section>
         </div>
-        <aside className="card h-fit p-5 animate-rise">
-          <h2 className="mb-3 text-lg font-bold">{t.stock.adjust}</h2>
-          <AdjustForm t={t} variantId={v.id} current={v.stockQty} />
-        </aside>
+        {count && (
+          <aside className="card h-fit p-5 animate-rise">
+            <h2 className="mb-3 text-lg font-bold">{t.stock.adjust}</h2>
+            <AdjustForm t={t} variantId={v.id} current={v.stockQty} />
+          </aside>
+        )}
       </div>
     </div>
   );

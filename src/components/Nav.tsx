@@ -7,12 +7,23 @@ import { Icon, type IconName } from "./Icon";
 
 export type NavItem = { href: string; label: string; icon: IconName; soon?: boolean; step?: { n: number; next: boolean }; highlight?: boolean };
 
+/** Aktiv ist der längste passende Eintrag (/settings/users statt /settings) */
+function activeHref(items: NavItem[], path: string): string | null {
+  let best: string | null = null;
+  for (const it of items) {
+    const hit = it.href === "/" ? path === "/" : path === it.href || path.startsWith(it.href + "/") || path.startsWith(it.href + "?");
+    if (hit && (!best || it.href.length > best.length)) best = it.href;
+  }
+  return best;
+}
+
 export function SideNav({ items, soonLabel }: { items: NavItem[]; soonLabel: string }) {
   const path = usePathname();
+  const current = activeHref(items, path);
   return (
     <nav className="space-y-1 short:space-y-0.5">
       {items.map((it) => {
-        const active = it.href === "/" ? path === "/" : path.startsWith(it.href);
+        const active = it.href === current;
         if (it.soon)
           return (
             <span key={it.href} title={soonLabel} className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/40 short:py-1.5 tiny:py-1">
@@ -33,7 +44,6 @@ export function SideNav({ items, soonLabel }: { items: NavItem[]; soonLabel: str
   );
 }
 
-const isActive = (href: string, path: string) => (href === "/" ? path === "/" : path.startsWith(href));
 
 /**
  * Handy: Leiste unten (Start, Verkauf, Scanner in der Mitte, Lager, „Menü“). „Menü“ öffnet alle Seiten der Seitenleiste
@@ -46,14 +56,15 @@ export function BottomNav({ items, all, menuLabel, closeLabel, footer }: {
   const [open, setOpen] = useState(false);
   // Seite gewechselt → Menü zu
   useEffect(() => { setOpen(false); }, [path]);
-  const inMenu = !items.some((it) => isActive(it.href, path)); // aktuelle Seite liegt nur im Menü
+  const current = activeHref(all, path);
+  const inMenu = !items.some((it) => it.href === current); // aktuelle Seite liegt nur im Menü
   const cols = items.length + 1;
   return (
     <>
       <nav className="print:hidden fixed inset-x-0 bottom-0 z-30 grid border-t border-black/5 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-lift backdrop-blur lg:hidden"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {items.map((it) => {
-          const active = isActive(it.href, path);
+          const active = it.href === current;
           // hervorgehoben (Scanner): runder Knopf, der etwas aus der Leiste ragt
           if (it.highlight) return (
             <Link key={it.href} href={it.href} aria-current={active ? "page" : undefined}
@@ -85,6 +96,7 @@ export function BottomNav({ items, all, menuLabel, closeLabel, footer }: {
 /** Alle Seiten als Kacheln, von unten eingeblendet (über die ganze Seite: Portal in <body>, siehe CLAUDE.md) */
 function MenuSheet({ items, title, closeLabel, footer, onClose }: { items: NavItem[]; title: string; closeLabel: string; footer?: ReactNode; onClose: () => void }) {
   const path = usePathname();
+  const current = activeHref(items, path);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
@@ -107,7 +119,7 @@ function MenuSheet({ items, title, closeLabel, footer, onClose }: { items: NavIt
         </div>
         <div className="grid grid-cols-3 gap-2 px-4 pb-4 min-[360px]:grid-cols-4">
           {items.map((it) => {
-            const active = isActive(it.href, path);
+            const active = it.href === current;
             return (
               <Link key={it.href} href={it.href} onClick={onClose} aria-current={active ? "page" : undefined}
                 className={`group relative flex min-h-[5.5rem] flex-col items-center justify-center gap-1.5 rounded-2xl p-2 text-center text-xs font-semibold leading-tight ring-1 transition active:scale-95 ${active ? "bg-brand-600 text-white shadow-card ring-brand-600" : "bg-brand-50/60 text-ink ring-black/5"}`}>
