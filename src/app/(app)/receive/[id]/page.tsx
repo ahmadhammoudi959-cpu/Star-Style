@@ -6,7 +6,6 @@ import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { Thumb } from "@/components/Thumb";
-import { PrintButton } from "@/components/PrintButton";
 import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 
@@ -35,7 +34,10 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   return (
     <div>
       <div className="print:hidden">
-        <PageHeader title={`${t.receive.title} ${String(head.number)}`} back="/receive" actions={<PrintButton label={t.pay.print} />} />
+        <PageHeader title={`${t.receive.title} ${String(head.number)}`} back="/receive" actions={
+          // Drucken = PDF im Design der Rechnung (Logo, Farben), Wunsch Inhaber 12.11.2026
+          <a href={`/api/pdf/goods-receipt/${id}`} target="_blank" rel="noopener" className="btn-primary group"><Icon name="receipt" className="h-4 w-4" />{t.pay.print}</a>
+        } />
       </div>
       <section className="card mb-4 grid gap-4 p-5 animate-rise sm:grid-cols-2 lg:grid-cols-4 print:shadow-none print:ring-0">
         <Info label={t.receive.number}><bdi dir="ltr" className="font-bold">{String(head.number)}</bdi></Info>

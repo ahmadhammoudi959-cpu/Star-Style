@@ -163,6 +163,7 @@ const en: Dict = {
     expiry: "Best before", addLine: "Add line", submit: "Book goods in", booked: "Goods booked in",
     expiryRequired: "This product needs an expiry date.", history: "Recent deliveries", number: "No.",
     items: "Lines", value: "Value",
+    colItem: "Item", colCost: "Unit cost", colAmount: "Amount", qtyTotal: "Total quantity (lines: {n})", valueNet: "Goods value (net)", checkedBy: "Goods checked and stored by (name, signature)", page: "Page {n} of {m}",
   },
   stock: {
     clear: "Clear filter", noLow: "No product is running low. To see a product here, set “Warn below” on the product.",

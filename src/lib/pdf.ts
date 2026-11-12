@@ -12,18 +12,18 @@ import { addDaysIso, formatDate } from "./dates";
 import { legalNotes } from "./tax";
 import { buildCiiXml } from "./einvoice";
 
-const MM = 2.8346;
-const W = 595.28, H = 841.89;
+export const MM = 2.8346;
+export const W = 595.28, H = 841.89;
 // Farben aus dem Logo: Nachtblau (Tabellenkopf), Blau (Summen), Rot (Akzent)
-const BRAND = rgb(0.067, 0.102, 0.2);
-const BLUE = rgb(0.09, 0.322, 0.839);
-const RED = rgb(0.89, 0.098, 0.11);
-const INK = rgb(0.114, 0.141, 0.2);
-const SOFT = rgb(0.36, 0.39, 0.46);
-const LINE = rgb(0.85, 0.87, 0.9);
-const ZEBRA = rgb(0.957, 0.965, 0.98);
+export const BRAND = rgb(0.067, 0.102, 0.2);
+export const BLUE = rgb(0.09, 0.322, 0.839);
+export const RED = rgb(0.89, 0.098, 0.11);
+export const INK = rgb(0.114, 0.141, 0.2);
+export const SOFT = rgb(0.36, 0.39, 0.46);
+export const LINE = rgb(0.85, 0.87, 0.9);
+export const ZEBRA = rgb(0.957, 0.965, 0.98);
 
-type Fonts = { r: TFont; s: TFont; b: TFont };
+export type Fonts = { r: TFont; s: TFont; b: TFont };
 type DocKind = "invoice" | "cancellation" | "offer" | "delivery";
 
 type Party = { name: string; street: string; zip: string; city: string; country: string; vatId: string };
@@ -98,7 +98,7 @@ export class TFont {
   }
 }
 
-async function fonts(doc: PDFDocument, needArabic: boolean): Promise<Fonts> {
+export async function fonts(doc: PDFDocument, needArabic: boolean): Promise<Fonts> {
   doc.registerFontkit(fontkit);
   const dir = path.join(process.cwd(), "assets", "fonts");
   const load = (f: string, subset = true) => doc.embedFont(fs.readFileSync(path.join(dir, f)), { subset });
@@ -121,7 +121,7 @@ async function fonts(doc: PDFDocument, needArabic: boolean): Promise<Fonts> {
   };
 }
 
-function wrap(text: string, font: TFont, size: number, width: number): string[] {
+export function wrap(text: string, font: TFont, size: number, width: number): string[] {
   const out: string[] = [];
   for (const para of text.split("\n")) {
     let line = "";
@@ -186,7 +186,7 @@ class Writer {
 }
 
 /** Logo aus den Einstellungen, sonst das Firmenlogo aus assets/logo.jpg */
-async function embedLogo(doc: PDFDocument, fileId: string | null) {
+export async function embedLogo(doc: PDFDocument, fileId: string | null) {
   if (fileId) {
     const file = await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, fileId) });
     if (file?.mime === "image/png") return doc.embedPng(file.data);

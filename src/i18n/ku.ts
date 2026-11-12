@@ -416,6 +416,7 @@ const ku: Dict = {
     number: "Hejmar",
     items: "Rêz",
     value: "Nirx",
+    colItem: "Berhem", colCost: "Bihayê kirînê", colAmount: "Tevahî", qtyTotal: "Hejmara giştî (rêz: {n})", valueNet: "Nirxa malan (net, bê bac)", checkedBy: "Mal hate kontrolkirin û li embarê hate danîn (nav û îmze)", page: "Rûpel {n} ji {m}",
   },
   stock: {
     clear: "Parzûnê rake",

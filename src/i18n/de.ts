@@ -162,6 +162,7 @@ const de = {
     expiry: "Haltbar bis", addLine: "Position hinzufügen", submit: "Wareneingang buchen", booked: "Wareneingang gebucht",
     expiryRequired: "Für diesen Artikel ist ein Haltbarkeitsdatum nötig.", history: "Letzte Wareneingänge", number: "Nr.",
     items: "Positionen", value: "Wert",
+    colItem: "Artikel", colCost: "EK / Stück", colAmount: "Betrag", qtyTotal: "Gesamtmenge (Positionen: {n})", valueNet: "Warenwert netto", checkedBy: "Ware geprüft und eingelagert von (Name, Unterschrift)", page: "Seite {n} von {m}",
   },
   stock: {
     clear: "Filter löschen", noLow: "Kein Artikel hat wenig Bestand. Damit ein Artikel hier erscheint, beim Artikel einen „Mindestbestand“ eintragen.",
