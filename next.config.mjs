@@ -16,6 +16,8 @@ const nextConfig = {
   // Schriften für die PDF-Erzeugung mit ausliefern
   outputFileTracingIncludes: { "/**/*": ["./assets/**/*"] },
   experimental: { serverActions: { bodySizeLimit: "10mb" } },
+  // Vorschau im Belegdesign: PDF → Bild auf dem Server (pdf.js + Canvas-Bibliothek mit eigener Binärdatei) – nicht bündeln
+  serverExternalPackages: ["pdfjs-dist", "@napi-rs/canvas"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

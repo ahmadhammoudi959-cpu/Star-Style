@@ -1,0 +1,1 @@
+ALTER TABLE "company_settings" ADD COLUMN "doc_design" jsonb DEFAULT '{}'::jsonb NOT NULL;

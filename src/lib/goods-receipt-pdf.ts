@@ -4,10 +4,11 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import type { Dict } from "@/i18n/de";
 import {
-  BLUE, BRAND, CONTENT_BOTTOM, CONTENT_TOP, H, INK, LINE, MM, RED, SOFT, W, WHITE,
-  drawFooterBand, drawHeaderBand, drawSpaced, embedBandLogo, fonts, hasArabic, roundRect, spacedWidth, wrap,
-  type BandHead, type Fonts, type TFont,
+  CONTENT_BOTTOM, CONTENT_TOP, DEFAULT_THEME, H, MM, W,
+  drawFooterBand, drawHeaderBand, drawSpaced, embedBandLogo, fonts, hasArabic, makeTheme, roundRect, spacedWidth, wrap,
+  type BandHead, type Fonts, type TFont, type Theme,
 } from "./pdf";
+import { parseDesign, type DocDesign } from "./doc-design";
 import { formatCents } from "./money";
 import { formatDate } from "./dates";
 import { formatWeight, shipmentWeight } from "./weight";
@@ -29,7 +30,8 @@ type Company = {
   name: string; street: string; zip: string; city: string; owner: string; email: string; phone: string; website: string;
   bankName: string; iban: string; bic: string; vatId: string; taxNumber: string; logoFileId: string | null;
 };
-export type GoodsReceiptOpts = { t: Dict; lang: string; company: Company };
+/** design: Belegdesign (Farben, Kopf/Fuß wie alle Belege; Schriftgröße bleibt – interner Beleg) */
+export type GoodsReceiptOpts = { t: Dict; lang: string; company: Company; design?: DocDesign };
 
 const L = 20 * MM, R = W - 20 * MM, CW = R - L; // Ränder wie auf der Rechnung, Inhaltsbreite 170 mm
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
@@ -39,15 +41,15 @@ class Sheet {
   page!: PDFPage;
   pages: PDFPage[] = [];
   y = 0;
-  constructor(private doc: PDFDocument, public f: Fonts, private logo: { img: PDFImage; tile: boolean } | null, public rtl: boolean, private brandName: string, private head: BandHead) {}
+  constructor(private doc: PDFDocument, public f: Fonts, private logo: { img: PDFImage; tile: boolean } | null, public rtl: boolean, private brandName: string, private head: BandHead, public th: Theme = DEFAULT_THEME) {}
   /** Text, der `s` nach dem Anfangsrand beginnt */
-  start(t: string, s: number, y: number, size = 9, font: TFont = this.f.r, color: RGB = INK, spacing = 0) {
+  start(t: string, s: number, y: number, size = 9, font: TFont = this.f.r, color: RGB = this.th.ink, spacing = 0) {
     const w = spacedWidth(font, t, size, spacing);
     drawSpaced(this.page, font, t, { x: this.rtl ? R - s - w : L + s, y, size, color, spacing });
     return w;
   }
   /** Text, der `e` nach dem Anfangsrand endet (Zahlenspalten) */
-  end(t: string, e: number, y: number, size = 9, font: TFont = this.f.r, color: RGB = INK, spacing = 0) {
+  end(t: string, e: number, y: number, size = 9, font: TFont = this.f.r, color: RGB = this.th.ink, spacing = 0) {
     const w = spacedWidth(font, t, size, spacing);
     drawSpaced(this.page, font, t, { x: this.rtl ? R - e : L + e - w, y, size, color, spacing });
     return w;
@@ -57,14 +59,14 @@ class Sheet {
   rect(s1: number, s2: number, y: number, h: number, color: RGB) {
     this.page.drawRectangle({ x: this.rtl ? R - s2 : L + s1, y, width: s2 - s1, height: h, color });
   }
-  line(s1: number, s2: number, y: number, thickness = 0.4, color: RGB = LINE) {
+  line(s1: number, s2: number, y: number, thickness = 0.4, color: RGB = this.th.line) {
     const x = (s: number) => (this.rtl ? R - s : L + s);
     this.page.drawLine({ start: { x: x(s1), y }, end: { x: x(s2), y }, thickness, color });
   }
   newPage() {
     this.page = this.doc.addPage([W, H]);
     this.pages.push(this.page);
-    drawHeaderBand(this.page, this.f, this.logo, this.head, this.brandName, this.rtl);
+    drawHeaderBand(this.page, this.f, this.logo, this.head, this.brandName, this.rtl, this.th);
     this.y = CONTENT_TOP;
   }
   ensure(space: number, onBreak?: () => void) {
@@ -102,12 +104,13 @@ export async function renderGoodsReceipt(d: GoodsReceiptDoc, o: GoodsReceiptOpts
   doc.setLanguage(o.lang === "de" ? "de-DE" : o.lang);
   doc.setAuthor(o.company.name);
   doc.setCreator("Star Style");
-  const f = await fonts(doc, hasArabic(JSON.stringify(d) + JSON.stringify(r) + JSON.stringify(t.common) + JSON.stringify(t.pdf) + t.product.initialNote + JSON.stringify(o.company)));
-  const s = new Sheet(doc, f, await embedBandLogo(doc, o.company.logoFileId), rtl, o.company.name, { label: r.title, number: d.number, date: formatDate(d.date) });
+  const th = { ...makeTheme(o.design), k: 1 };
+  const f = await fonts(doc, hasArabic(JSON.stringify(d) + JSON.stringify(r) + JSON.stringify(t.common) + JSON.stringify(t.pdf) + t.product.initialNote + JSON.stringify(o.company) + th.d.common.headerNote + th.d.common.footerNote));
+  const s = new Sheet(doc, f, await embedBandLogo(doc, o.company.logoFileId, th), rtl, o.company.name, { label: r.title, number: d.number, date: formatDate(d.date) }, th);
   s.newPage();
 
   // Lieferant (wo auf der Rechnung die Anschrift steht)
-  s.start(s.caps(r.supplier), 0, H - 51 * MM, 6.5, f.s, BLUE, 1.1);
+  s.start(s.caps(r.supplier), 0, H - 51 * MM, 6.5, f.s, th.accentText, 1.1);
   const sup = d.supplier;
   const addr = sup ? [sup.name, sup.street, [sup.zip, sup.city].filter(Boolean).join(" "), countryLabel(sup.country, o.lang)].filter(Boolean) : [t.common.none];
   addr.forEach((l, i) => s.start(l, 0, H - 56.5 * MM - i * 4.9 * MM, i === 0 ? 10.5 : 10, i === 0 ? f.s : f.r));
@@ -122,7 +125,7 @@ export async function renderGoodsReceipt(d: GoodsReceiptDoc, o: GoodsReceiptOpts
     const vw = f.s.widthOfTextAtSize(v, 8.5);
     const labels = wrap(k, f.r, 8, Math.max(22 * MM, CW - I0 - vw - 3 * MM));
     s.end(v, CW, iy, 8.5, f.s);
-    labels.forEach((l, i) => s.start(l, I0, iy - i * 3.6 * MM, 8, f.r, SOFT));
+    labels.forEach((l, i) => s.start(l, I0, iy - i * 3.6 * MM, 8, f.r, th.soft));
     const bottom = iy - (labels.length - 1) * 3.6 * MM;
     s.line(I0, CW, bottom - 2.3 * MM);
     iy = bottom - 6.3 * MM;
@@ -130,10 +133,13 @@ export async function renderGoodsReceipt(d: GoodsReceiptDoc, o: GoodsReceiptOpts
 
   // Titel mit Logo-Linie, Hinweis (z. B. „Anfangsbestand beim Anlegen“)
   s.y = Math.min(H - 97 * MM, iy - 8 * MM, H - 56.5 * MM - addr.length * 4.9 * MM - 12 * MM);
-  s.start(title, 0, s.y, 21, f.b, BRAND);
-  s.rect(0, 13 * MM, s.y - 4.2 * MM, 1.1 * MM, BLUE);
-  s.rect(13 * MM, 18 * MM, s.y - 4.2 * MM, 1.1 * MM, RED);
-  s.y -= 12.5 * MM;
+  s.start(title, 0, s.y, th.d.titleSize, f.b, th.brandText);
+  const gap = (th.d.titleSize / 21) * 4.2 * MM;
+  if (th.d.stripe) {
+    s.rect(0, 13 * MM, s.y - gap, 1.1 * MM, th.blue);
+    s.rect(13 * MM, 18 * MM, s.y - gap, 1.1 * MM, th.red);
+  }
+  s.y -= (th.d.titleSize / 21) * 12.5 * MM;
   const intro = d.note === "Anfangsbestand beim Anlegen" ? t.product.initialNote : d.note;
   if (intro) {
     for (const l of wrap(intro, f.r, 9.5, CW)) { s.ensure(5 * MM); s.start(l, 0, s.y, 9.5); s.y -= 5 * MM; }
@@ -142,14 +148,16 @@ export async function renderGoodsReceipt(d: GoodsReceiptDoc, o: GoodsReceiptOpts
 
   // Tabelle: # · Artikel · Menge · EK / Stück · Betrag – Kopf Nachtblau mit runden Ecken, Zeilen mit feiner Linie
   const C = { pos: 2 * MM, desc: 11 * MM, descW: 83 * MM, qty: 112 * MM, cost: 140 * MM, total: CW - 2.5 * MM };
+  const filledHead = th.d.tableHead === "filled", headText = filledHead ? th.onBrand : th.brandText;
   const head = () => {
-    roundRect(s.page, L, s.y - 2.7 * MM, CW, 8.2 * MM, 1.6 * MM, BRAND);
+    if (filledHead) roundRect(s.page, L, s.y - 2.7 * MM, CW, 8.2 * MM, 1.6 * MM, th.brand);
+    else s.line(0, CW, s.y - 2.7 * MM, 1, th.brand);
     const hs = (txt: string, width: number) => Math.max(6, Math.min(7, (7 * width) / Math.max(1, spacedWidth(f.s, txt, 7, 0.6))));
-    s.start("#", C.pos, s.y, 7, f.s, WHITE);
-    s.start(s.caps(r.colItem), C.desc, s.y, hs(s.caps(r.colItem), C.descW), f.s, WHITE, 0.6);
-    s.end(s.caps(t.common.qty), C.qty, s.y, hs(s.caps(t.common.qty), 16 * MM), f.s, WHITE, 0.6);
-    s.end(s.caps(r.colCost), C.cost, s.y, hs(s.caps(r.colCost), 25 * MM), f.s, WHITE, 0.6);
-    s.end(s.caps(r.colAmount), C.total, s.y, hs(s.caps(r.colAmount), 25 * MM), f.s, WHITE, 0.6);
+    s.start("#", C.pos, s.y, 7, f.s, headText);
+    s.start(s.caps(r.colItem), C.desc, s.y, hs(s.caps(r.colItem), C.descW), f.s, headText, 0.6);
+    s.end(s.caps(t.common.qty), C.qty, s.y, hs(s.caps(t.common.qty), 16 * MM), f.s, headText, 0.6);
+    s.end(s.caps(r.colCost), C.cost, s.y, hs(s.caps(r.colCost), 25 * MM), f.s, headText, 0.6);
+    s.end(s.caps(r.colAmount), C.total, s.y, hs(s.caps(r.colAmount), 25 * MM), f.s, headText, 0.6);
     s.y -= 9 * MM;
   };
   head();
@@ -165,10 +173,10 @@ export async function renderGoodsReceipt(d: GoodsReceiptDoc, o: GoodsReceiptOpts
     rows.forEach((row) => { s.start(row, C.desc, y, 9, f.s); y -= 4.4 * MM; });
     sub.forEach((ps) => {
       let at = C.desc;
-      ps.forEach((p, pi) => { if (pi) at += s.start(SEP, at, y + 0.5 * MM, 7.5, f.r, SOFT); at += s.start(p, at, y + 0.5 * MM, 7.5, f.r, SOFT); });
+      ps.forEach((p, pi) => { if (pi) at += s.start(SEP, at, y + 0.5 * MM, 7.5, f.r, th.soft); at += s.start(p, at, y + 0.5 * MM, 7.5, f.r, th.soft); });
       y -= 3.8 * MM;
     });
-    s.start(String(i + 1), C.pos, s.y, 9, f.r, SOFT);
+    s.start(String(i + 1), C.pos, s.y, 9, f.r, th.soft);
     s.end(String(l.qty), C.qty, s.y, 9);
     s.end(formatCents(l.costCents), C.cost, s.y, 9);
     s.end(formatCents(l.qty * l.costCents), C.total, s.y, 9, f.b);
@@ -194,23 +202,24 @@ export async function renderGoodsReceipt(d: GoodsReceiptDoc, o: GoodsReceiptOpts
   const amount = formatCents(value);
   const aw = f.b.widthOfTextAtSize(amount, 12);
   const ls = Math.max(7.5, Math.min(10.5, (10.5 * (CW - 96 * MM - aw - 8 * MM)) / Math.max(1, f.b.widthOfTextAtSize(r.valueNet, 10.5))));
-  roundRect(s.page, rtl ? L : L + 92 * MM, s.y - 3.6 * MM, CW - 92 * MM, 10.5 * MM, 1.8 * MM, BLUE);
-  s.start(r.valueNet, 96 * MM, s.y, ls, f.b, WHITE);
-  s.end(amount, CW - 4 * MM, s.y - 0.3 * MM, 12, f.b, WHITE);
+  const filledTotal = th.d.totalBox === "filled", totalText = filledTotal ? th.onAccent : th.brandText;
+  roundRect(s.page, rtl ? L : L + 92 * MM, s.y - 3.6 * MM, CW - 92 * MM, 10.5 * MM, 1.8 * MM, th.blue, filledTotal ? undefined : 1.2);
+  s.start(r.valueNet, 96 * MM, s.y, ls, f.b, totalText);
+  s.end(amount, CW - 4 * MM, s.y - 0.3 * MM, 12, f.b, totalText);
   s.y -= 14 * MM;
 
   // Unterschrift beim Einlagern
   s.ensure(24 * MM);
   s.y -= 12 * MM;
-  s.line(0, 95 * MM, s.y, 0.6, SOFT);
-  s.start(r.checkedBy, 0, s.y - 4 * MM, 7.5, f.r, SOFT);
-  s.line(115 * MM, CW, s.y, 0.6, SOFT);
-  s.start(t.common.date, 115 * MM, s.y - 4 * MM, 7.5, f.r, SOFT);
+  s.line(0, 95 * MM, s.y, 0.6, th.soft);
+  s.start(r.checkedBy, 0, s.y - 4 * MM, 7.5, f.r, th.soft);
+  s.line(115 * MM, CW, s.y, 0.6, th.soft);
+  s.start(t.common.date, 115 * MM, s.y - 4 * MM, 7.5, f.r, th.soft);
 
   // Fußband mit allen Firmendaten (wie auf der Rechnung), Beschriftungen in der Sprache des Nutzers
   const p = t.pdf;
   s.pages.forEach((pg, i) => drawFooterBand(pg, f, o.company, i + 1, s.pages.length,
-    { thanks: p.thanks, contact: p.contact, bank: p.bank, tax: p.tax, owner: p.owner, phone: p.phone, page: r.page }, rtl));
+    { thanks: p.thanks, contact: p.contact, bank: p.bank, tax: p.tax, owner: p.owner, phone: p.phone, page: r.page }, rtl, th));
   return doc.save();
 }
 
@@ -240,5 +249,5 @@ export async function goodsReceiptPdf(id: string, t: Dict, lang: string): Promis
     supplier: head.supplier_id ? { name: String(head.name ?? ""), street: String(head.street ?? ""), zip: String(head.zip ?? ""), city: String(head.city ?? ""), country: String(head.country ?? "DE") } : null,
     lines,
   };
-  return { number: d.number, bytes: await renderGoodsReceipt(d, { t, lang, company }) };
+  return { number: d.number, bytes: await renderGoodsReceipt(d, { t, lang, company, design: parseDesign(cs?.docDesign ?? {}) }) };
 }

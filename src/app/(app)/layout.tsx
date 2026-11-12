@@ -38,6 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/ask", label: t.nav.ask, icon: "spark" },
     { href: "/shops", label: t.nav.shops, icon: "globe" },
     { href: "/suppliers", label: t.nav.suppliers, icon: "truck" },
+    { href: "/design", label: t.nav.design, icon: "palette" },
     { href: "/settings", label: t.nav.settings, icon: "settings" },
   ];
   // Nummern der ersten Schritte am Menü, solange noch nicht alles erledigt ist

@@ -111,6 +111,8 @@ export const companySettings = pgTable("company_settings", {
   fiscalYearStartMonth: integer("fiscal_year_start_month").notNull().default(1),
   accountOverrides: jsonb("account_overrides").$type<Record<string, number>>().notNull().default({}),
   advisorEmail: text("advisor_email").notNull().default(""),
+  // Belegdesign (Seite „Belegdesign“, src/lib/doc-design.ts): nur die Abweichungen vom Standard; {} = bisheriges Aussehen
+  docDesign: jsonb("doc_design").$type<Record<string, unknown>>().notNull().default({}),
   updatedAt: updatedAt(),
 });
 
