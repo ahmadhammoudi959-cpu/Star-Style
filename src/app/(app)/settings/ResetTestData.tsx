@@ -2,7 +2,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { resetTestDataAction } from "./actions";
+import { resetTestDataAction, startLiveAction } from "./actions";
 import { ErrorBox, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
@@ -12,10 +12,13 @@ const MAX_CUSTOMERS = 8; // Kunden werden alle gelöscht → ein paar Namen reic
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k: string) => String(v[k] ?? ""));
 
 /**
- * „System zurücksetzen und Echtbetrieb starten“ (Wunsch Inhaber 04.11.2026): alle Bewegungen und Vorgänge weg, alle Artikel bleiben.
+ * „Testdaten zurücksetzen“ (Wunsch Inhaber 04.11.2026, 12.11.2026 beliebig oft): alle Bewegungen und Vorgänge weg, alle Artikel
+ * bleiben, das System bleibt im Testbetrieb. Darunter eigener Knopf „Echtbetrieb starten“ (einmalig, danach ist beides weg).
  * Nur sichtbar, solange kein Echtbetrieb. Bestätigung: Häkchen + eigenes Fenster (Fokus auf „Abbrechen“).
  */
-export function ResetTestData({ t, p, fingerprint, syncOn, empty }: { t: Dict; p: ResetPreview; fingerprint: string; syncOn: boolean; empty: boolean }) {
+export function ResetTestData({ t, p, fingerprint, syncOn, syncShops, empty }: {
+  t: Dict; p: ResetPreview; fingerprint: string; syncOn: boolean; syncShops: string[]; empty: boolean;
+}) {
   const [state, action] = useActionState(resetTestDataAction, undefined);
   const [ask, setAsk] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -24,6 +27,10 @@ export function ResetTestData({ t, p, fingerprint, syncOn, empty }: { t: Dict; p
   const r = t.reset;
   const err = state?.error ? ((r as Record<string, unknown>)[state.error] as string | undefined) ?? t.common.error : undefined;
   const names = (l: string[], max = Infinity) => (l.length > max ? [...l.slice(0, max), "…"] : l).join(" · ");
+  // Hinweis nennt den Shop, in dem der Abgleich noch läuft (Inhaber 12.11.2026: „wenn ich den Abgleich ausschalte, muss der Knopf da sein“)
+  const shopNames = t.shop.names as Record<string, string>;
+  const still = syncShops.map((c) => shopNames[c] ?? c).join(", ");
+  const shopsHref = syncShops.length === 1 ? `/shops/${syncShops[0]}` : "/shops";
   const rows: { label: string; n: number; names?: string }[] = [
     { label: r.invoices, n: p.invoices }, { label: r.cancellations, n: p.cancellations }, { label: r.drafts, n: p.drafts },
     { label: r.offers, n: p.offers }, { label: r.payments, n: p.payments }, { label: r.receipts, n: p.receipts },
@@ -61,8 +68,8 @@ export function ResetTestData({ t, p, fingerprint, syncOn, empty }: { t: Dict; p
       <p className="mt-2 rounded-xl bg-brand-50/60 px-3 py-2 text-sm font-semibold text-brand-800 ring-1 ring-brand-100">{r.order}</p>
       {syncOn ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">
-          <span>{r.syncOn}</span>
-          <Link href="/shops" className="btn-ghost group shrink-0 px-3 py-1.5 text-xs"><Icon name="globe" className="h-4 w-4" />{r.toShops}</Link>
+          <span>{fill(r.syncOn, { s: still })}</span>
+          <Link href={shopsHref} className="btn-ghost group shrink-0 px-3 py-1.5 text-xs"><Icon name="globe" className="h-4 w-4" />{r.toShops}</Link>
         </div>
       ) : (
         <form ref={formRef} action={action} className="mt-4 space-y-3"
@@ -76,17 +83,57 @@ export function ResetTestData({ t, p, fingerprint, syncOn, empty }: { t: Dict; p
         </form>
       )}
       {ask && (
-        <ConfirmReset t={t} empty={empty} invoices={p.invoices + p.cancellations + p.drafts} customers={p.customers} units={p.units} products={p.productsKept}
+        <Confirm t={t} title={r.confirmTitle} yes={r.yes}
+          facts={[!empty && fill(r.factDelete, { i: p.invoices + p.cancellations + p.drafts, c: p.customers, u: p.units }), fill(r.factKeep, { n: p.productsKept }), r.factStay]}
           onNo={() => setAsk(false)}
           onYes={() => { sure.current = true; setAsk(false); formRef.current?.requestSubmit(); }} />
       )}
+      <GoLive t={t} testDocs={p.invoices + p.cancellations + p.drafts + p.offers + p.payments} invoices={p.invoices + p.cancellations + p.drafts} customers={p.customers} />
     </section>
   );
 }
 
+/** „Echtbetrieb starten“: einmalig, löscht nichts – danach sind alle Daten echt und Zurücksetzen ist für immer weg (GoBD) */
+function GoLive({ t, testDocs, invoices, customers }: { t: Dict; testDocs: number; invoices: number; customers: number }) {
+  const [state, action] = useActionState(startLiveAction, undefined);
+  const [ask, setAsk] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const sure = useRef(false);
+  useEffect(() => { sure.current = false; }, [state]);
+  const r = t.reset;
+  const err = state?.error ? ((r as Record<string, unknown>)[state.error] as string | undefined) ?? t.common.error : undefined;
+  const warn = testDocs > 0 ? fill(r.goLiveTestData, { i: invoices, c: customers }) : null;
+  return (
+    <div className="mt-5 border-t border-black/5 pt-5">
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Icon name="check" className="icon-pop h-5 w-5" /></span>
+        <div className="min-w-0">
+          <h3 className="text-lg font-bold">{r.goLiveTitle}</h3>
+          <p className="text-sm text-ink-soft">{r.goLiveHint}</p>
+        </div>
+      </div>
+      {warn && <p role="alert" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">{warn}</p>}
+      <form ref={formRef} action={action} className="mt-4 space-y-3"
+        onSubmit={(e) => { if (!sure.current) { e.preventDefault(); setAsk(true); } }}>
+        <label className="flex cursor-pointer items-start gap-2 text-sm font-semibold">
+          <input type="checkbox" name="confirm" required className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600" />{r.goLiveUnderstand}
+        </label>
+        <SubmitButton className="btn group bg-emerald-600 text-white shadow-card hover:bg-emerald-700"><Icon name="check" className="icon-pop h-4 w-4" />{r.goLiveButton}</SubmitButton>
+        <ErrorBox message={err} />
+      </form>
+      {ask && (
+        <Confirm t={t} title={r.goLiveConfirmTitle} yes={r.goLiveYes} tone="live" warn={warn}
+          facts={[r.goLiveFact1, r.goLiveFact2]}
+          onNo={() => setAsk(false)}
+          onYes={() => { sure.current = true; setAsk(false); formRef.current?.requestSubmit(); }} />
+      )}
+    </div>
+  );
+}
+
 /** Letzte Rückfrage als eigenes Fenster (nicht das Browser-Fenster): klar, in der Sprache des Nutzers, Enter = Abbrechen */
-function ConfirmReset({ t, empty, invoices, customers, units, products, onYes, onNo }: {
-  t: Dict; empty: boolean; invoices: number; customers: number; units: number; products: number; onYes: () => void; onNo: () => void;
+function Confirm({ t, title, yes, facts: list, warn, tone = "reset", onYes, onNo }: {
+  t: Dict; title: string; yes: string; facts: (string | false | null)[]; warn?: string | null; tone?: "reset" | "live"; onYes: () => void; onNo: () => void;
 }) {
   const r = t.reset;
   const noRef = useRef(onNo);
@@ -100,29 +147,27 @@ function ConfirmReset({ t, empty, invoices, customers, units, products, onYes, o
     cancel.current?.focus({ preventScroll: true });
     return () => { document.body.style.overflow = prev; document.removeEventListener("keydown", esc); };
   }, []);
-  const facts = [
-    !empty && fill(r.factDelete, { i: invoices, c: customers, u: units }),
-    fill(r.factKeep, { n: products }),
-    r.factLive,
-  ].filter(Boolean) as string[];
+  const facts = list.filter(Boolean) as string[];
+  const live = tone === "live";
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy-900/50 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="reset-ask-title"
       onMouseDown={(e) => { if (e.target === e.currentTarget) noRef.current(); }}>
       <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 shadow-lift animate-rise sm:rounded-2xl">
         <div className="mb-3 flex items-start gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-red-50 text-red-600"><Icon name="alert" className="icon-pop h-6 w-6" /></span>
+          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${live ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}><Icon name="alert" className="icon-pop h-6 w-6" /></span>
           <div className="min-w-0">
-            <h2 id="reset-ask-title" className="text-lg font-bold leading-snug">{r.confirmTitle}</h2>
+            <h2 id="reset-ask-title" className="text-lg font-bold leading-snug">{title}</h2>
             <p className="mt-1 text-sm text-ink-soft">{r.confirm}</p>
           </div>
         </div>
+        {warn && <p role="alert" className="mb-1.5 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-200"><Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />{warn}</p>}
         <ul className="space-y-1.5 text-sm">
           {facts.map((f) => <li key={f} className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2"><Icon name="check" className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />{f}</li>)}
         </ul>
         <div className="mt-4 flex flex-col gap-2">
-          <button type="button" onClick={onYes} className="btn group w-full bg-red-600 py-3 text-base text-white shadow-card hover:bg-red-700">
-            <Icon name="history" className="h-5 w-5" />{r.yes}
+          <button type="button" onClick={onYes} className={`btn group w-full py-3 text-base text-white shadow-card ${live ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}`}>
+            <Icon name={live ? "check" : "history"} className="h-5 w-5" />{yes}
           </button>
           <button ref={cancel} type="button" onClick={onNo} className="btn-ghost w-full">{t.common.cancel}</button>
         </div>

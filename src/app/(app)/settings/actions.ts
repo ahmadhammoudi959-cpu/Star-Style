@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { audit } from "@/lib/stock";
 import { storeUpload } from "@/lib/files";
-import { ResetError, resetTestData } from "@/lib/test-reset";
+import { ResetError, resetTestData, startLive } from "@/lib/test-reset";
 
 export type SettingsState = { error?: string; ok?: boolean } | undefined;
 const str = (max = 200) => z.string().trim().max(max).default("");
@@ -62,7 +62,7 @@ export async function saveAccountsAction(_: SettingsState, fd: FormData): Promis
   return { ok: true };
 }
 
-/** „System zurücksetzen und Echtbetrieb starten“ – einmalig (alle Artikel bleiben; danach Echtbetrieb, siehe lib/test-reset.ts) */
+/** „Testdaten zurücksetzen“ – beliebig oft im Testbetrieb (alle Artikel bleiben, siehe lib/test-reset.ts) */
 export async function resetTestDataAction(_: SettingsState, fd: FormData): Promise<SettingsState> {
   const session = await requireSession();
   if (fd.get("confirm") !== "on") return { error: "needConfirm" };
@@ -77,4 +77,19 @@ export async function resetTestDataAction(_: SettingsState, fd: FormData): Promi
   }
   revalidatePath("/", "layout"); // alle Listen, Dashboard, „Erste Schritte“
   redirect(`/settings?reset=${outcome}`);
+}
+
+/** „Echtbetrieb starten“ – einmalig, löscht nichts; danach kein Zurücksetzen mehr (siehe lib/test-reset.ts) */
+export async function startLiveAction(_: SettingsState, fd: FormData): Promise<SettingsState> {
+  const session = await requireSession();
+  if (fd.get("confirm") !== "on") return { error: "needConfirm" };
+  let outcome = "1";
+  try {
+    await startLive(session.uid);
+  } catch (e) {
+    if (!(e instanceof ResetError)) { console.error(e); return { error: "error" }; }
+    outcome = e.code;
+  }
+  revalidatePath("/", "layout"); // Zeichen „Testbetrieb“ → „Echtbetrieb seit …“
+  redirect(`/settings?live=${outcome}`);
 }

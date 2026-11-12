@@ -8,7 +8,8 @@
  * die Dateien dieser Belege und Lieferanten, die nur in diesen Vorgängen vorkommen und bei keinem Artikel stehen.
  * Bleiben: ALLE Artikel so, wie sie sind (Namen, Preise, Größen/Farben, Barcodes, Fotos, Shop-Galerien, Zuordnungen zu den
  * Shops, Kategorien), die Lieferanten der Artikel, Shops, Einstellungen, Benutzer, Protokolle.
- * Zum Schluss company_settings.live_since = jetzt: ab da Echtbetrieb, nie mehr zurücksetzen (Anzeige „Echtbetrieb seit …“).
+ * Das System bleibt danach im Testbetrieb (beliebig oft wiederholbar, Wunsch Inhaber 12.11.2026). Den Echtbetrieb startet ein
+ * eigener Knopf (GO_LIVE_SQL: company_settings.live_since = jetzt) – ab da nie mehr zurücksetzen (Anzeige „Echtbetrieb seit …“).
  * Shop-Bestellungen werden erst ab dem nächsten Einschalten des Abgleichs übernommen.
  */
 
@@ -28,6 +29,7 @@ export const STATUS_SQL = `
   select
     (exists (select 1 from company_settings where live_since is not null) or exists (select 1 from period_locks)) as live,
     exists (select 1 from shops where active) as sync_on,
+    coalesce((select string_agg(channel::text, ',' order by channel::text) from shops where active), '') as sync_shops,
     (select max(live_since) from company_settings) as live_since`;
 
 /** Vorschau: was gelöscht würde (Zahlen + Namen + Prüfsumme der IDs). Auch in der Transaktion zum Vergleich mit dem, was der Nutzer gesehen hat. */
@@ -104,9 +106,10 @@ export const RESET_STATEMENTS: string[] = [
      and not exists (select 1 from shop_media where file_id = f.id)
      and not exists (select 1 from company_settings where logo_file_id = f.id)
      and not exists (select 1 from advisor_exports where file_id = f.id)`,
-  // ab jetzt Echtbetrieb – kein Zurücksetzen mehr
-  `update company_settings set live_since = now()`,
 ];
+
+/** „Echtbetrieb starten“ (eigener Knopf, einmalig): ab da kein Zurücksetzen mehr */
+export const GO_LIVE_SQL = `update company_settings set live_since = now() where live_since is null`;
 
 export type ResetPreview = {
   invoices: number; cancellations: number; drafts: number; offers: number; payments: number; receipts: number;
@@ -134,7 +137,7 @@ export function fingerprint(p: ResetPreview): string {
     p.sequences, p.exports, p.suppliers.length, p.numbers.length, p.digest].join(".");
 }
 
-/** Nichts zu löschen (dann startet der Knopf nur den Echtbetrieb) */
+/** Nichts zu löschen (der Knopf bleibt trotzdem da – Zurücksetzen ändert dann nichts) */
 export function isEmpty(p: ResetPreview): boolean {
   return !(p.invoices || p.cancellations || p.drafts || p.offers || p.payments || p.receipts || p.writeOffs || p.expenses
     || p.customers || p.stocked || p.sequences || p.exports || p.suppliers.length);

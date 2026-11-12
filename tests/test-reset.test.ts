@@ -39,7 +39,7 @@ describe("System zurücksetzen – Vorschau", () => {
 });
 
 // ───────────── System zurücksetzen (Datenbank) ─────────────
-// LÖSCHT ALLE BELEGE UND KUNDEN der Datenbank und setzt sie auf „Echtbetrieb“. Nur mit eigener, frisch migrierter Datenbank und nur diese Datei:
+// LÖSCHT ALLE BELEGE UND KUNDEN der Datenbank und setzt sie zum Schluss auf „Echtbetrieb“. Nur mit eigener, frisch migrierter Datenbank und nur diese Datei:
 //   RESET_TEST_DB=1 DATABASE_URL=postgres://…/starstyle_reset npx vitest run tests/test-reset.test.ts
 const run = process.env.DATABASE_URL && process.env.RESET_TEST_DB === "1" ? describe : describe.skip;
 run("System zurücksetzen (Datenbank)", async () => {
@@ -47,7 +47,7 @@ run("System zurücksetzen (Datenbank)", async () => {
   const { eq } = await import("drizzle-orm");
   const { receiveGoods, bookWriteOff } = await import("../src/lib/stock");
   const { nextNumber } = await import("../src/lib/numbering");
-  const { liveStatus, resetStatus, resetTestData, ResetError } = await import("../src/lib/test-reset");
+  const { liveStatus, resetStatus, resetTestData, startLive, ResetError } = await import("../src/lib/test-reset");
   const tag = String(Date.now()).slice(-8);
 
   async function product(sku: string, o: { linked?: boolean; supplierId?: string } = {}) {
@@ -80,7 +80,7 @@ run("System zurücksetzen (Datenbank)", async () => {
     expect((await resetStatus()).block).toBe(null);
   });
 
-  it("löscht alle Bewegungen und Vorgänge, ALLE Artikel bleiben (Bestand 0); danach Echtbetrieb – nie wieder", async () => {
+  it("löscht alle Bewegungen und Vorgänge, ALLE Artikel bleiben (Bestand 0); bleibt Testbetrieb, beliebig oft; „Echtbetrieb starten“ sperrt für immer", async () => {
     await db.update(schema.shops).set({ active: false });
     await db.insert(schema.companySettings).values({ id: "company" }).onConflictDoNothing();
     const [docSup] = await db.insert(schema.suppliers).values({ name: `Nur-Beleg-Lieferant ${tag}` }).returning();
@@ -132,7 +132,22 @@ run("System zurücksetzen (Datenbank)", async () => {
     const [c] = await db.insert(schema.customers).values({ name: `Erster echter Kunde ${tag}` }).returning();
     expect(c.number).toBe(1);
 
-    // Echtbetrieb: Zeichen mit Datum, Knopf weg, ein zweites Zurücksetzen geht nicht
+    // bleibt Testbetrieb (Wunsch Inhaber 12.11.2026: mehrmals testen) – ein zweites Zurücksetzen geht
+    expect(await liveStatus()).toEqual({ live: false, since: null });
+    await db.insert(schema.customers).values({ name: `Zweite Testrunde ${tag}` });
+    const again = await resetStatus();
+    expect(again.block).toBe(null);
+    expect(again.preview.customers).toBe(2);
+    await resetTestData(again.fingerprint, "u-test");
+    expect((await db.select().from(schema.customers)).length).toBe(0);
+    expect(await liveStatus()).toEqual({ live: false, since: null });
+
+    // „Echtbetrieb starten“: löscht nichts, Zeichen mit Datum, Zurücksetzen weg – auch ein zweites Starten nicht
+    const [kept] = await db.insert(schema.customers).values({ name: `Echter Kunde ${tag}` }).returning();
+    await startLive("u-test");
+    expect(await db.query.customers.findFirst({ where: eq(schema.customers.id, kept.id) })).toBeDefined();
+    expect((await db.select().from(schema.auditLog).where(eq(schema.auditLog.action, "go-live"))).length).toBe(1);
+    await expect(startLive("u-test")).rejects.toMatchObject({ code: "resetLive" });
     const live = await liveStatus();
     expect(live.live).toBe(true);
     expect(Math.abs(live.since!.getTime() - Date.now())).toBeLessThan(60_000);
