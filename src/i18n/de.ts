@@ -164,6 +164,8 @@ const de = {
     items: "Positionen", value: "Wert",
     colItem: "Artikel", colCost: "EK / Stück", colAmount: "Betrag", qtyTotal: "Gesamtmenge (Positionen: {n})", valueNet: "Warenwert netto", checkedBy: "Ware geprüft und eingelagert von (Name, Unterschrift)", page: "Seite {n} von {m}",
   },
+  // Fußband der PDF-Belege (Wareneingang in der Sprache des Nutzers)
+  pdf: { thanks: "Vielen Dank für Ihr Vertrauen.", contact: "Kontakt", bank: "Bankverbindung", tax: "Steuern", owner: "Inhaber", phone: "Tel." },
   stock: {
     clear: "Filter löschen", noLow: "Kein Artikel hat wenig Bestand. Damit ein Artikel hier erscheint, beim Artikel einen „Mindestbestand“ eintragen.",
     title: "Lager", movements: "Bewegungen", value: "Lagerwert (EK)", low: "unter Mindestbestand", filterLow: "Nur niedriger Bestand",

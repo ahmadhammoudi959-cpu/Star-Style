@@ -165,6 +165,8 @@ const ar: Dict = {
     items: "البنود", value: "القيمة",
     colItem: "المنتج", colCost: "سعر الشراء", colAmount: "المبلغ", qtyTotal: "الكمية الكلية (عدد البنود: {n})", valueNet: "قيمة البضاعة (بدون ضريبة)", checkedBy: "استلم البضاعة وفحصها وخزّنها (الاسم والتوقيع)", page: "صفحة {n} من {m}",
   },
+  // Fußband der PDF-Belege (Wareneingang in der Sprache des Nutzers)
+  pdf: { thanks: "شكراً لثقتكم.", contact: "التواصل", bank: "الحساب البنكي", tax: "الضرائب", owner: "المالك", phone: "هاتف" },
   stock: {
     clear: "امسح الفلتر", noLow: "ما في منتجات كميتها قليلة. لحتى يبيّن المنتج هون، اكتب رقم بخانة «نبّهني إذا قلّت عن» بصفحة المنتج.",
     title: "المخزون", movements: "الحركات", value: "قيمة المخزون بسعر الشراء", low: "تحت الحد الأدنى", filterLow: "بس الكميات القليلة",

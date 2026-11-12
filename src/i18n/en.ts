@@ -165,6 +165,8 @@ const en: Dict = {
     items: "Lines", value: "Value",
     colItem: "Item", colCost: "Unit cost", colAmount: "Amount", qtyTotal: "Total quantity (lines: {n})", valueNet: "Goods value (net)", checkedBy: "Goods checked and stored by (name, signature)", page: "Page {n} of {m}",
   },
+  // Fußband der PDF-Belege (Wareneingang in der Sprache des Nutzers)
+  pdf: { thanks: "Thank you for your trust.", contact: "Contact", bank: "Bank details", tax: "Tax", owner: "Owner", phone: "Phone" },
   stock: {
     clear: "Clear filter", noLow: "No product is running low. To see a product here, set “Warn below” on the product.",
     title: "Stock", movements: "Movements", value: "Stock value (cost)", low: "below minimum", filterLow: "Low stock only",

@@ -418,6 +418,8 @@ const ku: Dict = {
     value: "Nirx",
     colItem: "Berhem", colCost: "Bihayê kirînê", colAmount: "Tevahî", qtyTotal: "Hejmara giştî (rêz: {n})", valueNet: "Nirxa malan (net, bê bac)", checkedBy: "Mal hate kontrolkirin û li embarê hate danîn (nav û îmze)", page: "Rûpel {n} ji {m}",
   },
+  // Fußband der PDF-Belege (Wareneingang in der Sprache des Nutzers)
+  pdf: { thanks: "Spas ji bo baweriya we.", contact: "Têkilî", bank: "Hesabê bankê", tax: "Bac", owner: "Xwedî", phone: "Tel." },
   stock: {
     clear: "Parzûnê rake",
     noLow: "Stoka tu berhemekê kêm nîne. Da ku berhemek li vir xuya bibe, li rûpela berhemê “Stoka herî kêm” binivîse.",

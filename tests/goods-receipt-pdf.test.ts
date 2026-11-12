@@ -10,7 +10,7 @@ import { db, schema } from "../src/db";
 import { goodsReceiptPdf, renderGoodsReceipt, type GoodsReceiptDoc } from "../src/lib/goods-receipt-pdf";
 
 const OUT = process.env.PDF_OUT;
-const company = { name: "Star-Style", street: "Provinzialstr. 45", zip: "45711", city: "Datteln", email: "info@example.com", phone: "", website: "star-style.example", logoFileId: null };
+const company = { name: "Star-Style", street: "Provinzialstr. 45", zip: "45711", city: "Datteln", owner: "Max Muster", email: "info@example.com", phone: "+49 170 0000000", website: "star-style.example", bankName: "Musterbank", iban: "DE89370400440532013000", bic: "COBADEFFXXX", vatId: "DE123456789", taxNumber: "340/0000/0000", logoFileId: null };
 const sample: GoodsReceiptDoc = {
   number: "WE-2026-0007", date: "2026-11-05", supplierInvoiceNo: "56548", note: "",
   supplier: { name: "Sh – Qualitäts-Design GmbH", street: "Musterweg 12", zip: "10115", city: "Berlin", country: "DE" },

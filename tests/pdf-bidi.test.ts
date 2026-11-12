@@ -9,4 +9,7 @@ it("Arabisch und gemischte Zeilen", () => {
   expect(v("شارع الملك 12")).toBe("12 |[شارع الملك]");
   expect(v("شامبو احترافي 250 ml – كبير / أحمر")).toBe("[أحمر]| / |[كبير]| – 250 ml |[شامبو احترافي]");
   expect(v("صالون (فرع 2)")).toBe("(2 |[فرع]|) |[صالون]");
+  // Vorzeichen bleibt an der Zahl (Telefon im Fußband, Beträge)
+  expect(v("هاتف +49 178 5571725")).toBe("+49 178 5571725 |[هاتف]");
+  expect(v("الرصيد -400,00 €")).toBe("€ -400,00 |[الرصيد]");
 });
