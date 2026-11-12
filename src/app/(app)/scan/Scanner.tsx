@@ -6,7 +6,7 @@ import { Thumb } from "@/components/Thumb";
 import { formatCents, grossFromNet } from "@/lib/money";
 import { formatDate, todayIso } from "@/lib/dates";
 import { EXPIRY_BADGE, expiryState } from "@/lib/expiry";
-import { checkDigitOk } from "@/lib/barcode";
+import { checkDigitOk, prepareScanFrame, scanFrameMode } from "@/lib/barcode";
 import { formatWeight } from "@/lib/weight";
 import type { ScanResult, ScanVariant } from "@/lib/scan";
 import { scanLookupAction } from "./actions";
@@ -62,13 +62,16 @@ function feedback() {
  * Barcode-Scanner (Wunsch Inhaber 03.11.2026): Kamera des Handys im Browser, Barcode der Packung → Bestand im Lager, verfügbar,
  * Preise, Verkäufe, MHD, Shops. Nur lesen. Gelesen wird nur der mittlere Bereich (Rahmen), damit nicht die Nachbarpackung trifft.
  */
-export function Scanner({ t, intl }: { t: Dict; intl: string }) {
+/** view = Artikel/Lager öffnen, create = neuen Artikel anlegen (Rechte der Person; der Scanner selbst ist für alle) */
+type ScanLinks = { view: boolean; create: boolean };
+export function Scanner({ t, intl, links = { view: true, create: true } }: { t: Dict; intl: string; links?: ScanLinks }) {
   const S = t.scan;
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<Detector | null>(null);
   const timerRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const frameRef = useRef(0); // welches Bild: unverändert / umgedreht / farbverstärkt (weißer Barcode auf rotem Karton)
   // nach „Nächsten Artikel scannen“ die gerade gezeigte Packung kurz ignorieren (sie ist meist noch im Bild)
   const lastRef = useRef<{ code: string; until: number }>({ code: "", until: 0 });
   const [phase, setPhase] = useState<Phase>("idle");
@@ -112,6 +115,16 @@ export function Scanner({ t, intl }: { t: Dict; intl: string }) {
       const ctx = c.getContext("2d", { willReadFrequently: true });
       if (ctx) {
         ctx.drawImage(video, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, cw, ch);
+        // jedes zweite Bild unverändert; dazwischen umgedreht (helle Striche auf farbigem Karton) bzw. farbverstärkt –
+        // der eingebaute Leser von Android dreht nicht selbst um (Wunsch Inhaber 12.11.2026: roter Karton wurde nicht gelesen)
+        const mode = scanFrameMode(frameRef.current++);
+        if (mode !== "raw") {
+          try {
+            const img = ctx.getImageData(0, 0, cw, ch);
+            prepareScanFrame(img.data, mode === "inverted");
+            ctx.putImageData(img, 0, 0);
+          } catch { /* Bild bleibt unverändert */ }
+        }
         try {
           const last = lastRef.current;
           const hit = (await det.detect(c)).map((x) => x.rawValue.trim())
@@ -227,7 +240,7 @@ export function Scanner({ t, intl }: { t: Dict; intl: string }) {
         </div>
       )}
 
-      {phase === "result" && result && <ResultCard t={t} intl={intl} r={result} onAgain={again} />}
+      {phase === "result" && result && <ResultCard t={t} intl={intl} r={result} onAgain={again} links={links} />}
 
       {/* Nummer eintippen – wenn der Barcode kaputt ist oder keine Kamera da ist */}
       <form onSubmit={submitManual} className="card animate-rise p-4">
@@ -275,7 +288,7 @@ const label = (v: ScanVariant) => [v.size, v.color].filter(Boolean).join(" · ")
 const matched = (r: Extract<ScanResult, { found: true }>) =>
   r.variants.find((x) => x.id === r.matchedVariantId) ?? (r.variants.length === 1 ? r.variants[0] : null);
 
-function ResultCard({ t, intl, r, onAgain }: { t: Dict; intl: string; r: ScanResult; onAgain: () => void }) {
+function ResultCard({ t, intl, r, onAgain, links }: { t: Dict; intl: string; r: ScanResult; onAgain: () => void; links: ScanLinks }) {
   const S = t.scan;
   if (!r.found) {
     return (
@@ -288,10 +301,10 @@ function ResultCard({ t, intl, r, onAgain }: { t: Dict; intl: string; r: ScanRes
           </div>
         </div>
         <button type="button" onClick={onAgain} className="btn-primary group w-full py-3 text-base"><Icon name="scan" className="h-5 w-5" />{S.again}</button>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Link href={`/products/new?barcode=${encodeURIComponent(r.code)}`} className="btn-ghost group"><Icon name="plus" className="h-4 w-4" />{S.newProduct}</Link>
-          <Link href={`/products?q=${encodeURIComponent(r.code)}`} className="btn-ghost group"><Icon name="search" className="h-4 w-4" />{S.searchName}</Link>
-        </div>
+        {(links.create || links.view) && <div className="grid gap-2 sm:grid-cols-2">
+          {links.create && <Link href={`/products/new?barcode=${encodeURIComponent(r.code)}`} className="btn-ghost group"><Icon name="plus" className="h-4 w-4" />{S.newProduct}</Link>}
+          {links.view && <Link href={`/products?q=${encodeURIComponent(r.code)}`} className="btn-ghost group"><Icon name="search" className="h-4 w-4" />{S.searchName}</Link>}
+        </div>}
       </section>
     );
   }
@@ -394,10 +407,10 @@ function ResultCard({ t, intl, r, onAgain }: { t: Dict; intl: string; r: ScanRes
 
       <div className="space-y-2 border-t border-black/5 bg-brand-50/40 p-4">
         <button type="button" onClick={onAgain} className="btn-primary group w-full py-3 text-base"><Icon name="scan" className="h-5 w-5" />{S.again}</button>
-        <div className="grid grid-cols-2 gap-2">
+        {links.view && <div className="grid grid-cols-2 gap-2">
           {v && <Link href={`/stock/${v.id}`} className="btn-ghost group"><Icon name="layers" className="h-4 w-4" />{S.openStock}</Link>}
           <Link href={`/products/${p.id}`} className={`btn-ghost group ${v ? "" : "col-span-2"}`}><Icon name="eye" className="h-4 w-4" />{S.openProduct}</Link>
-        </div>
+        </div>}
       </div>
     </section>
   );
