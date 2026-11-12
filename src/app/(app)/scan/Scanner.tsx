@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Thumb } from "@/components/Thumb";
 import { formatCents, grossFromNet } from "@/lib/money";
-import { formatDate } from "@/lib/dates";
+import { formatDate, todayIso } from "@/lib/dates";
+import { EXPIRY_BADGE, expiryState } from "@/lib/expiry";
 import { checkDigitOk } from "@/lib/barcode";
 import { formatWeight } from "@/lib/weight";
 import type { ScanResult, ScanVariant } from "@/lib/scan";
@@ -371,7 +372,7 @@ function ResultCard({ t, intl, r, onAgain }: { t: Dict; intl: string; r: ScanRes
         <Fact label={S.sold30}><span className="num font-bold">{v ? v.sold30 : total.sold30}</span></Fact>
         <Fact label={S.sold90}><span className="num font-bold">{v ? v.sold90 : total.sold90}</span></Fact>
         <Fact label={S.lastSale}>{lastSale ? <span className="num font-semibold">{formatDate(lastSale, intl)}</span> : <span className="text-ink-soft">{S.neverSold}</span>}</Fact>
-        {expiry && <Fact label={S.expiry}><span className="num font-semibold">{formatDate(expiry.nextExpiry, intl)}</span> <span className="text-xs text-ink-soft">({fill(S.pieces, { n: expiry.nextExpiryQty })})</span></Fact>}
+        {expiry && <ExpiryFact t={t} intl={intl} date={expiry.nextExpiry!} qty={expiry.nextExpiryQty} />}
         {priceOf.weightGrams ? <Fact label={S.weight}><span className="num font-semibold">{formatWeight(priceOf.weightGrams)}</span></Fact> : null}
         {p.supplier && <Fact label={S.supplier}><span className="font-semibold [overflow-wrap:anywhere]">{p.supplier}</span></Fact>}
       </dl>
@@ -399,6 +400,18 @@ function ResultCard({ t, intl, r, onAgain }: { t: Dict; intl: string; r: ScanRes
         </div>
       </div>
     </section>
+  );
+}
+
+/** nächstes MHD: rot = schon abgelaufen, orange = läuft bald ab (gleiche Regeln wie Startseite und Lager) */
+function ExpiryFact({ t, intl, date, qty }: { t: Dict; intl: string; date: string; qty: number }) {
+  const st = expiryState(todayIso(), date); // erst nach dem Scannen im Browser gezeigt → kein Unterschied zum Server-HTML
+  const tone = st === "expired" ? "text-red-700" : st === "soon" ? "text-orange-700" : "";
+  return (
+    <Fact label={t.scan.expiry}>
+      <span className={`num font-semibold ${tone}`}>{formatDate(date, intl)}</span> <span className="text-xs text-ink-soft">({fill(t.scan.pieces, { n: qty })})</span>
+      {st !== "ok" && <span className="mt-0.5 block"><span className={`badge ${EXPIRY_BADGE[st]}`}>{st === "expired" ? t.home.expired : t.home.expiring}</span></span>}
+    </Fact>
   );
 }
 

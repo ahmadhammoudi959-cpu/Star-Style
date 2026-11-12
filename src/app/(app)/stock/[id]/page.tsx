@@ -10,6 +10,7 @@ import { formatCents } from "@/lib/money";
 import { formatWeight } from "@/lib/weight";
 import { daysBetween, formatDate, todayIso } from "@/lib/dates";
 import { variantLabel } from "@/lib/queries";
+import { EXPIRY_BADGE, expiryState } from "@/lib/expiry";
 import { AdjustForm } from "./AdjustForm";
 
 export default async function VariantStock({ params }: { params: Promise<{ id: string }> }) {
@@ -81,7 +82,7 @@ export default async function VariantStock({ params }: { params: Promise<{ id: s
                   return (
                     <tr key={b.id}>
                       <td><bdi dir="ltr">{b.batchNo || t.common.none}</bdi></td>
-                      <td>{b.expiryDate ? <span className={`badge ${d! < 0 ? "bg-red-100 text-red-800" : d! <= 60 ? "bg-orange-100 text-orange-800" : "bg-brand-50 text-brand-700"}`}>
+                      <td>{b.expiryDate ? <span className={`badge ${EXPIRY_BADGE[expiryState(today, b.expiryDate)]}`}>
                         {formatDate(b.expiryDate, intl)} · {d! < 0 ? t.stock.expired : d === 0 ? t.stock.expiresToday : fill(t.stock.expiresIn, { d: d! })}</span> : t.common.none}</td>
                       <td className="num text-end font-semibold">{b.qtyLeft}</td>
                       <td className="num text-end">{formatCents(b.unitCostCents, intl)}</td>

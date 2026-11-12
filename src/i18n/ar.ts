@@ -24,7 +24,7 @@ const ar: Dict = {
     receive: "إدخال بضاعة", receiveHint: "تسجيل شحنة جديدة",
     loss: "تسجيل تالف", lossHint: "كسر، انتهاء صلاحية، ضياع", expense: "تسجيل مصروف", expenseHint: "فاتورة، إعلانات، إيجار",
     reports: "التقارير", reportsHint: "المبيعات والأرباح",
-    stockValue: "قيمة المخزون", lowStock: "كمية قليلة", expiring: "قرّبت تنتهي صلاحيته", articles: "منتج",
+    stockValue: "قيمة المخزون", lowStock: "كمية قليلة", expiring: "قرّبت تنتهي صلاحيته", expired: "انتهت صلاحيته", articles: "منتج",
     alerts: "تنبيهات", noAlerts: "كل شي تمام، ما في تنبيهات.", comingSoon: "بالمرحلة التانية",
     scan: "سكان باركود", scanHint: "الكمية والسعر على طول",
     pendingTitle: "منتجات مو بالمتجر لسا", pendingText: "{shop}: {n} منتج ناقصين هناك ({r} جاهزين) – بدك ترفعهن؟", pendingAction: "شوفهن وارفعهن",
@@ -170,6 +170,9 @@ const ar: Dict = {
   stock: {
     clear: "امسح الفلتر", noLow: "ما في منتجات كميتها قليلة. لحتى يبيّن المنتج هون، اكتب رقم بخانة «نبّهني إذا قلّت عن» بصفحة المنتج.",
     title: "المخزون", movements: "الحركات", value: "قيمة المخزون بسعر الشراء", low: "تحت الحد الأدنى", filterLow: "بس الكميات القليلة",
+    filterExpiry: "الصلاحية", expAll: "الكل", expSoon: "قرّبت تنتهي (خلال {d} يوم)", expExpired: "انتهت صلاحيته",
+    noSoon: "ما في منتج بتنتهي صلاحيته خلال {d} يوم.", noExpired: "ما في منتج انتهت صلاحيته. ✓",
+    expiredQty: "منتهية: {n} قطعة", soonQty: "قرّبت تنتهي: {n} قطعة",
     type: { RECEIPT: "إدخال", SALE: "بيع", RETURN: "إرجاع", WRITE_OFF: "تالف", ADJUSTMENT: "جرد", CANCEL: "إلغاء" },
     adjust: "تصحيح بالجرد", counted: "العدد الحقيقي", adjustReason: "السبب", adjusted: "تم تصحيح الكمية",
     avgCost: "متوسط سعر الشراء", batches: "الدفعات", expiresIn: "بتنتهي بعد {d} يوم", expiresToday: "بتنتهي اليوم", expired: "منتهية",

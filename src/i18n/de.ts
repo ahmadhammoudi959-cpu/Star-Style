@@ -22,7 +22,7 @@ const de = {
     receive: "Ware eingeben", receiveHint: "Neue Lieferung buchen",
     loss: "Verlust melden", lossHint: "Bruch, Ablauf, Schwund", expense: "Ausgabe erfassen", expenseHint: "Rechnung, Werbung, Miete",
     reports: "Berichte", reportsHint: "Umsatz & Gewinn",
-    stockValue: "Lagerwert", lowStock: "Niedriger Bestand", expiring: "Läuft bald ab", articles: "Artikel",
+    stockValue: "Lagerwert", lowStock: "Niedriger Bestand", expiring: "Läuft bald ab", expired: "Abgelaufen", articles: "Artikel",
     alerts: "Hinweise", noAlerts: "Alles in Ordnung – keine Hinweise.", comingSoon: "Folgt in Stufe 2",
     scan: "Barcode scannen", scanHint: "Bestand & Preis sofort",
     pendingTitle: "Noch nicht im Shop", pendingText: "{shop}: {n} Artikel fehlen dort noch ({r} sofort bereit) – hochladen?", pendingAction: "Ansehen und hochladen",
@@ -169,6 +169,9 @@ const de = {
   stock: {
     clear: "Filter löschen", noLow: "Kein Artikel hat wenig Bestand. Damit ein Artikel hier erscheint, beim Artikel einen „Mindestbestand“ eintragen.",
     title: "Lager", movements: "Bewegungen", value: "Lagerwert (EK)", low: "unter Mindestbestand", filterLow: "Nur niedriger Bestand",
+    filterExpiry: "MHD", expAll: "Alle", expSoon: "Läuft bald ab ({d} Tage)", expExpired: "Abgelaufen",
+    noSoon: "Kein Artikel läuft in den nächsten {d} Tagen ab.", noExpired: "Kein Artikel ist abgelaufen. ✓",
+    expiredQty: "abgelaufen: {n} Stück", soonQty: "läuft bald ab: {n} Stück",
     type: { RECEIPT: "Wareneingang", SALE: "Verkauf", RETURN: "Rückgabe", WRITE_OFF: "Verlust", ADJUSTMENT: "Inventur", CANCEL: "Storno" },
     adjust: "Inventur-Korrektur", counted: "Gezählter Bestand", adjustReason: "Grund", adjusted: "Bestand korrigiert",
     avgCost: "Ø Einkaufspreis", batches: "Chargen", expiresIn: "läuft ab in {d} Tagen", expiresToday: "läuft heute ab", expired: "abgelaufen",

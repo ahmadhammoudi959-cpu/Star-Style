@@ -8,6 +8,7 @@ import { loadInsights } from "@/lib/insights-data";
 import { aiConfigured } from "@/lib/ai/client";
 import { formatCents } from "@/lib/money";
 import { daysBetween, formatDate, formatDateTime, todayIso } from "@/lib/dates";
+import { EXPIRY_BADGE, expiryState } from "@/lib/expiry";
 import { failuresSincePrevious } from "@/lib/login";
 import { setupSteps } from "@/lib/onboarding";
 import { fill } from "@/i18n";
@@ -16,14 +17,14 @@ import { pendingSummary } from "@/lib/shopify/product-push";
 export default async function Home() {
   const session = await requireSession();
   const { t, intl } = await getI18n();
-  const [stats, al, open, ins, setup, pend, fails] = await Promise.all([dashboardStats(), alerts(), openItems(), loadInsights(), setupSteps(), pendingSummary(), failuresSincePrevious()]);
+  const today = todayIso();
+  const [stats, al, open, ins, setup, pend, fails] = await Promise.all([dashboardStats(today), alerts(today), openItems(), loadInsights(), setupSteps(), pendingSummary(), failuresSincePrevious()]);
   const ai = aiConfigured();
   const debts = open.filter((r) => r.state.openCents > 0);
   const rOpen = debts.reduce((s, r) => s + r.state.openCents, 0);
   const rOverdue = debts.reduce((s, r) => s + r.state.overdueCents, 0);
   const rSoon = debts.filter((r) => r.light === "yellow").reduce((s, r) => s + r.state.nextDueCents, 0);
   const lateList = debts.filter((r) => r.light === "red").slice(0, 5);
-  const today = todayIso();
 
   const actions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean }[] = [
     { href: "/scan", label: t.home.scan, hint: t.home.scanHint, icon: "scan", tone: "from-teal-500 to-emerald-700" },
@@ -131,10 +132,15 @@ export default async function Home() {
         <Kpi icon="clock" label={t.pay.dueSoon} value={formatCents(rSoon, intl)} tone={rSoon ? "text-amber-600" : undefined} href="/receivables?f=yellow" />
       </div>
 
-      <div className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-        <Kpi icon="box" label={t.home.stockValue} value={formatCents(stats.stockValueCents, intl)} sub={`${stats.products} ${t.home.articles}`} wide />
+      {/* Lager: 2 × 2 (Handy bis Laptop), ab xl in einer Reihe. MHD getrennt: läuft bald ab / schon abgelaufen (Wunsch Inhaber 12.11.2026),
+          jede Zahl öffnet genau diese Artikel in der Lagerliste */}
+      <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <Kpi icon="box" label={t.home.stockValue} value={formatCents(stats.stockValueCents, intl)} sub={`${stats.products} ${t.home.articles}`} />
         <Kpi icon="layers" label={t.home.lowStock} value={String(stats.low)} tone={stats.low ? "text-amber-600" : undefined} href="/stock?low=1" />
-        <Kpi icon="clock" label={t.home.expiring} value={String(stats.expiring)} tone={stats.expiring ? "text-red-600" : undefined} href="/stock" />
+        <Kpi icon="clock" label={t.home.expiring} value={String(stats.expiring)} sub={stats.expiring ? fill(t.scan.pieces, { n: stats.expiringQty }) : undefined}
+          tone={stats.expiring ? "text-orange-600" : undefined} ring={stats.expiring ? "ring-1 ring-orange-200" : undefined} href="/stock?exp=soon" />
+        <Kpi icon="alert" label={t.home.expired} value={String(stats.expired)} sub={stats.expired ? fill(t.scan.pieces, { n: stats.expiredQty }) : undefined}
+          tone={stats.expired ? "text-red-600" : undefined} ring={stats.expired ? "ring-2 ring-red-200" : undefined} href="/stock?exp=expired" />
       </div>
 
       <div className={`grid gap-4 ${ai ? "lg:grid-cols-2" : ""}`}>
@@ -177,15 +183,15 @@ export default async function Home() {
                 </Link>
               </li>
             ))}
-            {al.expiring.map((x, i) => {
-              const d = daysBetween(today, x.expiry);
+            {al.expiring.map((x) => {
+              const st = expiryState(today, x.expiry), d = daysBetween(today, x.expiry);
               return (
-                <li key={"e" + i}>
+                <li key={"e" + x.batchId}>
                   <Link href={`/stock/${x.id}`} className="group flex items-center justify-between gap-3 py-2.5 text-sm hover:text-brand-700">
                     <span className="flex items-center gap-2">
-                      <span className={`badge ${d < 0 ? "bg-red-100 text-red-800" : "bg-orange-100 text-orange-800"}`}>{d < 0 ? t.stock.expired : t.home.expiring}</span>{x.name}
+                      <span className={`badge shrink-0 ${EXPIRY_BADGE[st]}`}>{st === "expired" ? t.home.expired : d === 0 ? capitalize(t.stock.expiresToday) : t.home.expiring}</span>{x.name}
                     </span>
-                    <span className="num text-ink-soft">{formatDate(x.expiry, intl)} · {x.qty}</span>
+                    <span className="num shrink-0 text-ink-soft">{formatDate(x.expiry, intl)} · {x.qty}</span>
                   </Link>
                 </li>
               );
@@ -197,8 +203,10 @@ export default async function Home() {
   );
 }
 
+const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase() + s.slice(1);
+
 /** wide = auf dem Handy über beide Spalten (die Summe), die anderen zwei stehen darunter nebeneinander */
-function Kpi({ icon, label, value, sub, tone, href, wide = false }: { icon: IconName; label: string; value: string; sub?: string; tone?: string; href?: string; wide?: boolean }) {
+function Kpi({ icon, label, value, sub, tone, ring, href, wide = false }: { icon: IconName; label: string; value: string; sub?: string; tone?: string; ring?: string; href?: string; wide?: boolean }) {
   const body = (
     <div className="flex items-center gap-3 sm:gap-4">
       <div className={`h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 sm:grid sm:h-12 sm:w-12 ${wide ? "grid" : "hidden"}`}><Icon name={icon} className="h-5 w-5 sm:h-6 sm:w-6" /></div>
@@ -209,6 +217,6 @@ function Kpi({ icon, label, value, sub, tone, href, wide = false }: { icon: Icon
       </div>
     </div>
   );
-  const box = `card group p-3.5 sm:col-span-1 sm:p-5 ${wide ? "col-span-2" : ""}`;
+  const box = `card group p-3.5 sm:col-span-1 sm:p-5 ${wide ? "col-span-2" : ""} ${ring ?? ""}`;
   return href ? <Link href={href} className={`${box} card-hover`}>{body}</Link> : <div className={box}>{body}</div>;
 }

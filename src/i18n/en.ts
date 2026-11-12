@@ -24,7 +24,7 @@ const en: Dict = {
     receive: "Goods in", receiveHint: "Book a new delivery",
     loss: "Report loss", lossHint: "Breakage, expiry, shrinkage", expense: "Add expense", expenseHint: "Invoice, ads, rent",
     reports: "Reports", reportsHint: "Sales & profit",
-    stockValue: "Stock value", lowStock: "Low stock", expiring: "Expiring soon", articles: "products",
+    stockValue: "Stock value", lowStock: "Low stock", expiring: "Expiring soon", expired: "Expired", articles: "products",
     alerts: "Alerts", noAlerts: "All good – no alerts.", comingSoon: "Coming in stage 2",
     scan: "Scan barcode", scanHint: "Stock & price instantly",
     pendingTitle: "Not in the shop yet", pendingText: "{shop}: {n} products are still missing there ({r} ready) – upload them?", pendingAction: "Review and upload",
@@ -170,6 +170,9 @@ const en: Dict = {
   stock: {
     clear: "Clear filter", noLow: "No product is running low. To see a product here, set “Warn below” on the product.",
     title: "Stock", movements: "Movements", value: "Stock value (cost)", low: "below minimum", filterLow: "Low stock only",
+    filterExpiry: "Expiry", expAll: "All", expSoon: "Expiring soon ({d} days)", expExpired: "Expired",
+    noSoon: "Nothing expires in the next {d} days.", noExpired: "No product has expired. ✓",
+    expiredQty: "expired: {n} pcs", soonQty: "expiring soon: {n} pcs",
     type: { RECEIPT: "Goods in", SALE: "Sale", RETURN: "Return", WRITE_OFF: "Loss", ADJUSTMENT: "Stocktake", CANCEL: "Cancellation" },
     adjust: "Stocktake correction", counted: "Counted quantity", adjustReason: "Reason", adjusted: "Stock corrected",
     avgCost: "Avg. cost", batches: "Batches", expiresIn: "expires in {d} days", expiresToday: "expires today", expired: "expired",

@@ -5,37 +5,56 @@ import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { productCategories, stockRows, type StockRow } from "@/lib/queries";
 import { formatCents } from "@/lib/money";
-import { daysBetween, formatDate, todayIso } from "@/lib/dates";
+import { formatDate, todayIso } from "@/lib/dates";
+import { EXPIRY_BADGE, EXPIRY_SOON_DAYS, expiryState, parseExpiryFilter } from "@/lib/expiry";
 import { CategorySelect } from "@/components/CategorySelect";
 import { AutoSubmitCheckbox } from "@/components/AutoSubmitCheckbox";
+import { FilterSelect } from "@/components/FilterSelect";
 import { OpenButton } from "@/components/OpenButton";
 import { SearchPick } from "@/components/SearchPick";
 import { fill } from "@/i18n";
 import { LIST_STEP, listLimit, ShowMore } from "@/components/ShowMore";
 
-export default async function StockPage({ searchParams }: { searchParams: Promise<{ q?: string; low?: string; cat?: string; n?: string }> }) {
-  const { q = "", low, cat = "", n } = await searchParams;
+export default async function StockPage({ searchParams }: { searchParams: Promise<{ q?: string; low?: string; cat?: string; exp?: string; n?: string }> }) {
+  const { q = "", low, cat = "", exp: expParam, n } = await searchParams;
   const { t, intl } = await getI18n();
   const lowOnly = low === "1";
-  const [rows, cats] = await Promise.all([stockRows({ q, lowOnly, category: cat }), productCategories()]);
-  const total = rows.reduce((s, r) => s + r.valueCents, 0);
+  // MHD-Filter: die Zahlen „Läuft bald ab“ / „Abgelaufen“ der Startseite öffnen genau diese Artikel
+  const exp = parseExpiryFilter(expParam);
   const today = todayIso();
-  const filtered = Boolean(q.trim() || cat || lowOnly);
+  const [rows, cats] = await Promise.all([stockRows({ q, lowOnly, category: cat, expiry: exp, today }), productCategories()]);
+  const total = rows.reduce((s, r) => s + r.valueCents, 0);
+  const filtered = Boolean(q.trim() || cat || lowOnly || exp);
   // nur die ersten Zeilen zeigen, „Weitere anzeigen“ holt mehr (sonst lädt die Seite bei vielen Artikeln sehr lange)
   const limit = listLimit(n);
   const shown = rows.slice(0, limit);
-  const moreHref = `/stock?${new URLSearchParams({ ...(q.trim() ? { q } : {}), ...(cat ? { cat } : {}), ...(lowOnly ? { low: "1" } : {}), n: String(limit + LIST_STEP) })}`;
+  const moreHref = `/stock?${new URLSearchParams({ ...(q.trim() ? { q } : {}), ...(cat ? { cat } : {}), ...(lowOnly ? { low: "1" } : {}), ...(exp ? { exp } : {}), n: String(limit + LIST_STEP) })}`;
+  // nächstes MHD als Abzeichen; darunter, wie viele Stück schon abgelaufen sind bzw. bald ablaufen
   const expiry = (r: StockRow) => {
     if (!r.nextExpiry) return null;
-    const d = daysBetween(today, r.nextExpiry);
-    return <span className={`badge ${d < 0 ? "bg-red-100 text-red-800" : d <= 60 ? "bg-orange-100 text-orange-800" : "bg-brand-50 text-brand-700"}`}>{formatDate(r.nextExpiry, intl)}</span>;
+    return (
+      <span className="inline-flex flex-col items-center gap-0.5 xl:items-start">
+        <span className={`badge ${EXPIRY_BADGE[expiryState(today, r.nextExpiry)]}`}>{formatDate(r.nextExpiry, intl)}</span>
+        {r.expiredQty > 0 && <span className="text-[0.6875rem] font-semibold leading-tight text-red-700 xl:whitespace-nowrap">{fill(t.stock.expiredQty, { n: r.expiredQty })}</span>}
+        {r.soonQty > 0 && <span className="text-[0.6875rem] font-semibold leading-tight text-orange-700 xl:whitespace-nowrap">{fill(t.stock.soonQty, { n: r.soonQty })}</span>}
+      </span>
+    );
   };
+  // leere Liste: eigener Satz nur, wenn sonst nichts eingeschränkt ist (mit Suche/Kategorie: „nichts gefunden“)
+  const narrowed = Boolean(q.trim() || cat);
+  const emptyText = narrowed || (exp && lowOnly) ? t.picker.empty
+    : exp === "expired" ? t.stock.noExpired : exp === "soon" ? fill(t.stock.noSoon, { d: EXPIRY_SOON_DAYS })
+    : lowOnly ? t.stock.noLow : t.common.nothingYet;
+  const expOptions = [
+    { value: "soon", label: fill(t.stock.expSoon, { d: EXPIRY_SOON_DAYS }) },
+    { value: "expired", label: t.stock.expExpired },
+  ];
 
   return (
     <div>
       <PageHeader title={t.stock.title} subtitle={`${t.stock.value}: ${formatCents(total, intl)}`} />
 
-      {/* Filter: Kategorie (filtert sofort), Suche, nur wenig Bestand (filtert sofort) */}
+      {/* Filter: Kategorie, MHD und „nur wenig Bestand“ filtern sofort; Suche */}
       <form className="card relative z-10 mb-4 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2 p-3 animate-rise md:flex md:flex-row md:flex-wrap md:items-end md:gap-3 md:p-4">
         {cats.length > 0 && <CategorySelect categories={cats} label={t.picker.category} allLabel={t.picker.all} name="cat" defaultValue={cat} autoSubmit className="md:w-64" />}
         <div className={`min-w-0 md:max-w-md md:flex-1 ${cats.length ? "" : "col-span-2"}`}>
@@ -44,15 +63,16 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
               sub: [r.barcode ?? r.sku, r.category, `${t.product.stock}: ${r.stockQty}`].filter(Boolean).join(" · "), href: `/stock/${r.id}`, imageId: r.imageId,
               search: [r.nameDe, r.nameNl, r.sku, r.barcode ?? "", r.size, r.color, r.category].join(" ").toLowerCase() }))} />
         </div>
+        <FilterSelect name="exp" label={t.stock.filterExpiry} allLabel={t.stock.expAll} options={expOptions} defaultValue={exp ?? ""} icon="clock" className="min-w-0 md:w-60" />
+        <div className="flex min-w-0 items-end"><AutoSubmitCheckbox name="low" defaultChecked={lowOnly} label={t.stock.filterLow} /></div>
         <div className="col-span-2 flex flex-wrap items-center gap-2">
-          <AutoSubmitCheckbox name="low" defaultChecked={lowOnly} label={t.stock.filterLow} />
           <button className="btn-primary group"><Icon name="search" className="h-4 w-4" />{t.common.search.replace("…", "").trim()}</button>
           {filtered && <Link href="/stock" className="btn-ghost group"><Icon name="x" className="h-4 w-4" />{t.stock.clear}</Link>}
         </div>
       </form>
 
       {rows.length === 0 ? (
-        <div className="card p-10 text-center text-ink-soft animate-rise">{lowOnly ? t.stock.noLow : filtered ? t.picker.empty : t.common.nothingYet}</div>
+        <div className="card p-10 text-center text-ink-soft animate-rise">{emptyText}</div>
       ) : (
         <>
           {/* PC/Laptop: alle Spalten ohne seitliches Scrollen */}
