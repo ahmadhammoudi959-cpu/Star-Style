@@ -106,17 +106,19 @@ run("Shopify-Abgleich (Datenbank, Shopify simuliert)", async () => {
   let variantId = "";
   const calls: { url: string; body: string }[] = [];
   let ordersPayload: ShopOrder[] = [];
-  let viesValid = true, denyTax = false;
+  let viesValid = true, denyTax = false, staleToken = "", tokenNo = 0;
 
   function shopifyMock() {
-    return vi.fn(async (url: string, init: { body: string | URLSearchParams }) => {
+    return vi.fn(async (url: string, init: { body: string | URLSearchParams; headers?: Record<string, string> }) => {
       const body = String(init.body);
       calls.push({ url, body });
-      if (url.endsWith("/admin/oauth/access_token")) return new Response(JSON.stringify({ access_token: "tok", scope: "x", expires_in: 86399 }));
+      if (url.endsWith("/admin/oauth/access_token")) return new Response(JSON.stringify({ access_token: `tok${++tokenNo}`, scope: "x", expires_in: 86399 }));
       if (url.includes("check-vat-number")) return Response.json({ valid: viesValid, name: "SALON WIEN GMBH", address: "RING 1, 1010 WIEN" });
       if (url.includes("evatr")) return Response.json({});
       const q = JSON.parse(body).query as string;
-      if (denyTax && q.includes("taxSettings")) return Response.json({ errors: [{ message: "Access denied for taxSettings field. Required access: `read_customers` access scope.", extensions: { code: "ACCESS_DENIED" } }] });
+      // staleToken = Token von vor der Freigabe des Rechts
+      const stale = staleToken !== "" && init.headers?.["x-shopify-access-token"] === staleToken;
+      if ((denyTax || stale) && q.includes("taxSettings")) return Response.json({ errors: [{ message: "Access denied for taxSettings field. Required access: `read_customers` access scope.", extensions: { code: "ACCESS_DENIED" } }] });
       if (q.includes("productVariants")) return Response.json({ data: { productVariants: { pageInfo: { hasNextPage: false, endCursor: "" }, nodes: [
         { id: "gid://shopify/ProductVariant/901", sku: "X", barcode: ean, displayName: "Haarspray - 300 ml", inventoryItem: { id: "gid://shopify/InventoryItem/701", tracked: true } },
         { id: "gid://shopify/ProductVariant/902", sku: "UNBEKANNT", barcode: "", displayName: "Geschenkkarte", inventoryItem: { id: "gid://shopify/InventoryItem/702", tracked: false } },
@@ -214,6 +216,18 @@ run("Shopify-Abgleich (Datenbank, Shopify simuliert)", async () => {
     const ev = await db.select().from(schema.shopEvents).where(eq(schema.shopEvents.ref, bad.name));
     expect(ev.map((e) => e.message)).toContain("skip:vatInvalid");
 
+    // Recht eben erst freigegeben, der zwischengespeicherte Token (24 h) stammt aber von vorher → einmal neu holen, Nummer kommt gleich
+    viesValid = true;
+    staleToken = `tok${tokenNo}`;
+    const tokensBefore = calls.filter((c) => c.url.endsWith("access_token")).length;
+    const fresh = rcOrder("4", "ATU12345678");
+    ordersPayload = [fresh];
+    await sync.syncOrders("BRAND_SHOP");
+    expect(await db.query.invoices.findFirst({ where: and(eq(schema.invoices.externalOrderId, fresh.id), eq(schema.invoices.status, "ISSUED")) }))
+      .toMatchObject({ taxMode: "EU_REVERSE_CHARGE", custVatId: "ATU12345678" });
+    expect(calls.filter((c) => c.url.endsWith("access_token")).length).toBe(tokensBefore + 1);
+    staleToken = "";
+
     // App ohne Recht read_customers: Abgleich läuft weiter, steuerfreie EU-Bestellung bleibt für Handarbeit
     denyTax = true; viesValid = true;
     const noScope = rcOrder("3", "ATU12345678");
@@ -224,10 +238,12 @@ run("Shopify-Abgleich (Datenbank, Shopify simuliert)", async () => {
     expect(all.map((e) => e.message)).toContain("needScopeTaxes");
     denyTax = false;
 
-    // aufräumen: die steuerfreie Bestellung im Shop stornieren → Bestand wieder wie vorher
-    ordersPayload = [{ ...ok, cancelledAt: "2026-10-18T13:00:00Z", displayFinancialStatus: "REFUNDED", totalRefundedSet: money(16.78) }];
+    // aufräumen: die steuerfreien Bestellungen im Shop stornieren → Bestand wieder wie vorher
+    const cancel = (o: ShopOrder) => ({ ...o, cancelledAt: "2026-10-18T13:00:00Z", displayFinancialStatus: "REFUNDED", totalRefundedSet: money(16.78) });
+    ordersPayload = [cancel(ok), cancel(fresh)];
     await sync.syncOrders("BRAND_SHOP");
     expect((await db.query.invoices.findFirst({ where: eq(schema.invoices.id, inv!.id) }))!.status).toBe("CANCELLED");
+    expect((await db.select().from(schema.invoices).where(eq(schema.invoices.externalOrderId, fresh.id))).every((i) => i.status === "CANCELLED")).toBe(true);
   }, 30_000);
 
   it("geänderte Bestände werden automatisch gemeldet und die Warteschlange geleert", async () => {

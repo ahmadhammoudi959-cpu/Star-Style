@@ -179,4 +179,35 @@ run("Versand: Sendung speichern und an Shopify melden", async () => {
     const audit = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.entity, "shipment"), eq(schema.auditLog.entityId, id)));
     expect(audit.map((a) => a.action)).toContain("create");
   }, 30_000);
+
+  it("Recht eben freigegeben: Token von vorher wird einmal neu geholt; fehlt das Recht wirklich → nicht für jede Sendung ein neuer Token", async () => {
+    // Zugang wie in Produktion per Client-Credentials; der zwischengespeicherte Token „alt“ (24 h) stammt von vor der Freigabe
+    await db.update(schema.shops).set({ staticTokenEnc: "", clientId: "cid", clientSecretEnc: encrypt("geheim"), tokenEnc: encrypt("alt"), tokenExpiresAt: new Date(Date.now() + 20 * 3600_000) })
+      .where(eq(schema.shops.channel, "GENERAL_SHOP"));
+    const base = mock();
+    let granted = true, tokens = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init: { body: string | URLSearchParams; headers?: Record<string, string> }) => {
+      if (url.endsWith("/admin/oauth/access_token")) { tokens++; return new Response(JSON.stringify({ access_token: `neu${tokens}`, expires_in: 86399 })); }
+      if (!granted || init.headers?.["x-shopify-access-token"] === "alt") {
+        return Response.json({ errors: [{ message: "Access denied for fulfillmentOrders field. Required access: `read_merchant_managed_fulfillment_orders` access scope.", extensions: { code: "ACCESS_DENIED" } }] });
+      }
+      return base(url, init);
+    }));
+    try {
+      remaining = 1;
+      const id = await sh.createShipment({ invoiceId, carrier: "DHL", carrierName: "", trackingUrl: "", numbers: ["00340434161094047777"], notify: true, pick: null });
+      expect(await sh.syncShipment(id)).toMatchObject({ shopStatus: "sent", shopError: "" });
+      expect(tokens).toBe(1);
+      // Recht fehlt wirklich (z. B. wieder entzogen): bleibt vorgemerkt, ohne bei jedem Versuch einen neuen Token zu holen
+      granted = false;
+      await sh.editShipment(id, { carrier: "DHL", carrierName: "", trackingUrl: "", numbers: ["00340434161094047778"], notify: false });
+      expect(await sh.syncShipment(id)).toMatchObject({ shopStatus: "update", shopError: "needScope" });
+      expect(await sh.syncShipment(id)).toMatchObject({ shopStatus: "update", shopError: "needScope" });
+      expect(tokens).toBe(1);
+      granted = true;
+      expect(await sh.syncShipment(id)).toMatchObject({ shopStatus: "sent", shopError: "", trackingNumbers: ["00340434161094047778"] });
+    } finally {
+      await db.update(schema.shops).set({ staticTokenEnc: encrypt("shpat_test"), tokenEnc: "", tokenExpiresAt: null }).where(eq(schema.shops.channel, "GENERAL_SHOP"));
+    }
+  }, 30_000);
 });

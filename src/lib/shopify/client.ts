@@ -43,6 +43,24 @@ export async function accessToken(shop: Shop, f: FetchLike = fetch): Promise<str
   return j.access_token;
 }
 
+/** Zwischengespeicherten Token verwerfen → der nächste Aufruf holt einen neuen (mit den Rechten, die jetzt freigegeben sind). */
+export async function forgetToken(shop: Shop) {
+  shop.tokenEnc = ""; shop.tokenExpiresAt = null;
+  await db.update(schema.shops).set({ tokenEnc: "", tokenExpiresAt: null }).where(eq(schema.shops.channel, shop.channel));
+}
+
+// Shopify meldet ein fehlendes Recht: der Token (24 h gültig) kann noch von vor der Freigabe stammen → neu holen.
+// Je Shop höchstens alle 2 min – fehlt das Recht wirklich, holte sonst jede vorgemerkte Sendung bzw. jeder Abgleich einen neuen Token.
+const refreshedAt = new Map<string, number>();
+/** true = Token verworfen, also lohnt sich ein zweiter Versuch */
+export async function refreshTokenOnce(shop: Shop): Promise<boolean> {
+  if (shop.staticTokenEnc) return false;
+  if (Date.now() - (refreshedAt.get(shop.channel) ?? 0) < 2 * 60_000) return false;
+  refreshedAt.set(shop.channel, Date.now());
+  await forgetToken(shop);
+  return true;
+}
+
 /** GraphQL-Aufruf mit Wiederholung bei Drosselung (THROTTLED / 429 / 5xx). */
 export async function gql<T>(shop: Shop, query: string, variables: Record<string, unknown> = {}, f: FetchLike = fetch): Promise<T> {
   let lastErr: ShopifyError = new ShopifyError("network", "unbekannt");

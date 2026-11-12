@@ -6,7 +6,7 @@ import "server-only";
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, schema } from "@/db";
-import { gql, getShop, ShopifyError, type Shop, type ShopChannel } from "./client";
+import { gql, getShop, refreshTokenOnce, ShopifyError, type Shop, type ShopChannel } from "./client";
 import { berlinDate, cents, mapOrder, PAID, quantitiesAfterRefund, type ShopOrder } from "./order-map";
 import { cancelInvoice, issueInvoice, saveInvoiceDraft, startCorrection, SalesError } from "../sales";
 import { cancelPayment, PaymentError, recordPayment } from "../payments";
@@ -177,6 +177,7 @@ const SCOPE_ERROR = /access denied|not approved|required access|access scope|tax
 async function gqlOrders<T>(shop: Shop, build: (fields: string) => string, variables: Record<string, unknown>): Promise<T> {
   const k = (x: (typeof EXTRAS)[number]) => `${shop.channel}:${x.key}`;
   let use = EXTRAS.filter((x) => { const st = extraAccess.get(k(x)); return !st || st.ok || Date.now() - st.at > 6 * 3600_000; });
+  let refreshed = false;
   for (;;) {
     try {
       const d = await gql<T>(shop, build(ORDER_BASE + use.map((x) => x.fields).join("")), variables);
@@ -184,6 +185,8 @@ async function gqlOrders<T>(shop: Shop, build: (fields: string) => string, varia
       return d;
     } catch (e) {
       if (!use.length || !(e instanceof ShopifyError && e.code === "graphql" && SCOPE_ERROR.test(e.message))) throw e;
+      // Recht vielleicht eben erst freigegeben, der zwischengespeicherte Token (24 h) stammt aber von vorher → einmal mit neuem
+      if (!refreshed && (await refreshTokenOnce(shop))) { refreshed = true; continue; }
       // das Feld weglassen, das Shopify bemängelt (unklar → alle Zusatzfelder)
       const blamed = use.filter((x) => x.match.test(e.message));
       const drop = blamed.length ? blamed : use;

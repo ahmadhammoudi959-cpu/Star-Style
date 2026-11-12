@@ -12,7 +12,7 @@ import {
   carrierFromCompany, carrierLabel, checkNumbers, customUrlOk, isCarrier, isDeliveryState, normalizeTrackingNumber, remapItems, resolveItems,
   shippingState, urlTemplate, type ShippingState,
 } from "./shipping";
-import { getShop, ShopifyError, type ShopChannel } from "./shopify/client";
+import { getShop, refreshTokenOnce, ShopifyError, type Shop, type ShopChannel } from "./shopify/client";
 import { cancelFulfillments, createFulfillment, FulfillError, SCOPE_RE, updateFulfillmentTracking } from "./shopify/fulfill";
 import { withOrderLock } from "./shopify/order-lock";
 import { berlinDate, type ShopOrder } from "./shopify/order-map";
@@ -112,6 +112,18 @@ export async function moveShipments(tx: Tx, fromInvoiceId: string, toInvoiceId: 
 
 // ───────────────────────── An Shopify melden ─────────────────────────
 
+const scopeMissing = (e: unknown) => e instanceof ShopifyError && e.code === "graphql" && SCOPE_RE.test(e.message);
+
+/** Recht fehlt → einmal mit neuem Token (der zwischengespeicherte kann von vor der Freigabe stammen, gilt 24 h) */
+async function withScopeRetry<T>(shop: Shop, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    if (scopeMissing(e) && (await refreshTokenOnce(shop))) return run();
+    throw e;
+  }
+}
+
 /**
  * Offene Aufgabe einer Sendung im Shop erledigen (anlegen / Nummern ändern / zurücknehmen).
  * Shop nicht erreichbar → bleibt vorgemerkt (Worker versucht es wieder); App-Recht fehlt → vorgemerkt + Hinweis „needScope“;
@@ -129,19 +141,21 @@ export async function syncShipment(id: string): Promise<Shipment | null> {
     if (!shop?.domain) { await set({ shopError: "notConfigured" }); return reload(); }
     if (!shop.active) { await set({ shopError: "syncOff" }); return reload(); }
     const label = `${carrierLabel(s.carrier, s.carrierName)} ${s.trackingNumbers.join(" ")}`.trim();
+    const orderId = s.externalOrderId;
     try {
       if (s.shopStatus === "pending") {
         const want = s.items.flatMap((i) => (i.externalLineId ? [{ externalLineId: i.externalLineId, qty: i.qty }] : []));
         const ids = [...s.shopFulfillmentIds];
-        const r = await createFulfillment(shop, s.externalOrderId, want, s, s.notifyCustomer, async (fid) => { ids.push(fid); await set({ shopFulfillmentIds: ids }); });
+        const r = await withScopeRetry(shop, () =>
+          createFulfillment(shop, orderId, want, s, s.notifyCustomer, async (fid) => { ids.push(fid); await set({ shopFulfillmentIds: ids }); }));
         await set({ shopStatus: "sent", shopError: r.missing ? `missing:${r.missing}` : "", shopTries: s.shopTries + 1 });
         await shopEvent(s.channel, "info", `shipped:${label}|${s.notifyCustomer ? 1 : 0}`, r.name, s.invoiceId);
       } else if (s.shopStatus === "update") {
-        await updateFulfillmentTracking(shop, s.shopFulfillmentIds, s, s.notifyCustomer);
+        await withScopeRetry(shop, () => updateFulfillmentTracking(shop, s.shopFulfillmentIds, s, s.notifyCustomer));
         await set({ shopStatus: "sent", shopError: "", shopTries: s.shopTries + 1 });
         await shopEvent(s.channel, "info", `trackingUpdated:${label}|${s.notifyCustomer ? 1 : 0}`, "", s.invoiceId);
       } else {
-        await cancelFulfillments(shop, s.shopFulfillmentIds);
+        await withScopeRetry(shop, () => cancelFulfillments(shop, s.shopFulfillmentIds));
         await set({ shopStatus: "cancelled", cancelledAt: new Date(), shopError: "", shopTries: s.shopTries + 1 });
         await shopEvent(s.channel, "info", `shipmentCancelled:${label}`, "", s.invoiceId);
       }
@@ -151,7 +165,7 @@ export async function syncShipment(id: string): Promise<Shipment | null> {
         await set({ shopStatus: "failed", shopError: e.code, shopTries: tries });
       } else if (e instanceof ShopifyError && ["network", "throttled", "auth", "notConfigured"].includes(e.code)) {
         await set({ shopError: e.code, shopTries: tries }); // später noch einmal
-      } else if (e instanceof ShopifyError && e.code === "graphql" && SCOPE_RE.test(e.message)) {
+      } else if (scopeMissing(e)) {
         // App-Recht „Bestellungen versenden“ fehlt noch → bleibt vorgemerkt und geht raus, sobald es freigeschaltet ist
         await set({ shopError: "needScope", shopTries: tries });
         if (await once(`scope:fulfil:${s.channel}:${todayIso()}`)) await shopEvent(s.channel, "warn", "needScopeFulfillment", "", s.invoiceId);

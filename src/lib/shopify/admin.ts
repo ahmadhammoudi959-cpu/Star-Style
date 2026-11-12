@@ -4,9 +4,9 @@ import "server-only";
  * Zugang prüfen, Token bei fehlendem Recht einmal neu holen, Fotos per staged upload, im Online Store veröffentlichen,
  * und eine Sperre je Artikel und Shop, damit nie zwei Vorgänge gleichzeitig dasselbe Shop-Produkt ändern.
  */
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { gql, ShopifyError, type Shop } from "./client";
+import { forgetToken, gql, ShopifyError, type Shop } from "./client";
 
 export const configured = (s: Shop | undefined | null): s is Shop => Boolean(s?.domain && (s.clientSecretEnc || s.staticTokenEnc));
 
@@ -22,8 +22,7 @@ export async function withFreshToken<T>(shop: Shop, run: () => Promise<T>): Prom
     return await run();
   } catch (e) {
     if (!(e instanceof ShopifyError) || !/access denied/i.test(e.message) || shop.staticTokenEnc) throw e;
-    shop.tokenEnc = ""; shop.tokenExpiresAt = null;
-    await db.update(schema.shops).set({ tokenEnc: "", tokenExpiresAt: null }).where(eq(schema.shops.channel, shop.channel));
+    await forgetToken(shop);
     return run();
   }
 }
