@@ -12,7 +12,7 @@ const OUT = process.env.PDF_OUT;
 const save = (name: string, b: Uint8Array) => { if (OUT) fs.writeFileSync(`${OUT}/${name}.pdf`, b); };
 const pages = async (b: Uint8Array) => (await PDFDocument.load(b)).getPageCount();
 
-const buyer = { name: "SH Investments GmbH", street: "Königsberger Str. 6", zip: "52078", city: "Aachen", country: "DE", vatId: "DE455308831" };
+const buyer = { name: "Salon Beispiel GmbH", street: "Musterstraße 1", zip: "44135", city: "Dortmund", country: "DE", vatId: "DE123456789" };
 const line = (position: number, description: string, category: string, qty: number, unitPriceCents: number, ean: string, discountBp = 0) => {
   const raw = qty * unitPriceCents, netCents = raw - Math.round((raw * discountBp) / 10000);
   return { position, sku: ean, ean, category, description, qty, unitPriceCents, discountBp, netCents, vatRateBp: 1900, vatCents: Math.round(netCents * 0.19), weightGrams: 2500 };
