@@ -217,7 +217,7 @@ const ku: Dict = {
     margin: "Rêjeya qezencê",
     reserved: "veqetandî",
     available: "amade",
-    shopsHint: "Nîşankirî = berhem aîdî vê firoşgehê ye. Dema tu tomar bikî, em dipirsin ka ew berhemeke rastîn e û divê were barkirin an na. Ger ew jixwe li wir hebe (heman barkod), tenê tê girêdan û tenê mezinahî/rengên nû lê zêde dibin. Her mezinahî/reng barkodekê dixwaze, berhemeke nû ya firoşgehê jî kategoriyeke firoşgehê dixwaze. Guhertinên paşê (biha, nav) ji kerema xwe di firoşgehê de bike.",
+    shopsHint: "Nîşankirî = berhem aîdî vê firoşgehê ye. Dema tu tomar bikî, em dipirsin ka ew berhemeke rastîn e û divê were barkirin an na. Ger ew jixwe li wir hebe (heman barkod), tenê tê girêdan û tenê mezinahî/rengên nû lê zêde dibin. Her mezinahî/reng barkodekê dixwaze, berhemeke nû ya firoşgehê jî kategoriyeke firoşgehê dixwaze. Biha, giranî, kategorî û wêneyên firoşgehê dema tomarkirinê bixwe diçin firoşgehê (bihayê ji bo firoşkaran diçe lîsteya bihayên firoşkaran); nav û danasînê di firoşgehê de biguherîne.",
     inShop: "di firoşgehê de ✓",
     willCreate: "hîn ne di firoşgehê de – dema tu tomar bikî em ê bipirsin",
     gallery: {
