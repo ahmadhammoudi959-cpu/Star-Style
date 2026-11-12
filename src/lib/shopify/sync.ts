@@ -13,6 +13,8 @@ import { cancelPayment, PaymentError, recordPayment } from "../payments";
 import { bookWriteOff } from "../stock";
 import { todayIso } from "../dates";
 import { verifyCustomerVat } from "../customer-vat";
+import { importShopFulfillments } from "../shipments";
+import { withOrderLock } from "./order-lock";
 
 export const CHANNELS: ShopChannel[] = ["BRAND_SHOP", "GENERAL_SHOP"];
 
@@ -160,25 +162,37 @@ const ORDER_BASE = `id name createdAt updatedAt processedAt cancelledAt test ema
   lineItems(first: 100) { nodes { id sku title variantTitle quantity variant { id } discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount } } taxLines { rate } } }
   shippingLines(first: 10) { nodes { title discountedPriceSet { shopMoney { amount } } taxLines { rate } } }
   refunds { id createdAt totalRefundedSet { shopMoney { amount } } refundLineItems(first: 100) { nodes { quantity restockType lineItem { id } } } }`;
-// USt-IdNr. aus dem Checkout (Reverse Charge) – braucht das App-Recht read_customers (oder read_taxes).
-// Fehlt das Recht, geht es ohne weiter (steuerfreie EU-Bestellungen dann von Hand) und es wird alle 6 h neu versucht.
-const ORDER_TAX = ` customer { taxSettings { taxId } }`;
-const taxIdAccess = new Map<string, { ok: boolean; at: number }>();
-const SCOPE_ERROR = /access denied|not approved|taxSettings|read_customers|read_taxes/i;
+// Zusatzfelder, für die die App ein eigenes Recht braucht. Fehlt es, geht der Abgleich ohne das Feld weiter
+// (Hinweis 1×/Tag im Protokoll) und es wird alle 6 h neu versucht.
+// - USt-IdNr. aus dem Checkout (Reverse Charge): read_customers oder read_taxes; ohne → steuerfreie EU-Bestellungen von Hand
+// - Sendungen der Bestellung (auch im Shopify-Admin angelegte, Zustellstatus): ohne → nur unsere eigenen Sendungen
+const EXTRAS = [
+  { key: "taxid", fields: ` customer { taxSettings { taxId } }`, match: /taxSettings|customer|read_taxes/i, log: "needScopeTaxes" },
+  { key: "fulfil", log: "needScopeFulfillments", match: /fulfil/i, fields: ` fulfillments(first: 20) { id status displayStatus createdAt
+    trackingInfo(first: 10) { company number url } fulfillmentLineItems(first: 100) { nodes { quantity lineItem { id } } } }` },
+];
+const extraAccess = new Map<string, { ok: boolean; at: number }>();
+const SCOPE_ERROR = /access denied|not approved|required access|access scope|taxSettings|read_customers|read_taxes/i;
 
 async function gqlOrders<T>(shop: Shop, build: (fields: string) => string, variables: Record<string, unknown>): Promise<T> {
-  const state = taxIdAccess.get(shop.channel);
-  const tryTax = !state || state.ok || Date.now() - state.at > 6 * 3600_000;
-  if (!tryTax) return gql<T>(shop, build(ORDER_BASE), variables);
-  try {
-    const d = await gql<T>(shop, build(ORDER_BASE + ORDER_TAX), variables);
-    taxIdAccess.set(shop.channel, { ok: true, at: Date.now() });
-    return d;
-  } catch (e) {
-    if (!(e instanceof ShopifyError && e.code === "graphql" && SCOPE_ERROR.test(e.message))) throw e;
-    taxIdAccess.set(shop.channel, { ok: false, at: Date.now() });
-    if (await once(`scope:taxid:${shop.channel}:${todayIso()}`)) await logEvent(shop.channel as ShopChannel, "warn", "order", "needScopeTaxes");
-    return gql<T>(shop, build(ORDER_BASE), variables);
+  const k = (x: (typeof EXTRAS)[number]) => `${shop.channel}:${x.key}`;
+  let use = EXTRAS.filter((x) => { const st = extraAccess.get(k(x)); return !st || st.ok || Date.now() - st.at > 6 * 3600_000; });
+  for (;;) {
+    try {
+      const d = await gql<T>(shop, build(ORDER_BASE + use.map((x) => x.fields).join("")), variables);
+      for (const x of use) extraAccess.set(k(x), { ok: true, at: Date.now() });
+      return d;
+    } catch (e) {
+      if (!use.length || !(e instanceof ShopifyError && e.code === "graphql" && SCOPE_ERROR.test(e.message))) throw e;
+      // das Feld weglassen, das Shopify bemängelt (unklar → alle Zusatzfelder)
+      const blamed = use.filter((x) => x.match.test(e.message));
+      const drop = blamed.length ? blamed : use;
+      for (const x of drop) {
+        extraAccess.set(k(x), { ok: false, at: Date.now() });
+        if (await once(`scope:${x.key}:${shop.channel}:${todayIso()}`)) await logEvent(shop.channel as ShopChannel, "warn", "order", x.log);
+      }
+      use = use.filter((x) => !drop.includes(x));
+    }
   }
 }
 
@@ -204,14 +218,9 @@ export async function syncOrders(channel: ShopChannel) {
   return { processed };
 }
 
-// Eine Bestellung nie gleichzeitig zweimal verarbeiten (Webhook + Abgleich)
-const locks = new Map<string, Promise<unknown>>();
+// Eine Bestellung nie gleichzeitig zweimal verarbeiten (Webhook + Abgleich + Sendung melden)
 export function processOrder(shop: Shop, o: ShopOrder) {
-  const key = `${shop.channel}:${o.id}`;
-  const prev = locks.get(key) ?? Promise.resolve();
-  const next = prev.catch(() => {}).then(() => doProcessOrder(shop, o));
-  locks.set(key, next);
-  return next.finally(() => { if (locks.get(key) === next) locks.delete(key); });
+  return withOrderLock(`${shop.channel}:${o.id}`, () => doProcessOrder(shop, o));
 }
 
 async function currentInvoice(channel: ShopChannel, externalId: string) {
@@ -358,6 +367,10 @@ async function doProcessOrder(shop: Shop, o: ShopOrder) {
     await payInvoice(inv.id, open, todayIso(), `Shopify ${o.name} · ${o.paymentGatewayNames.join(", ")}`);
     await logEvent(channel, "info", "payment", "paid", o.name, inv.id);
   }
+
+  // 5) Sendungen: im Shopify-Admin versendet → ins System übernehmen; dort storniert → zurücknehmen; Zustellstatus
+  inv = (await currentInvoice(channel, o.id))!;
+  if (inv.status === "ISSUED") await importShopFulfillments(channel, o, inv.id).catch((e) => logEvent(channel, "warn", "shipment", `shipImportFailed:${(e as Error).message}`, o.name, inv!.id));
 }
 
 /** Erstattete Ware, die nicht zurück ins Lager kommt (restockType NO_RESTOCK), als Verlust ausbuchen. */

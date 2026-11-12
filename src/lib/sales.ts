@@ -9,6 +9,7 @@ import { addStock, audit, markDirty, removeStock, StockError } from "./stock";
 import { computeTotals, determineTaxMode, effectiveRateBp, OSS_THRESHOLD_CENTS, type TaxMode } from "./tax";
 import { addDaysIso, formatDate, todayIso } from "./dates";
 import { fitPlanToGross, movePayments, recordPaymentTx } from "./payments";
+import { moveShipments } from "./shipments";
 
 export class SalesError extends Error {
   constructor(public code: string, public detail?: string) { super(code); }
@@ -321,6 +322,8 @@ export async function issueInvoice(id: string, userId?: string, opts: { allowNeg
 
     // Zahlungen: von der ersetzten Rechnung übernehmen, Ratenplan an Betrag anpassen, Zahlung bei Ausstellung buchen
     if (inv.replacesInvoiceId) await movePayments(tx, inv.replacesInvoiceId, id, userId);
+    // Sendungen (Sendungsnummern) gehören weiter zur Bestellung
+    if (inv.replacesInvoiceId) await moveShipments(tx, inv.replacesInvoiceId, id, userId);
     await fitPlanToGross(tx, id, t.totals.grossCents);
     const plan = await tx.select().from(schema.installments).where(eq(schema.installments.invoiceId, id));
     if (plan.length) {

@@ -19,6 +19,13 @@ export type ShopOrder = {
   refunds: { id: string; createdAt: string; totalRefundedSet: Money; refundLineItems: { nodes: { quantity: number; restockType: string; lineItem: { id: string } }[] } }[];
   /** USt-IdNr. aus dem Checkout-Feld „USt-IdNr. des Unternehmens“ (ab API 2026-07, braucht read_customers/read_taxes) */
   customer?: { taxSettings?: { taxId?: string | null } | null } | null;
+  /** Sendungen (auch die im Shopify-Admin angelegten) – fehlt, wenn die App das Feld nicht lesen darf */
+  fulfillments?: ShopFulfillment[];
+};
+export type ShopFulfillment = {
+  id: string; status: string; displayStatus: string | null; createdAt: string;
+  trackingInfo: { company: string | null; number: string | null; url: string | null }[];
+  fulfillmentLineItems: { nodes: { quantity: number; lineItem: { id: string } }[] };
 };
 
 export type MappedOrder = {

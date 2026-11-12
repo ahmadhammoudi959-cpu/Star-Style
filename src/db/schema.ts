@@ -570,6 +570,40 @@ export const shopProcessed = pgTable("shop_processed", {
   createdAt: createdAt(),
 });
 
+/** Inhalt einer Sendung: Rechnungsposition (bei Shop-Bestellungen zusätzlich die Shopify-Position) und Menge */
+export type ShipmentItem = { lineId: string | null; externalLineId: string | null; variantId: string | null; description: string; qty: number };
+
+/**
+ * Versand mit Sendungsverfolgung (Wunsch Inhaber 12.11.2026): eine Zeile = eine Sendung (ein Versanddienst, 1–n Pakete mit je einer
+ * Nummer). Gehört zur Rechnung, bei einer Korrektur wandert sie mit (moveShipments). Bei Shop-Bestellungen wird sie als Fulfillment an
+ * Shopify gemeldet → Shopify schickt dem Kunden die Versandbestätigung mit Link zur Sendungsverfolgung. Nie löschen, nur zurücknehmen.
+ * shop_status: none (keine Shop-Bestellung) | pending (melden) | update (geänderte Nummern melden) | cancel (im Shop zurücknehmen)
+ *              | sent (im Shop) | failed (Shop hat abgelehnt, Fehler in shop_error) | cancelled
+ */
+export const shipments = pgTable("shipments", {
+  id: id(),
+  invoiceId: text("invoice_id").notNull().references(() => invoices.id),
+  channel: channel("channel").notNull().default("STORE"),
+  externalOrderId: text("external_order_id"),                      // Shopify-Bestellung (gid) bei Shop-Bestellungen
+  carrier: text("carrier").notNull(),                              // DHL | DPD | GLS | HERMES | UPS | OTHER
+  carrierName: text("carrier_name").notNull().default(""),         // OTHER: Name der Spedition (z. B. für Möbel)
+  trackingNumbers: jsonb("tracking_numbers").$type<string[]>().notNull().default([]),
+  trackingUrl: text("tracking_url").notNull().default(""),         // OTHER: Link der Spedition (optional)
+  items: jsonb("items").$type<ShipmentItem[]>().notNull().default([]),
+  shippedOn: date("shipped_on", { mode: "string" }).notNull(),
+  notifyCustomer: boolean("notify_customer").notNull().default(true),
+  source: text("source").notNull().default("system"),              // system | shop (im Shopify-Admin versendet, übernommen)
+  shopFulfillmentIds: jsonb("shop_fulfillment_ids").$type<string[]>().notNull().default([]),
+  shopStatus: text("shop_status").notNull().default("none"),
+  shopError: text("shop_error").notNull().default(""),
+  shopTries: integer("shop_tries").notNull().default(0),
+  deliveryStatus: text("delivery_status").notNull().default(""),    // Shopify displayStatus (IN_TRANSIT, DELIVERED …), wenn gemeldet
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  createdBy: text("created_by"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index("shipment_invoice").on(t.invoiceId), index("shipment_order").on(t.channel, t.externalOrderId), index("shipment_shop_status").on(t.shopStatus)]);
+
 /** Varianten, deren Bestand sich geändert hat und an die Shops gemeldet werden muss */
 export const stockDirty = pgTable("stock_dirty", {
   variantId: text("variant_id").primaryKey(),
@@ -639,7 +673,9 @@ export const invoicesRelations = relations(invoices, ({ one, many }) => ({
   payments: many(payments),
   installments: many(installments),
   dunnings: many(dunnings),
+  shipments: many(shipments),
 }));
+export const shipmentsRelations = relations(shipments, ({ one }) => ({ invoice: one(invoices, { fields: [shipments.invoiceId], references: [invoices.id] }) }));
 export const expensesRelations = relations(expenses, ({ one }) => ({ supplier: one(suppliers, { fields: [expenses.supplierId], references: [suppliers.id] }) }));
 export const dunningsRelations = relations(dunnings, ({ one }) => ({ invoice: one(invoices, { fields: [dunnings.invoiceId], references: [invoices.id] }) }));
 export const invoiceLinesRelations = relations(invoiceLines, ({ one }) => ({

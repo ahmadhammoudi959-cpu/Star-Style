@@ -12,15 +12,20 @@ import { openItems } from "@/lib/receivables";
 import { OpenButton } from "@/components/OpenButton";
 import { FilterSelect } from "@/components/FilterSelect";
 import { SearchPick } from "@/components/SearchPick";
+import { shippingStates, shopOrdersToShip } from "@/lib/shipments";
+import type { ShippingState } from "@/lib/shipping";
 
-export default async function SalesPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; customer?: string; status?: string }> }) {
-  const { tab = "invoices", q = "", customer = "", status = "" } = await searchParams;
+export default async function SalesPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; customer?: string; status?: string; ship?: string }> }) {
+  const { tab = "invoices", q = "", customer = "", status = "", ship: shipParam = "" } = await searchParams;
   const { t, intl } = await getI18n();
   await expireOffers();
   const like = q.trim() ? `%${q.trim().toLowerCase()}%` : null;
   const cust = customer || null;
   // Filter „Status“: Angebote nach Angebotsstatus; Rechnungen nach Entwurf/ausgestellt/storniert oder Zahlungsstand
   const st = status || null;
+  // Filter „Versand“ (Wunsch Inhaber 12.11.2026): „Zu versenden“ = alle Shop-Bestellungen, die noch nicht ganz verschickt sind (ohne 200er-Grenze)
+  const ship = tab === "invoices" && (shipParam === "open" || shipParam === "done") ? shipParam : "";
+  const toShipIds = ship === "open" ? (await shopOrdersToShip()).map((x) => x.id) : null;
   const rows = tab === "offers"
     ? (await db.execute<Record<string, unknown>>(sql`
         select o.id, o.number, o.status::text as status, o.date as d, o.valid_until, c.name as customer,
@@ -36,7 +41,8 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         where (${like}::text is null or lower(coalesce(i.number,'')) like ${like} or lower(c.name) like ${like})
           and (${cust}::text is null or i.customer_id = ${cust})
           and (${st}::text is null or ${st} in ('PAID', 'OPEN', 'PARTIAL', 'OVERDUE', 'CREDIT') or i.status::text = ${st})
-        order by i.created_at desc limit 200`)).rows;
+          ${toShipIds ? (toShipIds.length ? sql`and i.id in (${sql.join(toShipIds.map((x) => sql`${x}`), sql`, `)})` : sql`and false`) : sql``}
+        order by i.created_at desc limit ${toShipIds ? 1000 : 200}`)).rows;
 
   // Summen (Wunsch Inhaber 04.11.2026): gültige Rechnungen und Storniertes – gleiche Suche/Kunde wie die Liste, ohne 200er-Grenze.
   // Storniert = ganze stornierte Rechnung; bei einer Korrektur nur der Betrag, um den die neue Rechnung kleiner ist.
@@ -55,14 +61,26 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
   const PAY_TONE = { PAID: "bg-emerald-100 text-emerald-800", OPEN: "bg-slate-100 text-slate-700", PARTIAL: "bg-sky-100 text-sky-800", OVERDUE: "bg-red-100 text-red-800", CREDIT: "bg-violet-100 text-violet-800" } as const;
   const payStateOf = (r: Record<string, unknown>) =>
     r.status === "ISSUED" && r.kind === "INVOICE" ? ((pay.get(String(r.id))?.state.status ?? "PAID") as string) : null;
-  const shown = tab === "invoices" && st && ["PAID", "OPEN", "PARTIAL", "OVERDUE", "CREDIT"].includes(st) ? rows.filter((r) => payStateOf(r) === st) : rows;
+  const payShown = tab === "invoices" && st && ["PAID", "OPEN", "PARTIAL", "OVERDUE", "CREDIT"].includes(st) ? rows.filter((r) => payStateOf(r) === st) : rows;
+  // Versandstand je ausgestellter Rechnung (Shop-Bestellungen immer, Laden-Rechnungen nur mit Sendung)
+  const shipState = tab === "invoices"
+    ? await shippingStates(payShown.filter((r) => r.status === "ISSUED" && r.kind === "INVOICE").map((r) => String(r.id)))
+    : new Map<string, ShippingState>();
+  const shown = ship === "done" ? payShown.filter((r) => shipState.get(String(r.id)) === "done") : payShown;
   const customers = (await db.execute<{ id: string; name: string; number: number }>(sql`
     select id, name, number from customers where active order by name`)).rows;
   const statusOptions = tab === "offers"
     ? (["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED", "CONVERTED"] as const).map((k) => ({ value: k, label: t.sales.status[k] }))
     : [...(["DRAFT", "ISSUED", "CANCELLED"] as const).map((k) => ({ value: k, label: t.sales.status[k] })),
        ...(["OPEN", "PARTIAL", "OVERDUE", "PAID"] as const).map((k) => ({ value: k, label: t.pay.status[k] }))];
-  const filtered = Boolean(q.trim() || customer || status);
+  const filtered = Boolean(q.trim() || customer || status || ship);
+  const SHIP_TONE = { none: "bg-amber-100 text-amber-900", partial: "bg-sky-100 text-sky-800", done: "bg-emerald-100 text-emerald-800" } as const;
+  const shipBadge = (r: Record<string, unknown>) => {
+    const s = shipState.get(String(r.id));
+    const isShop = r.channel !== "STORE";
+    if (!s || s === "nothing" || (!isShop && s === "none")) return null;
+    return <span className={`badge ms-1 ${SHIP_TONE[s]}`}><Icon name="truck" className="h-3 w-3" />{isShop && s === "none" ? t.ship.toShip : t.ship.state[s]}</span>;
+  };
   const payBadge = (r: Record<string, unknown>) => {
     if (r.status !== "ISSUED" || r.kind !== "INVOICE") return null;
     const s = (pay.get(String(r.id))?.state.status ?? "PAID") as keyof typeof PAY_TONE;
@@ -94,6 +112,8 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         {customers.length > 0 && <FilterSelect name="customer" label={t.sales.customer} allLabel={t.lists.allCustomers} defaultValue={customer} icon="users" className="md:w-60"
           options={customers.map((c) => ({ value: c.id, label: c.name }))} />}
         <FilterSelect name="status" label={t.lists.status} allLabel={t.lists.allStatuses} defaultValue={status} icon="check" className="md:w-56" options={statusOptions} />
+        {tab === "invoices" && <FilterSelect name="ship" label={t.lists.shipping} allLabel={t.lists.allShipping} defaultValue={ship} icon="truck" className="md:w-52"
+          options={[{ value: "open", label: t.ship.toShip }, { value: "done", label: t.ship.state.done }]} />}
         {filtered && <Link href={`/sales?tab=${tab}`} className="btn-ghost group"><Icon name="x" className="h-4 w-4" />{t.stock.clear}</Link>}
       </form>
       {totals && (
@@ -132,7 +152,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                 <td><Link href={`/sales/${tab}/${r.id}`} className="num font-semibold hover:text-brand-700" dir="ltr">{String(r.number)}</Link></td>
                 <td className="num">{formatDate(String(r.d), intl)}</td>
                 <td>{String(r.customer)}</td>
-                <td><StatusBadge t={t} status={String(r.status)} />{r.kind === "CANCELLATION" && <span className="badge ms-1 bg-red-50 text-red-700">Storno</span>}{payBadge(r)}</td>
+                <td><StatusBadge t={t} status={String(r.status)} />{r.kind === "CANCELLATION" && <span className="badge ms-1 bg-red-50 text-red-700">Storno</span>}{payBadge(r)}{shipBadge(r)}</td>
                 <td className="num hidden md:table-cell">{tab === "offers" ? formatDate(String(r.valid_until), intl) : t.sales.channels[r.channel as "STORE"]}</td>
                 <td className={`num text-end font-semibold ${Number(r.amount) < 0 ? "text-red-600" : ""}`}>{formatCents(Number(r.amount), intl)}</td>
                 <td className="text-end"><OpenButton href={`/sales/${tab}/${r.id}`} label={t.product.open} /></td>
@@ -153,7 +173,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex flex-wrap items-center gap-1">
-                    <StatusBadge t={t} status={String(r.status)} />{r.kind === "CANCELLATION" && <span className="badge bg-red-50 text-red-700">Storno</span>}{payBadge(r)}
+                    <StatusBadge t={t} status={String(r.status)} />{r.kind === "CANCELLATION" && <span className="badge bg-red-50 text-red-700">Storno</span>}{payBadge(r)}{shipBadge(r)}
                   </span>
                   <OpenButton href={`/sales/${tab}/${r.id}`} label={t.product.open} className="shrink-0 px-2.5 py-1.5 text-xs" />
                 </div>

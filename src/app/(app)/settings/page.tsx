@@ -14,7 +14,7 @@ import { deviceLabel } from "@/lib/login-guard";
 import { formatDate, formatDateTime } from "@/lib/dates";
 
 const logKey = (r: AttemptRow): LogKey =>
-  r.step === "change" ? (r.ok ? "changed" : r.reason === "code" ? "code" : "invalid")
+  r.step === "change" ? (r.ok ? (r.reason === "emailChanged" ? "emailChanged" : "changed") : r.reason === "code" ? "code" : "invalid")
   : r.ok && r.reason === "success" ? (r.step === "recovery" ? "recovery" : "success")
   : (["needCode", "invalid", "code", "locked"].includes(r.reason) ? r.reason : "invalid") as LogKey;
 
@@ -29,6 +29,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const plain = s ? Object.fromEntries(Object.entries(s).filter(([, v]) => !(v instanceof Date) && (typeof v !== "object" || v === null))) as Record<string, string | number | null> : {};
   const ai = aiConfigured();
   const security: SecurityView = {
+    email: me?.email ?? "",
     twoOn: !!me?.totpEnabledAt, twoSince: me?.totpEnabledAt ? formatDate(me.totpEnabledAt.toISOString(), intl) : null,
     codesLeft: me?.recoveryCodes.length ?? 0,
     passwordChanged: me?.passwordChangedAt ? formatDateTime(me.passwordChangedAt.toISOString(), intl) : null,

@@ -14,10 +14,11 @@ import { EmailForm, InvoiceOp } from "../../DocActions";
 import { mailConfigured } from "@/lib/mail";
 import { StatusBadge } from "../../StatusBadge";
 import { PaymentPanel } from "./PaymentPanel";
+import { ShippingPanel } from "./ShippingPanel";
 
-export default async function InvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ customer?: string }> }) {
+export default async function InvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ customer?: string; ship?: string }> }) {
   const { id } = await params;
-  const { customer: preset } = await searchParams;
+  const { customer: preset, ship: shipNotice } = await searchParams;
   const { t, intl } = await getI18n();
 
   if (id === "new") {
@@ -114,7 +115,9 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           </div>
         </aside>
       </div>
-      <PaymentPanel t={t} intl={intl} invoiceId={inv.id} />
+      {/* Shop-Bestellungen: zuerst versenden (Sendungsnummer → Shop → Versand-E-Mail an den Kunden), dann Zahlungen */}
+      {inv.channel !== "STORE" ? <><ShippingPanel t={t} intl={intl} invoiceId={inv.id} notice={shipNotice} /><PaymentPanel t={t} intl={intl} invoiceId={inv.id} /></>
+        : <><PaymentPanel t={t} intl={intl} invoiceId={inv.id} /><ShippingPanel t={t} intl={intl} invoiceId={inv.id} notice={shipNotice} /></>}
     </div>
   );
 }

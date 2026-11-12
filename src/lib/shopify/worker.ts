@@ -8,6 +8,7 @@ import "server-only";
 import { runCycle } from "./sync";
 import { retryGalleryDeletes } from "./gallery";
 import { pushDirtyPrices } from "./prices";
+import { retryShipments } from "../shipments";
 
 let started = false, busy = false, ticks = 0;
 
@@ -24,6 +25,8 @@ export function startWorker() {
       if (full) await retryGalleryDeletes().catch((e) => console.error("shopify gallery retry", e));
       // geänderte Preise, die noch nicht im Shop angekommen sind (Shop war kurz nicht erreichbar)
       if (full) await pushDirtyPrices().catch((e) => console.error("shopify prices retry", e));
+      // Sendungen, die noch nicht im Shop sind (Shop kurz weg, Abgleich aus, App-Recht fehlte)
+      if (full) await retryShipments().catch((e) => console.error("shopify shipments retry", e));
     } catch (e) { console.error("shopify worker", e); }
     finally { busy = false; ticks++; }
   };

@@ -14,6 +14,8 @@ export function evText(t: Dict, msg: string) {
   if (key === "pricesPushed") { const [u, f, err] = p.split("|"); return E.pricesPushed.replace("{u}", u).replace("{f}", f) + (err ? ` – ${err}` : ""); }
   if (key === "weightsPushed") { const [u, f, err] = p.split("|"); return E.weightsPushed.replace("{u}", u).replace("{f}", f) + (err ? ` – ${err}` : ""); }
   if (key === "bulkPushed") { const [c, l, u, f, s] = p.split("|"); return E.bulkPushed.replace("{c}", c).replace("{l}", l).replace("{u}", u).replace("{f}", f).replace("{s}", s); }
+  // Sendung: „Versanddienst Nummer(n)|1“ – 1 = Kunde per E-Mail informiert
+  if (key === "shipped" || key === "trackingUpdated") { const [label, mail] = p.split("|"); return E[key].replace("{p}", label) + (mail === "1" ? E.shippedMail : ""); }
   if (key === "pushBlocked") {
     const j = p.indexOf("|");
     const reason = p.slice(0, j), name = p.slice(j + 1);

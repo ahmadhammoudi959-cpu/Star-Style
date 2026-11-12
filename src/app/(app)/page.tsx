@@ -9,6 +9,7 @@ import { aiConfigured } from "@/lib/ai/client";
 import { formatCents } from "@/lib/money";
 import { daysBetween, formatDate, formatDateTime, todayIso } from "@/lib/dates";
 import { EXPIRY_BADGE, expiryState } from "@/lib/expiry";
+import { shopOrdersToShip } from "@/lib/shipments";
 import { failuresSincePrevious } from "@/lib/login";
 import { setupSteps } from "@/lib/onboarding";
 import { fill } from "@/i18n";
@@ -18,7 +19,7 @@ export default async function Home() {
   const session = await requireSession();
   const { t, intl } = await getI18n();
   const today = todayIso();
-  const [stats, al, open, ins, setup, pend, fails] = await Promise.all([dashboardStats(today), alerts(today), openItems(), loadInsights(), setupSteps(), pendingSummary(), failuresSincePrevious()]);
+  const [stats, al, open, ins, setup, pend, fails, toShip] = await Promise.all([dashboardStats(today), alerts(today), openItems(), loadInsights(), setupSteps(), pendingSummary(), failuresSincePrevious(), shopOrdersToShip()]);
   const ai = aiConfigured();
   const debts = open.filter((r) => r.state.openCents > 0);
   const rOpen = debts.reduce((s, r) => s + r.state.openCents, 0);
@@ -49,6 +50,17 @@ export default async function Home() {
             <span className="text-sm font-semibold text-amber-900">{fill(fails.n === 1 ? t.security.alertOne : t.security.alert, { n: fails.n, time: formatDateTime(fails.last, intl) })}</span>
           </span>
           <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">{t.security.alertLink}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></span>
+        </Link>
+      )}
+
+      {/* Online-Bestellungen, die noch verschickt werden müssen (Wunsch Inhaber 12.11.2026: alles im System, nie im Shopify-Admin) */}
+      {toShip.length > 0 && (
+        <Link href="/sales?ship=open" className="group card flex animate-rise flex-wrap items-center justify-between gap-3 p-4 ring-2 ring-brand-500/25 hover:shadow-lift">
+          <span className="flex items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600"><Icon name="truck" className="icon-pop h-5 w-5" /></span>
+            <span className="font-bold">{toShip.length === 1 ? t.home.toShipOne : fill(t.home.toShip, { n: toShip.length })}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">{t.home.toShipAction}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></span>
         </Link>
       )}
 

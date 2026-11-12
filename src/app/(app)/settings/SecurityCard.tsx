@@ -5,13 +5,13 @@ import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
 import {
-  cancelTwoFactorAction, changePasswordAction, confirmTwoFactorAction, disableTwoFactorAction, logoutOthersAction,
+  cancelTwoFactorAction, changeEmailAction, changePasswordAction, confirmTwoFactorAction, disableTwoFactorAction, logoutOthersAction,
   newRecoveryCodesAction, startTwoFactorAction, type SecResult,
 } from "./security-actions";
 
-export type LogKey = "success" | "recovery" | "needCode" | "invalid" | "code" | "locked" | "changed";
+export type LogKey = "success" | "recovery" | "needCode" | "invalid" | "code" | "locked" | "changed" | "emailChanged";
 export type SecurityView = {
-  twoOn: boolean; twoSince: string | null; codesLeft: number;
+  email: string; twoOn: boolean; twoSince: string | null; codesLeft: number;
   passwordChanged: string | null; dbInternal: boolean;
   log: { at: string; ok: boolean; key: LogKey; device: string; ip: string }[];
 };
@@ -54,6 +54,7 @@ export function SecurityCard({ t, v }: { t: Dict; v: SecurityView }) {
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <TwoFactor t={t} v={v} />
         <div className="space-y-5">
+          <EmailChange t={t} v={v} />
           <Password t={t} v={v} />
           <Others t={t} />
         </div>
@@ -207,6 +208,29 @@ function Password({ t, v }: { t: Dict; v: SecurityView }) {
       <Field label={P.repeat}><input name="repeat" type="password" autoComplete="new-password" required minLength={10} className="input" dir="ltr" /></Field>
       <ErrorBox message={errText(S, t.common.error, st)} />
       <SubmitButton className="btn-primary group"><Icon name="lock" className="icon-pop h-4 w-4" />{P.save}</SubmitButton>
+    </form>
+  );
+}
+
+/** Anmelde-E-Mail ändern: neue Adresse + Passwort (+ Code, wenn Zwei-Schritt an) */
+function EmailChange({ t, v }: { t: Dict; v: SecurityView }) {
+  const S = t.security, E = S.email;
+  // kein router.refresh(): die Action liefert die neue Adresse selbst (siehe changeEmailAction)
+  const [st, action] = useActionState(changeEmailAction, undefined);
+  const now = st?.ok && st.email ? st.email : v.email;
+  const [before, after] = E.current.split("{email}");
+  return (
+    <form action={action} className="space-y-3 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-black/[0.04]">
+      <h3 className="flex items-center gap-2 font-bold"><Icon name="mail" className="h-5 w-5 text-brand-600" />{E.title}</h3>
+      <p className="text-xs text-ink-soft">{before}<bdi dir="ltr" className="font-semibold text-ink [overflow-wrap:anywhere]">{now}</bdi>{after}</p>
+      {st?.ok && <Ok>{E.changed.replace("{email}", st.email ?? "")}</Ok>}
+      <Field label={E.next} hint={E.hint}>
+        <input key={st?.at ?? 0} name="email" type="email" autoComplete="email" required maxLength={200} className="input" dir="ltr" defaultValue={st && !st.ok ? st.email : ""} />
+      </Field>
+      <Field label={E.password}><input name="password" type="password" autoComplete="current-password" required className="input" dir="ltr" /></Field>
+      {v.twoOn && <Field label={S.two.code}><input name="code" inputMode="numeric" autoComplete="one-time-code" required maxLength={40} className="input num" dir="ltr" /></Field>}
+      <ErrorBox message={errText(S, t.common.error, st)} />
+      <SubmitButton className="btn-primary group"><Icon name="mail" className="icon-pop h-4 w-4" />{E.save}</SubmitButton>
     </form>
   );
 }

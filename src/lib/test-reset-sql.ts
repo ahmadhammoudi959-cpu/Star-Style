@@ -85,6 +85,7 @@ export const RESET_STATEMENTS: string[] = [
   // kein Shop läuft (geprüft); beim Einschalten gleicht der Abgleich ohnehin alle Bestände ab
   `delete from stock_dirty`,
   `delete from payments`,
+  `delete from shipments`, // Sendungen mit Sendungsnummern gehören zu den Rechnungen
   `delete from invoices`, // + Positionen, Raten, Mahnungen (Kaskade)
   `delete from offers`, // + Positionen, Reservierungen
   `delete from write_offs`, // + Positionen
