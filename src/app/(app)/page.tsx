@@ -15,6 +15,7 @@ import { failuresSincePrevious } from "@/lib/login";
 import { setupSteps } from "@/lib/onboarding";
 import { fill } from "@/i18n";
 import { pendingSummary } from "@/lib/shopify/product-push";
+import { recentBackups } from "@/lib/backup-info";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
   const session = await requireSession();
@@ -25,7 +26,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const may = (p: Perm) => can(session, p);
   const opens = (href: string) => canOpen(session, href);
   const money = may("dashboard.money"), seeStock = may("products.view");
-  const [stats, al, open, ins, setup, pend, fails, toShip] = await Promise.all([
+  const [stats, al, open, ins, setup, pend, fails, toShip, backups] = await Promise.all([
     seeStock || money ? dashboardStats(today) : null,
     seeStock ? alerts(today) : { low: [], expiring: [] },
     money ? openItems() : [],
@@ -34,6 +35,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     may("shops.manage") ? pendingSummary() : [],
     failuresSincePrevious(session.uid, session.admin),
     may("sales.shipping") ? shopOrdersToShip() : [],
+    opens("/backup") ? recentBackups(1) : [],
   ]);
   const ai = aiConfigured() && may("ask");
   const debts = open.filter((r) => r.state.openCents > 0);
@@ -42,13 +44,20 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const rSoon = debts.filter((r) => r.light === "yellow").reduce((s, r) => s + r.state.nextDueCents, 0);
   const lateList = opensSales(session) ? debts.filter((r) => r.light === "red").slice(0, 5) : [];
 
-  const allActions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean }[] = [
+  // Datensicherung (nur Admin, Wunsch Inhaber 12.11.2026: „باك اب يومي“ als Kachel wie Scanner/Verkaufen): gelb, solange heute noch keine
+  const berlinDay = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date(iso));
+  const backupToday = backups[0] && berlinDay(backups[0].at) === today ? backups[0].at : null;
+  const backupHint = backupToday
+    ? fill(t.home.backupLast, { d: new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit" }).format(new Date(backupToday)) })
+    : t.home.backupNone;
+  const allActions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean; warn?: boolean }[] = [
     { href: "/scan", label: t.home.scan, hint: t.home.scanHint, icon: "scan", tone: "from-teal-500 to-emerald-700" },
     { href: "/sales/invoices/new", label: t.home.sell, hint: t.home.sellHint, icon: "cart", tone: "from-brand-500 to-brand-700" },
     { href: "/receive", label: t.home.receive, hint: t.home.receiveHint, icon: "truck", tone: "from-sky-500 to-sky-700" },
     { href: "/expenses/new", label: t.home.expense, hint: t.home.expenseHint, icon: "receipt", tone: "from-rose-500 to-pink-700" },
     { href: "/write-offs", label: t.home.loss, hint: t.home.lossHint, icon: "alert", tone: "from-amber-500 to-orange-600" },
     { href: "/reports", label: t.home.reports, hint: t.home.reportsHint, icon: "chart", tone: "from-violet-500 to-indigo-700" },
+    { href: "/backup", label: t.home.backup, hint: backupHint, icon: "download", tone: "from-slate-500 to-navy-800", warn: !backupToday },
   ];
   const actions = allActions.filter((a) => opens(a.href));
   const showAlerts = (money && lateList.length > 0) || seeStock;
@@ -141,7 +150,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
       )}
 
       {/* Handy: Kacheln nebeneinander zum Wischen (Wunsch Inhaber 04.11.2026), ab Tablet als Raster */}
-      <div className="stagger swipe-row -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-6">
+      <div className={`stagger swipe-row -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 ${actions.length > 6 ? "sm:grid-cols-4 xl:grid-cols-7" : "sm:grid-cols-3 lg:grid-cols-6"}`}>
         {actions.map((a) => {
           const inner = (
             <>
@@ -149,10 +158,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
                 <Icon name={a.icon} className="h-6 w-6 sm:h-7 sm:w-7" />
               </div>
               <div className="font-bold sm:text-lg">{a.label}</div>
-              <div className="text-xs text-ink-soft sm:text-sm">{a.soon ? t.home.comingSoon : a.hint}</div>
+              <div className={`text-xs sm:text-sm ${a.warn ? "font-semibold text-amber-700" : "text-ink-soft"}`}>{a.soon ? t.home.comingSoon : a.hint}</div>
             </>
           );
-          const box = "card group w-[38%] shrink-0 snap-start p-4 sm:w-auto sm:p-5";
+          const box = `card group w-[38%] shrink-0 snap-start p-4 sm:w-auto sm:p-5${a.warn ? " ring-2 ring-amber-300" : ""}`;
           return a.soon ? (
             <div key={a.href} className={`${box} opacity-60`}>{inner}</div>
           ) : (

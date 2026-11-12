@@ -17,7 +17,8 @@ export function startWorker() {
   if (started || process.env.SHOPIFY_WORKER === "off") return;
   started = true;
   const tick = async () => {
-    if (busy) return;
+    // während eine Datensicherung zurückgeholt wird, nichts abgleichen (src/lib/backup.ts)
+    if (busy || (globalThis as { __ssMaintenance?: boolean }).__ssMaintenance) return;
     busy = true;
     try {
       const full = ticks % 15 === 0; // 15 × 20 s = 5 min

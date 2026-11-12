@@ -83,6 +83,8 @@ export const ROUTES: [RegExp, Need][] = [
   [/^\/$/, "all"],
   [R("/(?:account|password|scan)"), "all"],
   [R("/settings/users"), "admin"],
+  [R("/backup"), "admin"],
+  [R("/api/backup"), "admin"], // /api/backup/upload läuft an der Middleware vorbei (Datei in Stücken) und prüft selbst
   [R("/settings"), { any: ["settings"] }],
   [R("/products/new"), { any: ["products.edit"] }],
   [R("/(?:products|categories|stock)"), { any: ["products.view"] }],

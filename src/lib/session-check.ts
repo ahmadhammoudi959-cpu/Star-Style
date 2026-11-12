@@ -49,3 +49,5 @@ export async function sessionCurrent(uid: string, sv: number): Promise<boolean> 
 
 /** Nach einer Änderung im selben Prozess sofort neu lesen */
 export const forgetSession = (uid: string) => cache.delete(uid);
+/** Nach dem Zurückholen einer Datensicherung: alle neu lesen */
+export const forgetAllSessions = () => cache.clear();

@@ -20,6 +20,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const ai = aiConfigured();
   const links: { href: string; icon: IconName; title: string; hint: string }[] = [
     ...(admin ? [{ href: "/settings/users", icon: "users" as const, title: t.users.title, hint: t.users.cardHint }] : []),
+    ...(admin ? [{ href: "/backup", icon: "download" as const, title: t.backup.title, hint: t.backup.cardHint }] : []),
     { href: "/account", icon: "shield", title: t.account.cardTitle, hint: t.account.cardHint },
   ];
   return (
@@ -32,7 +33,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <div role="alert" className="mb-4 animate-rise rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">{t.reset[reset]}</div>
       )}
       {/* Mitarbeiter & Rechte (Admin) und das eigene Konto (Passwort, Zwei-Schritt) – die Sicherheit liegt jetzt unter „Mein Konto“ */}
-      <div id="security" className="stagger mb-5 grid scroll-mt-20 gap-3 md:grid-cols-2">
+      <div id="security" className="stagger mb-5 grid scroll-mt-20 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {links.map((l) => (
           <Link key={l.href} href={l.href} className="card card-hover group flex items-center gap-4 p-5">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600"><Icon name={l.icon} className="icon-pop h-5 w-5" /></span>

@@ -113,7 +113,8 @@ describe("jede Seite hat eine Rechte-Zeile", () => {
     .filter((s) => !/^\(.*\)$/.test(s))
     .map((s) => (s === "[channel]" ? "GENERAL_SHOP" : s.startsWith("[") ? "x" : s)).join("/");
   const PUBLIC = ["/login", "/setup", "/api/shopify/webhook"]; // in der Middleware ohne Sitzung (Webhook per HMAC)
-  const ADMIN_ONLY = ["/settings/users"];
+  // /api/backup/upload läuft an der Middleware vorbei, steht aber trotzdem als „nur Admin“ in ROUTES (und prüft selbst)
+  const ADMIN_ONLY = ["/settings/users", "/backup", "/api/backup"];
 
   it("findet die Seiten", () => expect(files.length).toBeGreaterThan(40));
   for (const f of files) {
