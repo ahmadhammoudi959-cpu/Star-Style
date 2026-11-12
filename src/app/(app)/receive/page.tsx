@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
@@ -18,7 +18,9 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
   const like = hq.trim() ? `%${hq.trim().toLowerCase()}%` : null;
   const [options, suppliers, history] = await Promise.all([
     variantOptions(),
-    db.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers).where(eq(schema.suppliers.active, true)).orderBy(asc(schema.suppliers.name)),
+    // nur Warenlieferanten – Firmen aus Ausgaben (Baumarkt, Steuerbüro …) gehören nicht hierher
+    db.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers)
+      .where(and(eq(schema.suppliers.active, true), eq(schema.suppliers.kind, "GOODS"))).orderBy(asc(schema.suppliers.name)),
     // letzte Wareneingänge; Suche nach WE-Nr., Lieferant, Lieferanten-Rechnungsnr. oder Artikel (Name, Nr., Barcode)
     db.execute<Record<string, unknown>>(sql`
       select r.id, r.number, r.date, r.supplier_invoice_no, r.note, s.name as supplier,

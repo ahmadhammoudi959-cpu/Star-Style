@@ -112,6 +112,25 @@ export const RESET_STATEMENTS: string[] = [
 /** „Echtbetrieb starten“ (eigener Knopf, einmalig): ab da kein Zurücksetzen mehr */
 export const GO_LIVE_SQL = `update company_settings set live_since = now() where live_since is null`;
 
+/**
+ * „Aus Versehen gestartet“ (Inhaber 12.11.2026: Knopf wurde versehentlich gedrückt): zurück in den Testbetrieb – löscht nichts,
+ * nur live_since weg. Nur in den ersten UNDO_LIVE_DAYS Tagen und nur ohne abgeschlossenen Monat (dann wäre gebucht).
+ * Danach gilt wieder alles aus test-reset (Zurücksetzen möglich). Protokoll im audit_log.
+ */
+export const UNDO_LIVE_DAYS = 7;
+export const UNDO_LIVE_SQL = `update company_settings set live_since = null where live_since is not null`;
+
+export type UndoLive = "ok" | "tooLate" | "locked";
+/** Darf der Echtbetrieb noch zurückgenommen werden? (rein, getestet) */
+export function undoLiveState(liveSince: Date, now: Date, monthLocked: boolean): UndoLive {
+  if (monthLocked) return "locked";
+  return now.getTime() - liveSince.getTime() <= UNDO_LIVE_DAYS * 86_400_000 ? "ok" : "tooLate";
+}
+/** Bis wann es geht (Anzeige) */
+export function undoLiveUntil(liveSince: Date): Date {
+  return new Date(liveSince.getTime() + UNDO_LIVE_DAYS * 86_400_000);
+}
+
 export type ResetPreview = {
   invoices: number; cancellations: number; drafts: number; offers: number; payments: number; receipts: number;
   writeOffs: number; expenses: number; customers: number; units: number; stocked: number; sequences: number; exports: number;

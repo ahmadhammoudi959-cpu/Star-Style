@@ -37,7 +37,11 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title={t.exp.title} actions={!locked && <Link href="/expenses/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.exp.new}</Link>} />
+      <PageHeader title={t.exp.title} actions={<>
+        {/* Firmen aus Ausgaben (Baumarkt, Steuerbüro …) – stehen nicht bei den Lieferanten */}
+        <Link href="/expenses/vendors" className="btn-ghost group"><Icon name="users" className="h-4 w-4" />{t.exp.vendors}</Link>
+        {!locked && <Link href="/expenses/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.exp.new}</Link>}
+      </>} />
       <div className="mb-5 flex flex-wrap items-center gap-3 animate-rise">
         <MonthNav month={month} base="/expenses" months={t.rep.months} locked={locked} />
       </div>

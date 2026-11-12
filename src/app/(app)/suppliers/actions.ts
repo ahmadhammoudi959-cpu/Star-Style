@@ -21,6 +21,8 @@ const S = z.object({
   country: z.string().trim().length(2).transform((s) => s.toUpperCase()).default("DE"),
   vatId: z.string().trim().max(30).transform((s) => s.replace(/\s/g, "").toUpperCase()).default(""),
   notes: z.string().trim().max(2000).default(""),
+  // Warenlieferant oder Firma aus Ausgaben – nur die Anzeige (Lieferanten/Wareneingang bzw. Ausgaben → Firmen)
+  kind: z.enum(["GOODS", "EXPENSE"]).default("GOODS"),
 });
 
 export async function saveSupplier(_: SupplierState, fd: FormData): Promise<SupplierState> {
@@ -30,13 +32,15 @@ export async function saveSupplier(_: SupplierState, fd: FormData): Promise<Supp
   const { id, ...v } = p.data;
   await db.transaction(async (tx) => {
     if (id) {
+      const before = await tx.query.suppliers.findFirst({ where: eq(schema.suppliers.id, id) });
       await tx.update(schema.suppliers).set(v).where(eq(schema.suppliers.id, id));
-      await audit(tx, { entity: "supplier", entityId: id, action: "update", after: v, userId: session.uid });
+      await audit(tx, { entity: "supplier", entityId: id, action: "update", before, after: v, userId: session.uid });
     } else {
       const [r] = await tx.insert(schema.suppliers).values(v).returning({ id: schema.suppliers.id });
       await audit(tx, { entity: "supplier", entityId: r.id, action: "create", after: v, userId: session.uid });
     }
   });
   revalidatePath("/suppliers");
-  redirect("/suppliers");
+  revalidatePath("/expenses/vendors");
+  redirect(v.kind === "EXPENSE" ? "/expenses/vendors" : "/suppliers");
 }

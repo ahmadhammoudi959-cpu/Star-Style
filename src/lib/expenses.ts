@@ -1,6 +1,7 @@
 /**
  * Eingangsrechnungen / Ausgaben.
- * Lieferant wird automatisch angelegt, wenn der Name neu ist (z. B. „Meta Platforms Ireland“).
+ * Lieferant wird automatisch angelegt, wenn der Name neu ist (z. B. „Meta Platforms Ireland“) – als „Firma aus Ausgaben“
+ * (kind EXPENSE, Seite /expenses/vendors), bei Wareneinkauf als Warenlieferant.
  */
 import { and, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -11,6 +12,11 @@ import { expenseAmounts, type ExpenseCategory, type ExpenseTaxCase, type PayMeth
 
 export class ExpenseError extends Error {
   constructor(public code: string) { super(code); }
+}
+
+/** Art einer Firma, die über eine Ausgabe neu angelegt wird: Wareneinkauf = Warenlieferant, sonst „Firma aus Ausgaben“ */
+export function supplierKindForExpense(category: ExpenseCategory): "GOODS" | "EXPENSE" {
+  return category === "GOODS" ? "GOODS" : "EXPENSE";
 }
 
 export type ExpenseInput = {
@@ -45,15 +51,25 @@ export async function saveExpense(e: ExpenseInput, userId?: string): Promise<str
       await assertOpen(tx, e.date, e.paid ? e.paidAt : null, before?.date, before?.paid ? before.paidAt : null);
     } catch { throw new ExpenseError("periodLocked"); }
 
-    // Lieferant finden oder anlegen
+    // Lieferant finden oder anlegen. Neue Firmen aus Ausgaben = „Firma aus Ausgaben“ (EXPENSE): sie stehen nicht bei den
+    // Lieferanten/im Wareneingang (Wunsch Inhaber 12.11.2026), bleiben aber Kreditoren wie bisher. Wareneinkauf → Warenlieferant.
     const name = e.vendorName.trim();
     let supplier = await tx.query.suppliers.findFirst({ where: sql`lower(${schema.suppliers.name}) = lower(${name})` });
     const vatId = e.vendorVatId.replace(/\s/g, "").toUpperCase();
+    const kind = supplierKindForExpense(e.category);
     if (!supplier) {
-      [supplier] = await tx.insert(schema.suppliers).values({ name, country: e.vendorCountry.toUpperCase(), vatId }).returning();
+      [supplier] = await tx.insert(schema.suppliers).values({ name, country: e.vendorCountry.toUpperCase(), vatId, kind }).returning();
       await audit(tx, { entity: "supplier", entityId: supplier.id, action: "create", after: supplier, userId });
-    } else if ((vatId && supplier.vatId !== vatId) || supplier.country !== e.vendorCountry.toUpperCase()) {
-      await tx.update(schema.suppliers).set({ vatId: vatId || supplier.vatId, country: e.vendorCountry.toUpperCase() }).where(eq(schema.suppliers.id, supplier.id));
+    } else {
+      const set: Partial<typeof schema.suppliers.$inferInsert> = {};
+      if ((vatId && supplier.vatId !== vatId) || supplier.country !== e.vendorCountry.toUpperCase()) {
+        set.vatId = vatId || supplier.vatId; set.country = e.vendorCountry.toUpperCase();
+      }
+      if (supplier.kind === "EXPENSE" && kind === "GOODS") set.kind = "GOODS"; // liefert jetzt Ware
+      if (Object.keys(set).length) {
+        await tx.update(schema.suppliers).set(set).where(eq(schema.suppliers.id, supplier.id));
+        if (set.kind) await audit(tx, { entity: "supplier", entityId: supplier.id, action: "update", before: { kind: supplier.kind }, after: { kind: set.kind, reason: "Wareneinkauf" }, userId });
+      }
     }
 
     const values = {

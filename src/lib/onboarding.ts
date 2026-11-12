@@ -19,7 +19,7 @@ export async function setupSteps() {
   const r = (await db.execute<Record<string, unknown>>(sql`select
       (select (coalesce(street,'') <> '' and coalesce(city,'') <> '' and (coalesce(vat_id,'') <> '' or coalesce(tax_number,'') <> '') and coalesce(iban,'') <> '')
          from company_settings limit 1) as company,
-      exists(select 1 from suppliers) as supplier,
+      exists(select 1 from suppliers where kind = 'GOODS') as supplier,
       exists(select 1 from products) as product,
       exists(select 1 from goods_receipts) as receive,
       exists(select 1 from customers) as customer,

@@ -26,7 +26,7 @@ export default async function EditProduct({ params, searchParams }: { params: Pr
   if (!p) notFound();
   const vs = await db.select().from(schema.variants)
     .where(and(eq(schema.variants.productId, id), eq(schema.variants.active, true))).orderBy(asc(schema.variants.createdAt));
-  const [{ suppliers, categories }, deletable, shopStatus, galleries] = await Promise.all([formLookups(), productDeletable(id), productShopStatus(id), galleriesOf(id)]);
+  const [{ suppliers, categories }, deletable, shopStatus, galleries] = await Promise.all([formLookups(p.supplierId), productDeletable(id), productShopStatus(id), galleriesOf(id)]);
   return (
     <div>
       <PageHeader title={p.nameDe} subtitle={p.sku} back="/products"

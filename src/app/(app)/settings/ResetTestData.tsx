@@ -2,7 +2,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { resetTestDataAction, startLiveAction } from "./actions";
+import { resetTestDataAction, startLiveAction, undoLiveAction } from "./actions";
 import { ErrorBox, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
@@ -131,9 +131,61 @@ function GoLive({ t, testDocs, invoices, customers }: { t: Dict; testDocs: numbe
   );
 }
 
+/**
+ * Karte „Echtbetrieb“: seit wann – und in den ersten Tagen „Aus Versehen gestartet? Zurück in den Testbetrieb“
+ * (Inhaber 12.11.2026). Löscht nichts; danach ist „Testdaten zurücksetzen“ wieder da.
+ */
+export function LiveCard({ t, since, undo }: {
+  t: Dict; since: string;
+  undo: { state: "ok" | "tooLate" | "locked"; until: string; invoices: number; payments: number; expenses: number; exports: number } | null;
+}) {
+  const [state, action] = useActionState(undoLiveAction, undefined);
+  const [ask, setAsk] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const sure = useRef(false);
+  useEffect(() => { sure.current = false; }, [state]);
+  const r = t.reset;
+  const err = state?.error ? ((r as Record<string, unknown>)[state.error] as string | undefined) ?? t.common.error : undefined;
+  const made = undo && (undo.invoices || undo.payments || undo.expenses || undo.exports)
+    ? fill(r.undoSince, { i: undo.invoices, p: undo.payments, e: undo.expenses, x: undo.exports }) : null;
+  return (
+    <section id="live" className="card mt-5 scroll-mt-6 animate-rise p-5 ring-1 ring-emerald-100">
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Icon name="check" className="icon-pop h-5 w-5" /></span>
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold">{r.liveTitle}</h2>
+          <p className="text-sm text-ink-soft">{fill(r.liveCard, { date: since })}</p>
+        </div>
+      </div>
+      {undo?.state === "locked" && <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-sm text-ink-soft ring-1 ring-black/[0.03]">{r.undoLockedHint}</p>}
+      {undo?.state === "ok" && (
+        <div className="mt-5 border-t border-black/5 pt-5">
+          <h3 className="font-bold">{r.undoTitle}</h3>
+          <p className="text-sm text-ink-soft">{fill(r.undoHint, { date: undo.until })}</p>
+          {made && <p role="alert" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">{made}</p>}
+          <form ref={formRef} action={action} className="mt-4 space-y-3"
+            onSubmit={(e) => { if (!sure.current) { e.preventDefault(); setAsk(true); } }}>
+            <label className="flex cursor-pointer items-start gap-2 text-sm font-semibold">
+              <input type="checkbox" name="confirm" required className="mt-0.5 h-5 w-5 shrink-0 accent-amber-600" />{r.undoUnderstand}
+            </label>
+            <SubmitButton className="btn group bg-amber-500 text-white shadow-card hover:bg-amber-600"><Icon name="history" className="icon-pop h-4 w-4" />{r.undoButton}</SubmitButton>
+            <ErrorBox message={err} />
+          </form>
+        </div>
+      )}
+      {ask && (
+        <Confirm t={t} title={r.undoConfirmTitle} yes={r.undoYes} warn={made} lead={r.undoLead}
+          facts={[r.undoFact1, r.undoFact2, r.undoFact3]}
+          onNo={() => setAsk(false)}
+          onYes={() => { sure.current = true; setAsk(false); formRef.current?.requestSubmit(); }} />
+      )}
+    </section>
+  );
+}
+
 /** Letzte Rückfrage als eigenes Fenster (nicht das Browser-Fenster): klar, in der Sprache des Nutzers, Enter = Abbrechen */
-function Confirm({ t, title, yes, facts: list, warn, tone = "reset", onYes, onNo }: {
-  t: Dict; title: string; yes: string; facts: (string | false | null)[]; warn?: string | null; tone?: "reset" | "live"; onYes: () => void; onNo: () => void;
+function Confirm({ t, title, yes, facts: list, warn, lead, tone = "reset", onYes, onNo }: {
+  t: Dict; title: string; yes: string; facts: (string | false | null)[]; warn?: string | null; lead?: string; tone?: "reset" | "live"; onYes: () => void; onNo: () => void;
 }) {
   const r = t.reset;
   const noRef = useRef(onNo);
@@ -158,7 +210,7 @@ function Confirm({ t, title, yes, facts: list, warn, tone = "reset", onYes, onNo
           <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${live ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}><Icon name="alert" className="icon-pop h-6 w-6" /></span>
           <div className="min-w-0">
             <h2 id="reset-ask-title" className="text-lg font-bold leading-snug">{title}</h2>
-            <p className="mt-1 text-sm text-ink-soft">{r.confirm}</p>
+            <p className="mt-1 text-sm text-ink-soft">{lead ?? r.confirm}</p>
           </div>
         </div>
         {warn && <p role="alert" className="mb-1.5 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-200"><Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />{warn}</p>}

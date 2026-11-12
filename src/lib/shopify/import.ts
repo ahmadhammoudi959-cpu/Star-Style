@@ -59,8 +59,9 @@ export async function importProducts(channel: ShopChannel, o: { userId?: string;
     const hasImage = new Map<string, boolean>(products.map((p) => [p.id, Boolean(p.imageFileId)]));
     const barcodeOwner = new Map<string, string>((await db.select({ barcode: schema.variants.barcode, productId: schema.variants.productId }).from(schema.variants)
       .where(isNotNull(schema.variants.barcode))).map((v) => [v.barcode!, v.productId]));
-    const supplierByName = new Map<string, string>((await db.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers))
-      .map((s) => [s.name.trim().toLowerCase(), s.id]));
+    // nur Warenlieferanten (eine Firma aus Ausgaben wie ein Baumarkt ist nie Hersteller eines Artikels)
+    const supplierByName = new Map<string, string>((await db.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers)
+      .where(eq(schema.suppliers.kind, "GOODS"))).map((s) => [s.name.trim().toLowerCase(), s.id]));
 
     let created = 0, variants = 0, noBarcode = 0, failed = 0;
     const existing = new Set<string>();

@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { audit } from "@/lib/stock";
 import { storeUpload } from "@/lib/files";
-import { ResetError, resetTestData, startLive } from "@/lib/test-reset";
+import { ResetError, resetTestData, startLive, undoLive } from "@/lib/test-reset";
 
 export type SettingsState = { error?: string; ok?: boolean } | undefined;
 const str = (max = 200) => z.string().trim().max(max).default("");
@@ -77,6 +77,21 @@ export async function resetTestDataAction(_: SettingsState, fd: FormData): Promi
   }
   revalidatePath("/", "layout"); // alle Listen, Dashboard, „Erste Schritte“
   redirect(`/settings?reset=${outcome}`);
+}
+
+/** „Aus Versehen gestartet → zurück in den Testbetrieb“ – nur in den ersten Tagen, löscht nichts (siehe lib/test-reset.ts) */
+export async function undoLiveAction(_: SettingsState, fd: FormData): Promise<SettingsState> {
+  const session = await requireSession();
+  if (fd.get("confirm") !== "on") return { error: "needConfirm" };
+  try {
+    await undoLive(session.uid);
+  } catch (e) {
+    if (e instanceof ResetError) return { error: e.code };
+    console.error(e);
+    return { error: "error" };
+  }
+  revalidatePath("/", "layout"); // Zeichen „Echtbetrieb“ → „Testbetrieb“, Karte „Testdaten zurücksetzen“ wieder da
+  redirect("/settings?undo=1#reset");
 }
 
 /** „Echtbetrieb starten“ – einmalig, löscht nichts; danach kein Zurücksetzen mehr (siehe lib/test-reset.ts) */

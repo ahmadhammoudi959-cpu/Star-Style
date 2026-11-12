@@ -36,6 +36,12 @@ export const expenseTaxCase = pgEnum("expense_tax_case", [
   "EU_GOODS",       // Ware aus EU ohne MwSt. (innergemeinschaftlicher Erwerb)
   "NO_VAT",         // ohne Umsatzsteuer (z. B. Versicherung, Gebühren)
 ]);
+/**
+ * Art des Lieferanten – nur für die Oberfläche (Wunsch Inhaber 12.11.2026): GOODS = liefert Ware (Seite „Lieferanten“,
+ * Wareneingang, Artikel), EXPENSE = kommt nur über Ausgaben (z. B. Baumarkt, Steuerbüro; Seite „Ausgaben → Firmen“).
+ * Buchhaltung unverändert: beide sind Kreditoren mit Nummer (DATEV 70000 + Nr.).
+ */
+export const supplierKind = pgEnum("supplier_kind", ["GOODS", "EXPENSE"]);
 
 // ───────────────────────── Benutzer & Einstellungen ─────────────────────────
 export const users = pgTable("users", {
@@ -169,6 +175,7 @@ export const suppliers = pgTable("suppliers", {
   vatId: text("vat_id").notNull().default(""),
   notes: text("notes").notNull().default(""),
   active: boolean("active").notNull().default(true),
+  kind: supplierKind("kind").notNull().default("GOODS"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

@@ -11,13 +11,16 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { db, type Tx } from "@/db";
 import { audit } from "./stock";
-import { fingerprint, GO_LIVE_SQL, isEmpty, PREVIEW_SQL, RESET_LOCK, RESET_STATEMENTS, STATUS_SQL, toPreview, type ResetPreview } from "./test-reset-sql";
+import {
+  fingerprint, GO_LIVE_SQL, isEmpty, PREVIEW_SQL, RESET_LOCK, RESET_STATEMENTS, STATUS_SQL, toPreview, UNDO_LIVE_SQL,
+  undoLiveState, undoLiveUntil, type ResetPreview, type UndoLive,
+} from "./test-reset-sql";
 
-export type { ResetPreview };
+export type { ResetPreview, UndoLive };
 export type ResetBlock = "live" | "syncOn" | null;
 
 export class ResetError extends Error {
-  constructor(public code: "resetLive" | "resetSyncOn" | "resetChanged") { super(code); }
+  constructor(public code: "resetLive" | "resetSyncOn" | "resetChanged" | "undoNotLive" | "undoLocked" | "undoTooLate") { super(code); }
 }
 
 type StatusRow = { live: boolean; sync_on: boolean; sync_shops: string | null; live_since: string | Date | null };
@@ -61,6 +64,45 @@ export async function resetTestData(expect: string, userId?: string) {
     for (const s of RESET_STATEMENTS) await tx.execute(sql.raw(s));
     await audit(tx, { entity: "system", entityId: "test-reset", action: "reset", before, after: { at: new Date().toISOString() }, userId });
     return before;
+  });
+}
+
+export type SinceLive = { invoices: number; payments: number; expenses: number; exports: number };
+type UndoInfo = { state: UndoLive; until: Date; since: SinceLive } | null;
+
+/** Für die Karte „Echtbetrieb“: darf er (aus Versehen gestartet) noch zurückgenommen werden, und was ist seitdem entstanden? */
+export async function undoLiveInfo(): Promise<UndoInfo> {
+  const s = await db.query.companySettings.findFirst();
+  if (!s?.liveSince) return null;
+  const at = s.liveSince;
+  const r = (await db.execute<Record<string, unknown>>(sql`select
+      (select count(*) from invoices where number is not null and created_at >= ${at})::int as invoices,
+      (select count(*) from payments where created_at >= ${at})::int as payments,
+      (select count(*) from expenses where created_at >= ${at})::int as expenses,
+      (select count(*) from advisor_exports where created_at >= ${at})::int as exports,
+      exists (select 1 from period_locks) as locked`)).rows[0] ?? {};
+  return {
+    state: undoLiveState(s.liveSince, new Date(), Boolean(r.locked)), until: undoLiveUntil(s.liveSince),
+    since: { invoices: Number(r.invoices), payments: Number(r.payments), expenses: Number(r.expenses), exports: Number(r.exports) },
+  };
+}
+
+/**
+ * „Aus Versehen gestartet → zurück in den Testbetrieb“ (Inhaber 12.11.2026): löscht nichts, nur live_since weg.
+ * Nur innerhalb von UNDO_LIVE_DAYS Tagen und ohne abgeschlossenen Monat; Vorher-Stand im audit_log.
+ */
+export async function undoLive(userId?: string) {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql.raw(RESET_LOCK));
+    const s = await tx.query.companySettings.findFirst();
+    if (!s?.liveSince) throw new ResetError("undoNotLive");
+    const locked = (await tx.execute<{ locked: boolean }>(sql`select exists (select 1 from period_locks) as locked`)).rows[0]?.locked;
+    const state = undoLiveState(s.liveSince, new Date(), Boolean(locked));
+    if (state === "locked") throw new ResetError("undoLocked");
+    if (state === "tooLate") throw new ResetError("undoTooLate");
+    await tx.execute(sql.raw(UNDO_LIVE_SQL));
+    await audit(tx, { entity: "system", entityId: "go-live", action: "undo-go-live", before: { liveSince: s.liveSince.toISOString() },
+      after: { liveSince: null, reason: "versehentlich gestartet" }, userId });
   });
 }
 

@@ -3,11 +3,11 @@ import { db, schema } from "@/db";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { SettingsForm } from "./SettingsForm";
-import { ResetTestData } from "./ResetTestData";
+import { LiveCard, ResetTestData } from "./ResetTestData";
 import { SecurityCard, type LogKey, type SecurityView } from "./SecurityCard";
 import { Icon } from "@/components/Icon";
 import { aiConfigured, aiModel } from "@/lib/ai/client";
-import { resetStatus } from "@/lib/test-reset";
+import { resetStatus, undoLiveInfo } from "@/lib/test-reset";
 import { requireSession } from "@/lib/auth";
 import { dbConnectionInternal, recentAttempts, type AttemptRow } from "@/lib/login";
 import { deviceLabel } from "@/lib/login-guard";
@@ -18,13 +18,13 @@ const logKey = (r: AttemptRow): LogKey =>
   : r.ok && r.reason === "success" ? (r.step === "recovery" ? "recovery" : "success")
   : (["needCode", "invalid", "code", "locked"].includes(r.reason) ? r.reason : "invalid") as LogKey;
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ reset?: string; live?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ reset?: string; live?: string; undo?: string }> }) {
   const session = await requireSession();
   const { t, intl } = await getI18n();
-  const { reset, live } = await searchParams;
-  const [s, rs, me, log] = await Promise.all([
+  const { reset, live, undo: undoDone } = await searchParams;
+  const [s, rs, me, log, undo] = await Promise.all([
     db.query.companySettings.findFirst(), resetStatus(),
-    db.query.users.findFirst({ where: eq(schema.users.id, session.uid) }), recentAttempts(15),
+    db.query.users.findFirst({ where: eq(schema.users.id, session.uid) }), recentAttempts(15), undoLiveInfo(),
   ]);
   const plain = s ? Object.fromEntries(Object.entries(s).filter(([, v]) => !(v instanceof Date) && (typeof v !== "object" || v === null))) as Record<string, string | number | null> : {};
   const ai = aiConfigured();
@@ -41,6 +41,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <PageHeader title={t.settings.title} />
       {reset === "1" && <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200"><Icon name="check" className="h-4 w-4 shrink-0" />{t.reset.done}</div>}
       {live === "1" && <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200"><Icon name="check" className="h-4 w-4 shrink-0" />{t.reset.goLiveDone}</div>}
+      {undoDone === "1" && rs.block !== "live" && <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200"><Icon name="check" className="h-4 w-4 shrink-0" />{t.reset.undoDone}</div>}
       {(reset === "resetLive" || reset === "resetSyncOn") && (
         <div role="alert" className="mb-4 animate-rise rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">{t.reset[reset]}</div>
       )}
@@ -59,13 +60,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <p id="live" className="mt-5 animate-rise rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">{t.reset.lockedHint}</p>
       )}
       {rs.block === "live" && rs.liveSince && (
-        <section id="live" className="card mt-5 flex animate-rise items-start gap-3 p-5 ring-1 ring-emerald-100">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Icon name="check" className="icon-pop h-5 w-5" /></span>
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold">{t.reset.liveTitle}</h2>
-            <p className="text-sm text-ink-soft">{t.reset.liveCard.replace("{date}", formatDateTime(rs.liveSince.toISOString(), intl))}</p>
-          </div>
-        </section>
+        <LiveCard t={t} since={formatDateTime(rs.liveSince.toISOString(), intl)}
+          undo={undo && { ...undo.since, state: undo.state, until: formatDateTime(undo.until.toISOString(), intl) }} />
       )}
     </div>
   );

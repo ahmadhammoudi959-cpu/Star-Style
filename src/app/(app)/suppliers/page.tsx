@@ -1,13 +1,17 @@
 import Link from "next/link";
-import { asc } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { getI18n } from "@/i18n";
+import { fill, getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 
 export default async function SuppliersPage() {
   const { t } = await getI18n();
-  const rows = await db.select().from(schema.suppliers).orderBy(asc(schema.suppliers.name));
+  // nur Warenlieferanten; Firmen aus Ausgaben (Baumarkt, Steuerbüro …) stehen unter Ausgaben → Firmen (Wunsch Inhaber 12.11.2026)
+  const [rows, [other]] = await Promise.all([
+    db.select().from(schema.suppliers).where(eq(schema.suppliers.kind, "GOODS")).orderBy(asc(schema.suppliers.name)),
+    db.select({ n: sql<number>`count(*)::int` }).from(schema.suppliers).where(eq(schema.suppliers.kind, "EXPENSE")),
+  ]);
   return (
     <div>
       <PageHeader title={t.supplier.title} actions={<Link href="/suppliers/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.supplier.new}</Link>} />
@@ -25,6 +29,12 @@ export default async function SuppliersPage() {
           </Link>
         ))}
       </div>
+      {other.n > 0 && (
+        <Link href="/expenses/vendors" className="group mt-5 inline-flex items-center gap-2 text-sm text-ink-soft hover:text-brand-700">
+          <Icon name="receipt" className="icon-pop h-4 w-4" />{fill(t.supplier.expenseVendors, { n: other.n })}
+          <Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" />
+        </Link>
+      )}
     </div>
   );
 }
