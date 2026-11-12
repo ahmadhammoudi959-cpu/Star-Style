@@ -13,6 +13,7 @@ import { pushPrices } from "@/lib/shopify/prices";
 import { linkVariant, processDirty, pushStock, syncOrders, syncProducts, testConnection, runCycle } from "@/lib/shopify/sync";
 import { registerWebhooks } from "@/lib/shopify/webhooks";
 import { importProducts } from "@/lib/shopify/import";
+import { pushResellerPrices } from "@/lib/shopify/b2b";
 
 export type ShopResult = { ok?: string; error?: string; detail?: string; locations?: { id: string; name: string }[] };
 const CH = (v: unknown): ShopChannel => (v === "GENERAL_SHOP" ? "GENERAL_SHOP" : "BRAND_SHOP");
@@ -192,4 +193,18 @@ export async function pushPricesAction(channel: string): Promise<ShopResult> {
   const ch = CH(channel);
   void pushPrices(undefined, ch).catch((e) => console.error("shopify prices", e));
   return { ok: "started" };
+}
+
+/**
+ * Großhandelspreise (جملة الجملة) in die Preisliste des B2B-Markts (Wunsch Inhaber 12.11.2026). Wartet auf das Ergebnis
+ * (wenige Aufrufe), ok = „geändert|entfernt|gleich|Fehler“, error = Problem mit dem Markt (noMarket, noPriceList, needScope …).
+ */
+export async function pushResellerPricesAction(channel: string): Promise<ShopResult> {
+  await requireSession();
+  try {
+    const [r] = await pushResellerPrices(undefined, CH(channel));
+    if (!r) return { ok: "0|0|0|0" };
+    if (r.problem) return { error: r.problem };
+    return { ok: `${r.updated}|${r.removed}|${r.unchanged}|${r.failed}` };
+  } catch (e) { return fail(e); }
 }

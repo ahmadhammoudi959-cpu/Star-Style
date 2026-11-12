@@ -134,6 +134,13 @@
       "when": 1794493195445,
       "tag": "0018_shipments",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794502652953,
+      "tag": "0019_shop_companies",
+      "breakpoints": true
     }
   ]
 }

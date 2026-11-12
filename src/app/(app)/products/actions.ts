@@ -123,6 +123,7 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   const galleryChanged: ShopChannel[] = []; // eigene Shop-Fotos geändert → im Hintergrund an verbundene Shops
   let categoryChanged = false; // → im Shop den Produkttyp verbundener Produkte anpassen
   let priceChanged = false; // → Shop-Preis der verbundenen Varianten gleich melden
+  let resellerChanged = false;
   try {
     await db.transaction(async (tx) => {
       // Kategorie so schreiben, wie sie im Verzeichnis steht (Groß/klein); neue kommen ins Verzeichnis (Seite „Kategorien“)
@@ -145,7 +146,9 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
         categoryChanged = before.category !== values.category;
         // Shop-Preis geändert (Großhandelspreis Salon oder MwSt.) → an verbundene Shop-Varianten melden (Wunsch Inhaber 09.11.2026)
         priceChanged = before.retailPriceCents !== values.retailPriceCents || before.vatRateBp !== values.vatRateBp;
-        if (priceChanged)
+        // Großhandelspreis (جملة الجملة) → Preisliste der Wiederverkäufer im Shop (Shopify B2B)
+        resellerChanged = before.wholesalePriceCents !== values.wholesalePriceCents || before.vatRateBp !== values.vatRateBp;
+        if (priceChanged || resellerChanged)
           await tx.insert(schema.shopPriceDirty).values({ productId: d.id }).onConflictDoUpdate({ target: schema.shopPriceDirty.productId, set: { at: new Date() } });
       } else {
         const [p] = await tx.insert(schema.products).values(values).returning({ id: schema.products.id });
@@ -244,7 +247,12 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   // geänderter Preis → gleich an die Shops (nur wo er dort abweicht); wartet höchstens 8 s, das Ergebnis steht über dem Formular.
   // Klappt es nicht, bleibt die Vormerkung und der Worker versucht es alle 5 min wieder.
   let price = "";
-  if (priceChanged) { try { price = encodePriceNotes(await pushProductPrices(productId!)); } catch (e) { console.error("shopify prices", e); } }
+  if (priceChanged || resellerChanged) {
+    try {
+      const res = await pushProductPrices(productId!);
+      if (priceChanged) price = encodePriceNotes(res);
+    } catch (e) { console.error("shopify prices", e); }
+  }
   // Kategorie geändert → verbundene Shop-Produkte wandern in die passende Kollektion; geänderte Shop-Fotos abgleichen
   if (categoryChanged) syncProductTypesLater([productId!]);
   syncGalleryLater(productId!, galleryChanged);

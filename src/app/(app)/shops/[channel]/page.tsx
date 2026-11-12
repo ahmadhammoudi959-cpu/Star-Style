@@ -8,6 +8,8 @@ import { ShopControls, ShopForm } from "./ShopSetup";
 import { CategoryMap, PendingProducts } from "./PendingProducts";
 import { bulkPushStatus, getStoreTypes, pendingProducts, type StoreType } from "@/lib/shopify/product-push";
 import { resolveStoreType } from "@/lib/shopify/product-push-map";
+import { resellerSetup, resellerSummary, type SetupResult } from "@/lib/shopify/b2b";
+import { ResellerCard, type ResellerInfo } from "./ResellerCard";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +34,14 @@ export default async function ShopPage({ params }: { params: Promise<{ channel: 
       select category, count(*)::int as n from products where active and ${flag} and category <> '' group by category order by category`);
     catRows = cats.rows.map((r) => ({ category: r.category, n: Number(r.n), auto: types.length ? resolveStoreType(r.category, types, {}) : null, mapped: s.categoryMap?.[r.category] ?? null }));
   }
+  // Großhandelspreise (جملة الجملة) über Shopify B2B – nur im allgemeinen Shop; nie länger als 3 s auf den Shop warten
+  let reseller: ResellerInfo | null = null;
+  const resellerCounts = await resellerSummary(channel);
+  if (s && ready && channel === "GENERAL_SHOP") {
+    const r = await Promise.race([resellerSetup(s).catch((): SetupResult => ({ problem: "error" })), new Promise<null>((res) => setTimeout(() => res(null), 3000))]);
+    reseller = r == null ? null : "problem" in r ? { ok: false, problem: r.problem, detail: r.problem === "error" ? r.detail : undefined }
+      : { ok: true, market: r.marketName, catalog: r.catalogTitle, taxesIncluded: r.taxesIncluded, allLocations: r.allLocations };
+  }
   const data = {
     channel, domain: s?.domain ?? "", clientId: s?.clientId ?? "", hasSecret: Boolean(s?.clientSecretEnc), legacy: Boolean(s?.staticTokenEnc),
     stockBuffer: s?.stockBuffer ?? 0, importTestOrders: s?.importTestOrders ?? false, locationId: s?.locationId ?? "", locationName: s?.locationName ?? "",
@@ -41,6 +51,7 @@ export default async function ShopPage({ params }: { params: Promise<{ channel: 
     <div className="space-y-6">
       <PageHeader title={t.shop.names[channel]} subtitle={data.domain || t.shop.notConnected} back="/shops" />
       {ready && <PendingProducts t={t} channel={channel} items={pending} types={types} initialBulk={bulkPushStatus(channel)} />}
+      {ready && channel === "GENERAL_SHOP" && <ResellerCard t={t} channel={channel} info={reseller} counts={resellerCounts} />}
       {ready && <CategoryMap t={t} channel={channel} rows={catRows} types={types} />}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-6">

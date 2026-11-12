@@ -604,6 +604,32 @@ export const shipments = pgTable("shipments", {
   updatedAt: updatedAt(),
 }, (t) => [index("shipment_invoice").on(t.invoiceId), index("shipment_order").on(t.channel, t.externalOrderId), index("shipment_shop_status").on(t.shopStatus)]);
 
+/**
+ * Kunde „جملة الجملة“ (Wiederverkäufer) ↔ Unternehmen im Shop (Shopify B2B, Wunsch Inhaber 12.11.2026): Der Kunde meldet sich im
+ * Shop mit seiner E-Mail an und sieht die Preise der Wiederverkäufer-Preisliste. Verbunden wird über die E-Mail, nie über den Namen.
+ * wanted = Inhaber will die Verbindung (Häkchen am Kunden); status pending/linked/removed/failed, Fehler in error.
+ */
+export const shopCompanies = pgTable("shop_companies", {
+  id: id(),
+  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(),
+  wanted: boolean("wanted").notNull().default(true),
+  /** E-Mail, mit der zuletzt verbunden wurde (Shop-Kunde = Kontakt des Unternehmens) */
+  email: text("email").notNull().default(""),
+  companyId: text("company_id").notNull().default(""),
+  locationId: text("location_id").notNull().default(""),
+  contactId: text("contact_id").notNull().default(""),
+  shopCustomerId: text("shop_customer_id").notNull().default(""),
+  /** Name/Anschrift/USt-IdNr. beim letzten Abgleich – geändert → im Shop nachziehen */
+  fingerprint: text("fingerprint").notNull().default(""),
+  status: text("status").notNull().default("pending"),
+  error: text("error").notNull().default(""),
+  tries: integer("tries").notNull().default(0),
+  syncedAt: timestamp("synced_at", { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex("shop_company_customer").on(t.customerId, t.channel), index("shop_company_status").on(t.status)]);
+
 /** Varianten, deren Bestand sich geändert hat und an die Shops gemeldet werden muss */
 export const stockDirty = pgTable("stock_dirty", {
   variantId: text("variant_id").primaryKey(),

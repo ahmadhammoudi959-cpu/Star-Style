@@ -13,6 +13,8 @@ export function evText(t: Dict, msg: string) {
   if (key === "imagesLoaded") { const [ok, f] = p.split("|"); return E.imagesLoaded.replace("{ok}", ok).replace("{f}", f); }
   if (key === "pricesPushed") { const [u, f, err] = p.split("|"); return E.pricesPushed.replace("{u}", u).replace("{f}", f) + (err ? ` – ${err}` : ""); }
   if (key === "weightsPushed") { const [u, f, err] = p.split("|"); return E.weightsPushed.replace("{u}", u).replace("{f}", f) + (err ? ` – ${err}` : ""); }
+  if (key === "resellerPricesPushed") { const [u, d, f, err] = p.split("|"); return E.resellerPricesPushed.replace("{u}", u).replace("{d}", d).replace("{f}", f) + (err ? ` – ${err}` : ""); }
+  if (key === "resellerFailed") { const [name, err] = p.split("|"); return E.resellerFailed.replace("{p}", name) + (err ? ` – ${err}` : ""); }
   if (key === "bulkPushed") { const [c, l, u, f, s] = p.split("|"); return E.bulkPushed.replace("{c}", c).replace("{l}", l).replace("{u}", u).replace("{f}", f).replace("{s}", s); }
   // Sendung: „Versanddienst Nummer(n)|1“ – 1 = Kunde per E-Mail informiert
   if (key === "shipped" || key === "trackingUpdated") { const [label, mail] = p.split("|"); return E[key].replace("{p}", label) + (mail === "1" ? E.shippedMail : ""); }

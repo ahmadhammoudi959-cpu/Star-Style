@@ -9,6 +9,8 @@ import { requireSession } from "@/lib/auth";
 import { parseMoney } from "@/lib/money";
 import { audit } from "@/lib/stock";
 import { splitVatId } from "@/lib/vat-check";
+import { validEmail } from "@/lib/shopify/b2b-map";
+import { setResellerWanted, syncShopCompanyNow } from "@/lib/shopify/b2b";
 
 export type CustomerState = { error?: string } | undefined;
 
@@ -29,14 +31,17 @@ const C = z.object({
   creditLimit: z.string().default(""),
   paymentTermDays: z.string().default(""),
   notes: z.string().trim().max(2000).default(""),
+  shopReseller: z.string().optional().transform((v) => v === "on"),
 });
 
 export async function saveCustomer(_: CustomerState, fd: FormData): Promise<CustomerState> {
   const session = await requireSession();
   const p = C.safeParse(Object.fromEntries(fd));
   if (!p.success) return { error: "required" };
-  const { id, vatPending, creditLimit, paymentTermDays, ...d } = p.data;
+  const { id, vatPending, creditLimit, paymentTermDays, shopReseller, ...d } = p.data;
   if (d.vatId && !splitVatId(d.vatId)) return { error: "vatFormat" };
+  const reseller = shopReseller && d.priceGroup === "WHOLESALE";
+  if (reseller && !validEmail(d.email)) return { error: "resellerEmail" };
   const limit = creditLimit.trim() ? parseMoney(creditLimit) : null;
   if (creditLimit.trim() && limit == null) return { error: "required" };
   const days = paymentTermDays.trim() ? Number(paymentTermDays) : null;
@@ -59,8 +64,21 @@ export async function saveCustomer(_: CustomerState, fd: FormData): Promise<Cust
       await audit(tx, { entity: "customer", entityId: r.id, action: "create", after: values, userId: session.uid });
     }
   });
+  // Großhandelspreise im allgemeinen Shop: verbinden/trennen und höchstens 8 s warten (Stand steht dann auf der Kundenseite);
+  // dauert es länger oder ist der Shop weg, läuft es im Hintergrund weiter bzw. der Worker versucht es alle 5 min wieder
+  try {
+    if (await setResellerWanted(cid!, reseller, session.uid)) await syncShopCompanyNow(cid!);
+  } catch (e) { console.error("shopify b2b", e); }
   revalidatePath("/customers");
   redirect(`/customers/${cid}?saved=1`);
+}
+
+/** „Erneut versuchen“ an der Kundenseite (nach einer Ablehnung durch den Shop) */
+export async function retryResellerAction(customerId: string): Promise<{ status: string }> {
+  await requireSession();
+  await db.update(schema.shopCompanies).set({ status: "pending", error: "", tries: 0, updatedAt: new Date() }).where(eq(schema.shopCompanies.customerId, customerId));
+  const r = await syncShopCompanyNow(customerId);
+  return { status: r?.status ?? "pending" };
 }
 
 export type CheckState = { error?: string; ok?: boolean } | undefined;

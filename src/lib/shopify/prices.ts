@@ -12,6 +12,7 @@ import { db } from "@/db";
 import { gql, getShop, ShopifyError, type ShopChannel } from "./client";
 import { CHANNELS, logEvent } from "./sync";
 import { planPriceUpdates, shopPriceCents, type ShopVariantPrice } from "./product-push-map";
+import { pushResellerPrices } from "./b2b";
 
 const NODES_Q = `query($ids: [ID!]!) { nodes(ids: $ids) { ... on ProductVariant { id price product { id } } } }`;
 const UPDATE_M = `mutation($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
@@ -83,8 +84,11 @@ async function clearMarks(marks: { product_id: string; at: string }[]) {
 export async function pushDirtyPrices(): Promise<void> {
   const marks = (await db.execute<{ product_id: string; at: string }>(sql`select product_id, at::text as at from shop_price_dirty order by at limit 200`)).rows;
   if (!marks.length) return;
-  const res = await pushPrices(marks.map((m) => m.product_id));
-  if (res.some((r) => r.retry)) return;
+  const ids = marks.map((m) => m.product_id);
+  const res = await pushPrices(ids);
+  // Großhandelspreise (جملة الجملة) in die Preisliste der Wiederverkäufer (Shopify B2B)
+  const resale = await pushResellerPrices(ids).catch((e) => { console.error("shopify reseller prices", e); return [{ retry: true }]; });
+  if (res.some((r) => r.retry) || resale.some((r) => r.retry)) return;
   await clearMarks(marks);
 }
 
@@ -94,8 +98,11 @@ export async function pushDirtyPrices(): Promise<void> {
  */
 export async function pushProductPrices(productId: string, timeoutMs = 8000): Promise<PricePush[] | null> {
   const marks = (await db.execute<{ product_id: string; at: string }>(sql`select product_id, at::text as at from shop_price_dirty where product_id = ${productId}`)).rows;
-  const work = pushPrices([productId]).then(async (res) => {
-    if (!res.some((r) => r.retry)) await clearMarks(marks);
+  const work = Promise.all([
+    pushPrices([productId]),
+    pushResellerPrices([productId]).catch((e) => { console.error("shopify reseller prices", e); return [{ retry: true }]; }),
+  ]).then(async ([res, resale]) => {
+    if (!res.some((r) => r.retry) && !resale.some((r) => r.retry)) await clearMarks(marks);
     return res;
   });
   work.catch((e) => console.error("shopify prices", e));

@@ -9,6 +9,7 @@ import { runCycle } from "./sync";
 import { retryGalleryDeletes } from "./gallery";
 import { pushDirtyPrices } from "./prices";
 import { retryShipments } from "../shipments";
+import { pushResellerPricesPeriodically, retryShopCompanies } from "./b2b";
 
 let started = false, busy = false, ticks = 0;
 
@@ -27,6 +28,9 @@ export function startWorker() {
       if (full) await pushDirtyPrices().catch((e) => console.error("shopify prices retry", e));
       // Sendungen, die noch nicht im Shop sind (Shop kurz weg, Abgleich aus, App-Recht fehlte)
       if (full) await retryShipments().catch((e) => console.error("shopify shipments retry", e));
+      // Großhandelskunden (جملة الجملة), deren Verbindung im Shop noch aussteht; Preisliste höchstens alle 30 min ganz vergleichen
+      if (full) await retryShopCompanies().catch((e) => console.error("shopify b2b retry", e));
+      if (full) await pushResellerPricesPeriodically().catch((e) => console.error("shopify reseller prices", e));
     } catch (e) { console.error("shopify worker", e); }
     finally { busy = false; ticks++; }
   };

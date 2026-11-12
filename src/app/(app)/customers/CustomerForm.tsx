@@ -3,10 +3,13 @@ import { useActionState, useState } from "react";
 import { saveCustomer } from "./actions";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import type { Dict } from "@/i18n/de";
+import { validEmail } from "@/lib/shopify/b2b-email";
 
 export type CustomerData = {
   id?: string; type: "COMPANY" | "PERSON"; name: string; contact: string; email: string; phone: string; street: string; zip: string;
   city: string; country: string; vatId: string; vatIdStatus: string; priceGroup: "WHOLESALE" | "RETAIL"; creditLimit: string; paymentTermDays: string; notes: string;
+  /** sieht im allgemeinen Shop die جملة الجملة-Preise (Shopify B2B, Wunsch Inhaber 12.11.2026) */
+  shopReseller?: boolean;
 };
 
 export function CustomerForm({ t, initial }: { t: Dict; initial: CustomerData }) {
@@ -14,12 +17,16 @@ export function CustomerForm({ t, initial }: { t: Dict; initial: CustomerData })
   const [type, setType] = useState(initial.type);
   const [country, setCountry] = useState(initial.country);
   const [vatId, setVatId] = useState(initial.vatId);
+  const [email, setEmail] = useState(initial.email);
+  const [group, setGroup] = useState(initial.priceGroup);
+  const [reseller, setReseller] = useState(Boolean(initial.shopReseller));
+  const emailOk = validEmail(email);
   const foreignEu = country.toUpperCase() !== "DE";
   return (
     <form action={action} className="card grid grid-cols-2 gap-3 p-4 animate-rise sm:p-5 md:gap-4">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
       <input type="hidden" name="type" value={type} />
-      <div className="col-span-2"><ErrorBox message={state?.error === "vatFormat" ? `${t.customer.vatId}: DE123456789 / NL123456789B01` : state?.error ? t.common.required : undefined} /></div>
+      <div className="col-span-2"><ErrorBox message={state?.error === "vatFormat" ? `${t.customer.vatId}: DE123456789 / NL123456789B01` : state?.error === "resellerEmail" ? t.customer.resellerEmail : state?.error ? t.common.required : undefined} /></div>
       <div className="col-span-2 flex gap-2">
         {(["COMPANY", "PERSON"] as const).map((k) => (
           <button type="button" key={k} onClick={() => setType(k)}
@@ -28,7 +35,7 @@ export function CustomerForm({ t, initial }: { t: Dict; initial: CustomerData })
       </div>
       <Field label={t.customer.name} className="col-span-2 md:col-span-1"><input name="name" defaultValue={initial.name} required className="input" /></Field>
       <Field label={t.customer.contact} className="col-span-2 md:col-span-1"><input name="contact" defaultValue={initial.contact} className="input" /></Field>
-      <Field label={t.supplier.email}><input name="email" type="email" defaultValue={initial.email} className="input" dir="ltr" /></Field>
+      <Field label={t.supplier.email}><input name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" dir="ltr" /></Field>
       <Field label={t.supplier.phone}><input name="phone" defaultValue={initial.phone} className="input" dir="ltr" /></Field>
       <Field label={t.setup.street} className="col-span-2 md:col-span-1"><input name="street" defaultValue={initial.street} className="input" /></Field>
       <div className="col-span-2 grid grid-cols-[minmax(0,1fr)_2fr_1fr] gap-3 md:col-span-1">
@@ -47,12 +54,22 @@ export function CustomerForm({ t, initial }: { t: Dict; initial: CustomerData })
         </div>
       )}
       <Field label={t.customer.priceGroup}>
-        <select name="priceGroup" defaultValue={initial.priceGroup} className="input">
+        <select name="priceGroup" value={group} onChange={(e) => setGroup(e.target.value as "WHOLESALE" | "RETAIL")} className="input">
           <option value="WHOLESALE">{t.customer.WHOLESALE}</option><option value="RETAIL">{t.customer.RETAIL}</option>
         </select>
       </Field>
       <Field label={`${t.customer.creditLimit} (€, ${t.common.optional})`}><input name="creditLimit" defaultValue={initial.creditLimit} inputMode="decimal" className="input num" dir="ltr" /></Field>
       <Field label={`${t.customer.paymentDays} (${t.common.optional})`}><input name="paymentTermDays" type="number" min={0} defaultValue={initial.paymentTermDays} className="input num" /></Field>
+      {/* جملة الجملة-Kunde sieht im allgemeinen Shop seine Preise – verbunden über die E-Mail (Wunsch Inhaber 12.11.2026) */}
+      {group === "WHOLESALE" && (
+        <label className={`col-span-2 flex items-start gap-2 rounded-xl p-3 text-sm ring-1 ${emailOk ? "cursor-pointer bg-brand-50/60 ring-brand-100" : "bg-slate-50 ring-black/5"}`}>
+          <input type="checkbox" name="shopReseller" checked={reseller && emailOk} disabled={!emailOk} onChange={(e) => setReseller(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-brand-600" />
+          <span className="min-w-0">
+            <span className="font-semibold">{t.customer.shopReseller}</span>
+            <span className="block text-xs text-ink-soft [overflow-wrap:anywhere]">{emailOk ? t.customer.shopResellerHint.replace("{email}", email.trim().toLowerCase()) : t.customer.shopResellerNoEmail}</span>
+          </span>
+        </label>
+      )}
       <Field label={t.common.note} className="col-span-2"><textarea name="notes" rows={2} defaultValue={initial.notes} className="input" /></Field>
       <div className="col-span-2 flex justify-end"><SubmitButton className="btn-primary px-8">{t.common.save}</SubmitButton></div>
     </form>

@@ -12,6 +12,10 @@ import { formatDate } from "@/lib/dates";
 import { CustomerForm, type CustomerData } from "../CustomerForm";
 import { VatCheckButton } from "../VatCheckButton";
 import { openItems } from "@/lib/receivables";
+import { shopCompanyOf } from "@/lib/shopify/b2b";
+import { getShop } from "@/lib/shopify/client";
+import { shopAdminUrl } from "@/lib/shopify/admin";
+import { ResellerRetry } from "../ResellerRetry";
 
 export default async function CustomerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const { id } = await params;
@@ -30,7 +34,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
       select 'invoice', id, coalesce(number, '—'), status::text, coalesce(issue_date, created_at::date), gross_cents from invoices where customer_id = ${id}
       order by d desc limit 30`),
   ]);
-  const items = await openItems(id);
+  const [items, link, generalShop] = await Promise.all([openItems(id), shopCompanyOf(id), getShop("GENERAL_SHOP")]);
   const openC = items.reduce((s, r) => s + r.state.openCents, 0);
   const overdueC = items.reduce((s, r) => s + r.state.overdueCents, 0);
   const mode = determineTaxMode(c);
@@ -48,6 +52,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
             country: c.country, vatId: c.vatId, vatIdStatus: c.vatIdStatus, priceGroup: c.priceGroup,
             creditLimit: c.creditLimitCents != null ? (c.creditLimitCents / 100).toFixed(2).replace(".", ",") : "",
             paymentTermDays: c.paymentTermDays != null ? String(c.paymentTermDays) : "", notes: c.notes,
+            shopReseller: Boolean(link?.wanted),
           }} />
           <section className="card overflow-hidden animate-rise">
             <h2 className="px-5 pt-5 text-lg font-bold">{t.customer.documents}</h2>
@@ -68,6 +73,9 @@ export default async function CustomerPage({ params, searchParams }: { params: P
           </section>
         </div>
         <aside className="space-y-4">
+          {(c.priceGroup === "WHOLESALE" || (link && link.status !== "removed")) && <ResellerCard t={t} link={link} email={c.email}
+            customerId={c.id} wholesale={c.priceGroup === "WHOLESALE"}
+            companyUrl={link?.companyId && generalShop?.domain ? shopAdminUrl(generalShop, `/companies/${link.companyId.split("/").pop()}`) : null} />}
           <div className="card p-5 animate-rise">
             <div className="text-sm text-ink-soft">{openC < 0 ? t.pay.credit : t.pay.openNow}</div>
             <div className={`num text-2xl font-bold ${overdueC ? "text-red-600" : openC < 0 ? "text-violet-700" : ""}`}>{formatCents(Math.abs(openC), intl)}</div>
@@ -104,6 +112,41 @@ export default async function CustomerPage({ params, searchParams }: { params: P
           )}
         </aside>
       </div>
+    </div>
+  );
+}
+
+/** Großhandelspreise im allgemeinen Shop (Shopify B2B): Stand der Verbindung über die E-Mail */
+function ResellerCard({ t, link, email, customerId, wholesale, companyUrl }: {
+  t: Awaited<ReturnType<typeof getI18n>>["t"]; link: Awaited<ReturnType<typeof shopCompanyOf>>; email: string; customerId: string; wholesale: boolean; companyUrl: string | null;
+}) {
+  const R = t.customer.reseller;
+  const why = (code: string) => {
+    const key = code.split(":")[0] as keyof typeof R.why;
+    return R.why[key] ?? code;
+  };
+  const on = Boolean(link?.wanted);
+  const state = !link || (!on && link.status !== "pending") ? "off" : link.status;
+  const tone = state === "linked" ? "bg-emerald-50 text-emerald-900 ring-emerald-200" : state === "failed" ? "bg-red-50 text-red-800 ring-red-200"
+    : state === "pending" ? "bg-amber-50 text-amber-900 ring-amber-200" : "bg-slate-50 text-slate-700 ring-black/5";
+  const icon = state === "linked" ? "check" : state === "failed" ? "alert" : state === "pending" ? "clock" : "globe";
+  return (
+    <div className="card animate-rise p-5">
+      <h3 className="mb-2 flex items-center gap-2 font-bold"><Icon name="globe" className="icon-pop h-4 w-4 text-brand-600" />{R.title}</h3>
+      <div className={`flex items-start gap-2 rounded-xl p-3 text-sm ring-1 ${tone}`}>
+        <Icon name={icon} className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="min-w-0 [overflow-wrap:anywhere]">
+          {state === "linked" && R.linked.replace("{email}", link!.email || email)}
+          {state === "pending" && <>{R.pending}{link!.error && <span className="mt-1 block text-xs">{why(link!.error)}</span>}</>}
+          {state === "failed" && <>{R.failed}<span className="mt-1 block text-xs">{why(link!.error)}</span></>}
+          {state === "removed" && R.removed}
+          {state === "off" && (wholesale ? R.off : R.removed)}
+        </div>
+      </div>
+      {state === "failed" && <ResellerRetry customerId={customerId} label={R.retry} />}
+      {companyUrl && state === "linked" && (
+        <a href={companyUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline">{R.openShop}<Icon name="link" className="h-3.5 w-3.5" /></a>
+      )}
     </div>
   );
 }
