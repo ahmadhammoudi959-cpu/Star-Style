@@ -5,7 +5,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import {
-  companyCreateInput, companyFingerprint, contactName, normEmail, pickResellerSetup, planResellerPrices, validEmail, type B2bCustomer, type MarketNode,
+  ALL_PARTS, companyCreateInput, companyFingerprint, contactName, normEmail, partNote, pickResellerSetup, planResellerPrices, rejectedParts, shownInShop, validEmail,
+  type B2bCustomer, type MarketNode,
 } from "../src/lib/shopify/b2b-map";
 
 const ali: B2bCustomer = { number: 7, type: "COMPANY", name: "Ali Friseurbedarf", contact: "", email: " Ali@Example.com ", street: "Viktoriastraße 26-28", zip: "45468", city: "Mülheim an der Ruhr", country: "de", vatId: "de 462 925 434" };
@@ -39,6 +40,26 @@ describe("Großhandelspreise im Shop (rein)", () => {
     // Fingerabdruck ändert sich mit Name/Anschrift/USt-IdNr., nicht mit der E-Mail
     expect(companyFingerprint({ ...ali, email: "x@y.de" })).toBe(companyFingerprint(ali));
     expect(companyFingerprint({ ...ali, street: "Neue Str. 1" })).not.toBe(companyFingerprint(ali));
+  });
+
+  it("Shopify lehnt Anschrift/USt-IdNr. ab (PLZ „0000“, 12.11.2026) → erkennen, ohne diesen Teil anlegen, beim nächsten Speichern erneut", () => {
+    expect(rejectedParts([{ field: ["input", "companyLocation", "shippingAddress", "zip"], message: "Zip is invalid" }])).toEqual({ address: true, tax: false });
+    expect(rejectedParts([{ field: null, message: "Zip is invalid" }])).toEqual({ address: true, tax: false });
+    expect(rejectedParts([{ field: ["input", "companyLocation", "taxRegistrationId"], message: "is invalid" }])).toEqual({ address: false, tax: true });
+    expect(rejectedParts([{ field: ["input", "companyLocation", "shippingAddress", "zip"], message: "Zip is invalid" }, { field: null, message: "Tax ID is invalid" }]))
+      .toEqual({ address: true, tax: true });
+    // Fehler am Kontakt ist nichts davon (sonst würde die Anschrift umsonst weggelassen)
+    expect(rejectedParts([{ field: ["companyContact", "email"], message: "Email address is invalid" }])).toEqual({ address: false, tax: false });
+    expect(rejectedParts([{ field: ["companyContact", "email"], message: "Email has already been taken" }])).toEqual({ address: false, tax: false });
+    expect(rejectedParts([{ field: ["input", "company", "name"], message: "Customer must have a name" }])).toEqual({ address: false, tax: false });
+    const noAddress = companyCreateInput(ali, false, { address: false, tax: true }).companyLocation;
+    expect(noAddress).not.toHaveProperty("shippingAddress");
+    expect(noAddress).toHaveProperty("taxRegistrationId", "DE462925434");
+    expect(companyCreateInput(ali, false, { address: true, tax: false }).companyLocation).not.toHaveProperty("taxRegistrationId");
+    expect(companyFingerprint(shownInShop(ali, { address: false, tax: true }))).not.toBe(companyFingerprint(ali));
+    expect(companyFingerprint(shownInShop(ali, ALL_PARTS))).toBe(companyFingerprint(ali));
+    expect(partNote("noAddress", [{ message: "Zip is invalid" }, { message: "City a|b is invalid" }, { message: "Tax ID is invalid" }])).toBe("noAddress:Zip is invalid; City a/b is invalid");
+    expect(partNote("noTax", [{ message: "Zip is invalid" }, { message: "Tax ID is invalid" }])).toBe("noTax:Tax ID is invalid");
   });
 
   it("B2B-Markt finden: Bedingung Unternehmensstandorte + Katalog mit Preisliste; Steuer aus dem Markt", () => {
@@ -98,6 +119,11 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
     contacts: { nodes: c.contacts.map((x) => ({ id: x.id, customer: { id: x.customerId, email: custById(x.customerId).email }, roleAssignments: { nodes: x.roles.map((r) => ({ companyLocation: { id: r } })) } })) },
   });
   const newCustomer = (email: string) => { const c = { id: gid("Customer"), email }; S.customers.set(email, c); return c; };
+  // wie Shopify: deutsche PLZ 5 Ziffern („Zip is invalid“, am 12.11.2026 live mit „0000“), USt-IdNr. DE + 9 Ziffern
+  const invalid = (address: { zip?: string; countryCode?: string } | null | undefined, tax: string | null | undefined, path: string[]) => [
+    ...(address && address.countryCode === "DE" && !/^\d{5}$/.test(address.zip ?? "") ? [{ field: [...path, "shippingAddress", "zip"], message: "Zip is invalid" }] : []),
+    ...(tax && tax.startsWith("DE") && !/^DE\d{9}$/.test(tax) ? [{ field: [...path, "taxRegistrationId"], message: "Tax registration ID is invalid" }] : []),
+  ];
   const ok = (data: unknown) => Response.json({ data });
   function mock() {
     return vi.fn(async (_url: string, init: { body: string }) => {
@@ -120,6 +146,8 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
         case "company": { const c = S.companies.get(v.id); return ok({ company: c ? companyNode(c) : null }); }
         case "companyCreate": {
           const i = v.input;
+          const bad = invalid(i.companyLocation.shippingAddress, i.companyLocation.taxRegistrationId, ["input", "companyLocation"]);
+          if (bad.length) return ok({ companyCreate: { company: null, userErrors: bad } });
           const co: Company = { id: gid("Company"), name: i.company.name, externalId: i.company.externalId, mainContact: null, contacts: [],
             locations: [{ id: gid("CompanyLocation"), address: i.companyLocation.shippingAddress ?? null, tax: i.companyLocation.taxRegistrationId ?? null }] };
           if (i.companyContact) {
@@ -152,10 +180,14 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
         }
         case "companyUpdate": { S.companies.get(v.id)!.name = v.input.name; return ok({ companyUpdate: { company: { id: v.id }, userErrors: [] } }); }
         case "companyLocationAssignAddress": {
+          const bad = invalid(v.address, null, []);
+          if (bad.length) return ok({ companyLocationAssignAddress: { addresses: null, userErrors: bad } });
           for (const co of S.companies.values()) for (const l of co.locations) if (l.id === v.id) l.address = v.address;
           return ok({ companyLocationAssignAddress: { addresses: [{ id: "A" }], userErrors: [] } });
         }
         case "companyLocationTaxSettingsUpdate": {
+          const bad = invalid(null, v.tax, []);
+          if (bad.length) return ok({ companyLocationTaxSettingsUpdate: { companyLocation: null, userErrors: bad } });
           for (const co of S.companies.values()) for (const l of co.locations) if (l.id === v.id) l.tax = v.tax;
           return ok({ companyLocationTaxSettingsUpdate: { companyLocation: { id: v.id }, userErrors: [] } });
         }
@@ -242,6 +274,29 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
     const twin = await customer("Bob zweiter Eintrag", mail("bob"));
     await b2b.setResellerWanted(twin, true);
     expect(await b2b.syncShopCompany(twin)).toMatchObject({ status: "failed", error: "emailUsed" });
+  }, 30_000);
+
+  it("PLZ „0000“ + kurze USt-IdNr. lehnt Shopify ab → trotzdem verbunden (Preise gehen), Hinweis; korrigiert → nachgetragen", async () => {
+    vi.stubGlobal("fetch", mock());
+    const id = await customer("محمود", mail("mahmoud"), { zip: "0000", street: "germany", city: "obour", vatId: "DE5977154" });
+    await b2b.setResellerWanted(id, true);
+    const r = await b2b.syncShopCompany(id);
+    expect(r).toMatchObject({ status: "linked" });
+    expect(r!.error.split("|").map((n) => n.split(":")[0]).sort()).toEqual(["noAddress", "noTax"]);
+    const co = S.companies.get(r!.companyId)!;
+    expect(co.locations[0]).toMatchObject({ address: null, tax: null });
+    expect(co.contacts[0].roles).toEqual([r!.locationId]); // darf bestellen → sieht die Preise
+    // nochmal speichern (immer noch falsch) → erneut versucht, Hinweis bleibt
+    expect(await b2b.setResellerWanted(id, true)).toBe(true);
+    expect((await b2b.syncShopCompany(id))!.error).toMatch(/noAddress:Zip is invalid/);
+    // korrigiert → Anschrift + Nummer im Shop, Hinweis weg; danach nichts mehr zu tun
+    await db.update(schema.customers).set({ zip: "45711", street: "Provinzialstraße 45", city: "Datteln", vatId: "DE123456789" }).where(eq(schema.customers.id, id));
+    expect(await b2b.setResellerWanted(id, true)).toBe(true);
+    expect(await b2b.syncShopCompany(id)).toMatchObject({ status: "linked", error: "" });
+    expect(co.locations[0]).toMatchObject({ address: { zip: "45711", city: "Datteln" }, tax: "DE123456789" });
+    expect(await b2b.setResellerWanted(id, true)).toBe(false);
+    const ev = await db.select().from(schema.shopEvents).where(eq(schema.shopEvents.ref, mail("mahmoud")));
+    expect(ev.some((e) => e.message.startsWith("resellerPartial:"))).toBe(true);
   }, 30_000);
 
   it("Recht fehlt → bleibt vorgemerkt; nach Freigabe verbindet der Worker", async () => {

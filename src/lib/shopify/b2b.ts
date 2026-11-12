@@ -15,8 +15,9 @@ import { gql, getShop, refreshTokenOnce, ShopifyError, type Shop, type ShopChann
 import { configured, withProductLock } from "./admin";
 import { CHANNELS, logEvent } from "./sync";
 import {
-  chunks, companyAddress, companyCreateInput, companyFingerprint, contactName, normEmail, pickResellerSetup, planResellerPrices, validEmail, vatForShop,
-  type B2bCustomer, type FixedPrice, type MarketNode, type ResellerProblem, type ResellerSetup,
+  ALL_PARTS, chunks, companyAddress, companyCreateInput, companyFingerprint, contactName, normEmail, partNote, pickResellerSetup, planResellerPrices,
+  rejectedParts, shownInShop, validEmail, vatForShop,
+  type B2bCustomer, type CompanyParts, type FixedPrice, type MarketNode, type ResellerProblem, type ResellerSetup,
 } from "./b2b-map";
 
 export type ShopCompany = typeof schema.shopCompanies.$inferSelect;
@@ -262,28 +263,51 @@ export async function syncShopCompany(customerId: string, channel: ShopChannel =
       let state = companyId ? await companyState(shop, companyId) : null;
       if (companyId && !state) companyId = locationId = contactId = ""; // im Shop gelöscht → neu
       let created = false;
+      // Anschrift/USt-IdNr., die Shopify ablehnt (z. B. PLZ „0000“, 12.11.2026), lassen wir weg – die Preise gehen auch ohne;
+      // die Kundenseite zeigt den Hinweis, nach dem Korrigieren + Speichern wird es nachgetragen (Fingerabdruck ohne diese Teile)
+      const parts: CompanyParts = { ...ALL_PARTS };
+      const notes: string[] = [];
       if (!companyId) {
         const prof = sc?.companyContactProfiles[0];
         if (prof) {
           // diese E-Mail ist im Shop schon Kontakt eines Unternehmens (z. B. von Hand oder vor dem Zurücksetzen angelegt) → das nehmen
           companyId = prof.company.id; contactId = prof.id; locationId = prof.company.locations.nodes[0]?.id ?? "";
         } else {
-          const d = await call<{ companyCreate: { company: { id: string; mainContact: { id: string } | null; locations: { nodes: { id: string }[] } } | null; userErrors: UserError[] } }>(
-            shop, COMPANY_CREATE_M, { input: companyCreateInput(b2b, !sc) });
-          check(d.companyCreate.userErrors, "companyCreate");
-          companyId = d.companyCreate.company!.id;
-          locationId = d.companyCreate.company!.locations.nodes[0]?.id ?? "";
-          contactId = d.companyCreate.company!.mainContact?.id ?? "";
-          created = true;
+          for (;;) {
+            const d = await call<{ companyCreate: { company: { id: string; mainContact: { id: string } | null; locations: { nodes: { id: string }[] } } | null; userErrors: UserError[] } }>(
+              shop, COMPANY_CREATE_M, { input: companyCreateInput(b2b, !sc, parts) });
+            const errs = d.companyCreate.userErrors ?? [];
+            if (errs.length) {
+              const bad = rejectedParts(errs);
+              const dropAddress = parts.address && bad.address, dropTax = parts.tax && bad.tax;
+              if (!dropAddress && !dropTax) check(errs, "companyCreate"); // nichts mehr wegzulassen → Fehler
+              if (dropAddress) { parts.address = false; notes.push(partNote("noAddress", errs)); }
+              if (dropTax) { parts.tax = false; notes.push(partNote("noTax", errs)); }
+              continue;
+            }
+            companyId = d.companyCreate.company!.id;
+            locationId = d.companyCreate.company!.locations.nodes[0]?.id ?? "";
+            contactId = d.companyCreate.company!.mainContact?.id ?? "";
+            created = true;
+            break;
+          }
         }
         state = await companyState(shop, companyId);
         if (!state) throw new B2bError("userErrors", "company not found after create");
       }
       if (!locationId) locationId = state!.locations.nodes[0]?.id ?? "";
-      if (!locationId) {
+      while (!locationId) {
         const d = await call<{ companyLocationCreate: { companyLocation: { id: string } | null; userErrors: UserError[] } }>(shop, LOCATION_CREATE_M,
-          { id: companyId, input: companyCreateInput(b2b, false).companyLocation });
-        check(d.companyLocationCreate.userErrors, "companyLocationCreate");
+          { id: companyId, input: companyCreateInput(b2b, false, parts).companyLocation });
+        const errs = d.companyLocationCreate.userErrors ?? [];
+        if (errs.length) {
+          const bad = rejectedParts(errs);
+          const dropAddress = parts.address && bad.address, dropTax = parts.tax && bad.tax;
+          if (!dropAddress && !dropTax) check(errs, "companyLocationCreate");
+          if (dropAddress) { parts.address = false; notes.push(partNote("noAddress", errs)); }
+          if (dropTax) { parts.tax = false; notes.push(partNote("noTax", errs)); }
+          continue;
+        }
         locationId = d.companyLocationCreate.companyLocation!.id;
         state = await companyState(shop, companyId);
       }
@@ -317,7 +341,8 @@ export async function syncShopCompany(customerId: string, channel: ShopChannel =
         const d = await call<{ companyContactAssignRole: { userErrors: UserError[] } }>(shop, ASSIGN_ROLE_M, { contactId, roleId, locationId });
         check(d.companyContactAssignRole.userErrors, "companyContactAssignRole");
       }
-      // Name, Anschrift, USt-IdNr. geändert → im Shop nachziehen (beim Neuanlegen schon richtig)
+      // Name, Anschrift, USt-IdNr. geändert → im Shop nachziehen (beim Neuanlegen schon richtig). Lehnt Shopify Anschrift bzw.
+      // USt-IdNr. ab → bleibt verbunden, mit Hinweis (Fingerabdruck ohne den Teil → beim nächsten Speichern neuer Versuch)
       const fp = companyFingerprint(b2b);
       if (!created && row.fingerprint && row.fingerprint !== fp) {
         const u = await call<{ companyUpdate: { userErrors: UserError[] } }>(shop, COMPANY_UPDATE_M, { id: companyId, input: { name: b2b.name.trim().slice(0, 255) } });
@@ -325,15 +350,24 @@ export async function syncShopCompany(customerId: string, channel: ShopChannel =
         const address = companyAddress(b2b);
         if (address) {
           const a = await call<{ companyLocationAssignAddress: { userErrors: UserError[] } }>(shop, ADDRESS_M, { id: locationId, address });
-          check(a.companyLocationAssignAddress.userErrors, "companyLocationAssignAddress");
+          const errs = a.companyLocationAssignAddress.userErrors ?? [];
+          if (errs.length && rejectedParts(errs).address) { parts.address = false; notes.push(partNote("noAddress", errs)); }
+          else check(errs, "companyLocationAssignAddress");
         }
         const t = await call<{ companyLocationTaxSettingsUpdate: { userErrors: UserError[] } }>(shop, TAX_M, { id: locationId, tax: vatForShop(b2b) || null });
-        check(t.companyLocationTaxSettingsUpdate.userErrors, "companyLocationTaxSettingsUpdate");
+        const terrs = t.companyLocationTaxSettingsUpdate.userErrors ?? [];
+        if (terrs.length && rejectedParts(terrs).tax) { parts.tax = false; notes.push(partNote("noTax", terrs)); }
+        else check(terrs, "companyLocationTaxSettingsUpdate");
       }
       if (oldId) await removeContact(shop, oldId);
       const first = row.status !== "linked" || row.email !== email;
-      await set({ status: "linked", error: "", email, companyId, locationId, contactId, shopCustomerId: sc?.id ?? row.shopCustomerId, fingerprint: fp, tries: 0, syncedAt: new Date() });
+      const skipped = !parts.address || !parts.tax;
+      await set({
+        status: "linked", error: notes.join("|"), email, companyId, locationId, contactId, shopCustomerId: sc?.id ?? row.shopCustomerId,
+        fingerprint: skipped ? companyFingerprint(shownInShop(b2b, parts)) : fp, tries: 0, syncedAt: new Date(),
+      });
       if (first) await logEvent(channel, "info", "customers", `resellerLinked:${cust.name}`, email);
+      if (skipped) await logEvent(channel, "warn", "customers", `resellerPartial:${cust.name}|${notes.join(" / ")}`, email);
       return reload();
     } catch (e) {
       const tries = row.tries + 1;

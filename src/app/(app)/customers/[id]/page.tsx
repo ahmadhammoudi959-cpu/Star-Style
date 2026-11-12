@@ -123,10 +123,20 @@ function ResellerCard({ t, link, email, customerId, wholesale, companyUrl }: {
   const R = t.customer.reseller;
   const why = (code: string) => {
     const key = code.split(":")[0] as keyof typeof R.why;
-    return R.why[key] ?? code;
+    const raw = code.slice(code.indexOf(":") + 1);
+    // „noAddress:Zip is invalid“ → Hinweis + der Grund (PLZ) in seiner Sprache
+    if (key === "noAddress" && /\bzip\b|postal|post ?code/i.test(raw)) return `${R.why.noAddress} ${R.why.zip}`;
+    if (R.why[key]) return R.why[key];
+    // Ablehnung durch Shopify als Rohtext („companyCreate: Zip is invalid“) → verständlich
+    if (/\bzip\b|postal|post ?code/i.test(code)) return R.why.zip;
+    if (/\btax\b|\bvat\b|tax registration/i.test(code)) return R.why.taxId;
+    if (/address|province|city|country/i.test(code)) return R.why.address;
+    return code;
   };
   const on = Boolean(link?.wanted);
   const state = !link || (!on && link.status !== "pending") ? "off" : link.status;
+  // verbunden, aber ohne Anschrift/USt-IdNr. (von Shopify abgelehnt) → Hinweis zum Korrigieren
+  const notes = state === "linked" && link?.error ? link.error.split("|").filter(Boolean) : [];
   const tone = state === "linked" ? "bg-emerald-50 text-emerald-900 ring-emerald-200" : state === "failed" ? "bg-red-50 text-red-800 ring-red-200"
     : state === "pending" ? "bg-amber-50 text-amber-900 ring-amber-200" : "bg-slate-50 text-slate-700 ring-black/5";
   const icon = state === "linked" ? "check" : state === "failed" ? "alert" : state === "pending" ? "clock" : "globe";
@@ -143,6 +153,11 @@ function ResellerCard({ t, link, email, customerId, wholesale, companyUrl }: {
           {state === "off" && (wholesale ? R.off : R.removed)}
         </div>
       </div>
+      {notes.map((n) => (
+        <p key={n} className="mt-2 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900 ring-1 ring-amber-200 [overflow-wrap:anywhere]">
+          <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />{why(n)}
+        </p>
+      ))}
       {state === "failed" && <ResellerRetry customerId={customerId} label={R.retry} />}
       {companyUrl && state === "linked" && (
         <a href={companyUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline">{R.openShop}<Icon name="link" className="h-3.5 w-3.5" /></a>

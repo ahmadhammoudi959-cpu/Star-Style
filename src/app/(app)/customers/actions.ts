@@ -12,7 +12,9 @@ import { splitVatId } from "@/lib/vat-check";
 import { validEmail } from "@/lib/shopify/b2b-map";
 import { setResellerWanted, syncShopCompanyNow } from "@/lib/shopify/b2b";
 
-export type CustomerState = { error?: string } | undefined;
+/** values: bei einem Fehler die getippten Eingaben zurück (React 19 setzt das Formular nach jeder Action zurück) */
+export type CustomerState = { error?: string; values?: Record<string, string> } | undefined;
+const KEEP = ["name", "contact", "email", "phone", "street", "zip", "city", "country", "vatId", "creditLimit", "paymentTermDays", "notes"] as const;
 
 const C = z.object({
   id: z.string().optional(),
@@ -36,14 +38,19 @@ const C = z.object({
 
 export async function saveCustomer(_: CustomerState, fd: FormData): Promise<CustomerState> {
   const session = await requireSession();
+  const fail = (error: string): CustomerState => ({ error, values: Object.fromEntries(KEEP.map((k) => [k, String(fd.get(k) ?? "")])) });
   const p = C.safeParse(Object.fromEntries(fd));
-  if (!p.success) return { error: "required" };
+  if (!p.success) return fail("required");
   const { id, vatPending, creditLimit, paymentTermDays, shopReseller, ...d } = p.data;
-  if (d.vatId && !splitVatId(d.vatId)) return { error: "vatFormat" };
+  // Deutschland: PLZ = 5 Ziffern, USt-IdNr. = DE + 9 Ziffern (Shopify lehnt „0000“ ab, 12.11.2026; auch auf der Rechnung falsch).
+  // Reihenfolge wie im Formular: erst die Anschrift, dann die Nummer
+  if (d.country === "DE" && d.zip && !/^\d{5}$/.test(d.zip)) return fail("zipDe");
+  if (d.vatId && !splitVatId(d.vatId)) return fail("vatFormat");
+  if (d.vatId.startsWith("DE") && !/^DE\d{9}$/.test(d.vatId)) return fail("vatDe");
   const reseller = shopReseller && d.priceGroup === "WHOLESALE";
-  if (reseller && !validEmail(d.email)) return { error: "resellerEmail" };
+  if (reseller && !validEmail(d.email)) return fail("resellerEmail");
   const limit = creditLimit.trim() ? parseMoney(creditLimit) : null;
-  if (creditLimit.trim() && limit == null) return { error: "required" };
+  if (creditLimit.trim() && limit == null) return fail("required");
   const days = paymentTermDays.trim() ? Number(paymentTermDays) : null;
 
   let cid = id;

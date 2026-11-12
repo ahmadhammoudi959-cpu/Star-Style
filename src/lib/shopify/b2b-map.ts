@@ -29,10 +29,17 @@ export function companyAddress(c: B2bCustomer) {
   return { address1: c.street.trim().slice(0, 255), city: c.city.trim().slice(0, 255), zip: c.zip.trim().slice(0, 20), countryCode: countryOf(c), recipient: c.name.trim().slice(0, 255) };
 }
 
-/** companyCreate: Firma + Standort (+ Kontakt, wenn es den Shop-Kunden mit der E-Mail noch nicht gibt) */
-export function companyCreateInput(c: B2bCustomer, withContact: boolean) {
-  const address = companyAddress(c);
-  const vat = vatOf(c);
+/** Was beim Unternehmen im Shop mitgeschickt wird (Shopify lehnt z. B. eine ungültige PLZ ab → dann ohne Anschrift) */
+export type CompanyParts = { address: boolean; tax: boolean };
+export const ALL_PARTS: CompanyParts = { address: true, tax: true };
+
+/**
+ * companyCreate: Firma + Standort (+ Kontakt, wenn es den Shop-Kunden mit der E-Mail noch nicht gibt).
+ * parts: Anschrift bzw. USt-IdNr. weglassen, wenn Shopify sie abgelehnt hat – die Preise gehen auch ohne.
+ */
+export function companyCreateInput(c: B2bCustomer, withContact: boolean, parts: CompanyParts = ALL_PARTS) {
+  const address = parts.address ? companyAddress(c) : null;
+  const vat = parts.tax ? vatOf(c) : "";
   return {
     company: { name: c.name.trim().slice(0, 255), externalId: `K${c.number}` },
     companyLocation: {
@@ -52,6 +59,34 @@ export function companyFingerprint(c: B2bCustomer) {
 }
 
 export const vatForShop = vatOf;
+
+export type ShopUserError = { field?: string[] | null; message: string };
+
+/**
+ * Hat Shopify die Anschrift oder die USt-IdNr. abgelehnt? (Feldpfad oder Meldung, z. B. „Zip is invalid“ beim Anlegen am
+ * 12.11.2026 mit PLZ „0000“). Andere Fehler (z. B. E-Mail schon vergeben) → beides false.
+ */
+export function rejectedParts(errs: ShopUserError[]): CompanyParts {
+  let address = false, tax = false;
+  for (const e of errs) {
+    const f = (e.field ?? []).join(".").toLowerCase(), m = e.message.toLowerCase();
+    const mail = /e-?mail|contact/.test(`${f} ${m}`); // „Email address …“ betrifft den Kontakt, nicht die Anschrift
+    if (!mail && (/address|zip|postal|city|province|zone|country/.test(f) || /\bzip\b|postal|post ?code|postleitzahl|address|province|city|country code|street/.test(m))) address = true;
+    if (/tax/.test(f) || /\btax\b|\bvat\b|tax ?id|tax registration|ust-?id/.test(m)) tax = true;
+  }
+  return { address, tax };
+}
+
+/** Der Kunde so, wie er im Shop steht (weggelassene Teile leer) – für den Fingerabdruck: beim nächsten Speichern wird es erneut versucht */
+export function shownInShop(c: B2bCustomer, parts: CompanyParts): B2bCustomer {
+  return { ...c, ...(parts.address ? {} : { street: "", zip: "", city: "" }), ...(parts.tax ? {} : { vatId: "" }) };
+}
+
+/** Hinweis für die Kundenseite: „noAddress:<Meldung>“ / „noTax:<Meldung>“ (nur die passenden Meldungen), mehrere mit „|“ getrennt */
+export function partNote(kind: "noAddress" | "noTax", errs: ShopUserError[]) {
+  const mine = errs.filter((e) => rejectedParts([e])[kind === "noAddress" ? "address" : "tax"]);
+  return `${kind}:${(mine.length ? mine : errs).map((e) => e.message).join("; ").replace(/\|/g, "/")}`.slice(0, 200);
+}
 
 // ───────────────────────── B2B-Markt + Preisliste ─────────────────────────
 
