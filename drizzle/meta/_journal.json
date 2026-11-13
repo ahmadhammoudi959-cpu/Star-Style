@@ -169,6 +169,13 @@
       "when": 1794563866467,
       "tag": "0023_shop_companies_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794566160060,
+      "tag": "0024_shop_customers",
+      "breakpoints": true
     }
   ]
 }

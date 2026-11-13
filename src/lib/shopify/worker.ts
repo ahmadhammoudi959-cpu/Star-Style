@@ -1,6 +1,6 @@
 import "server-only";
 /**
- * Hintergrund-Abgleich im Server-Prozess (eine Instanz auf Render):
+ * Hintergrund-Abgleich im Server-Prozess (eine Instanz auf Render; Kundenkonten siehe ./customers.ts):
  * - alle 20 s: geänderte Bestände an die Shops melden
  * - alle 5 min: Bestellungen abholen (falls ein Webhook verloren ging) und alle Bestände vergleichen;
  *   im Shop zu löschende Galerie-Fotos und geänderte Preise, bei denen das noch nicht geklappt hat, erneut versuchen
@@ -10,6 +10,9 @@ import { retryGalleryDeletes } from "./gallery";
 import { pushDirtyPrices } from "./prices";
 import { retryShipments } from "../shipments";
 import { pushResellerPricesPeriodically, retryShopCompanies } from "./b2b";
+import { syncAllShopCustomers } from "./customers";
+import { ensureCustomerWebhooks } from "./webhooks";
+import { CHANNELS } from "./sync";
 
 let started = false, busy = false, ticks = 0;
 
@@ -32,6 +35,9 @@ export function startWorker() {
       // Großhandelskunden (جملة الجملة), deren Verbindung im Shop noch aussteht; Preisliste höchstens alle 30 min ganz vergleichen
       if (full) await retryShopCompanies().catch((e) => console.error("shopify b2b retry", e));
       if (full) await pushResellerPricesPeriodically().catch((e) => console.error("shopify reseller prices", e));
+      // Kunden mit Konto oder Bestellung (auch unbezahlt/Nachnahme) aus beiden Shops ins System – auch bei ausgeschaltetem Abgleich
+      if (full) for (const ch of CHANNELS) await ensureCustomerWebhooks(ch).catch((e) => console.error("shopify customer hooks", e));
+      if (full) await syncAllShopCustomers().catch((e) => console.error("shopify customers", e));
     } catch (e) { console.error("shopify worker", e); }
     finally { busy = false; ticks++; }
   };

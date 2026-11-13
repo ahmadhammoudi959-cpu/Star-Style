@@ -13,6 +13,7 @@ import { CustomerForm, type CustomerData } from "../CustomerForm";
 import { VatCheckButton } from "../VatCheckButton";
 import { openItems } from "@/lib/receivables";
 import { RESELLER_CHANNELS, shopCompaniesOf, type ShopCompany } from "@/lib/shopify/b2b";
+import { shopAccountsOf } from "@/lib/shopify/customers";
 import { getShop, type ShopChannel } from "@/lib/shopify/client";
 import { shopAdminUrl } from "@/lib/shopify/admin";
 import { ResellerRetry } from "../ResellerRetry";
@@ -38,7 +39,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
       select 'invoice', id, coalesce(number, '—'), status::text, coalesce(issue_date, created_at::date), gross_cents from invoices where customer_id = ${id}
       order by d desc limit 30`),
   ]);
-  const [items, links, shops] = await Promise.all([openItems(id), shopCompaniesOf(id), Promise.all(RESELLER_CHANNELS.map((ch) => getShop(ch)))]);
+  const [items, links, shops, accounts] = await Promise.all([openItems(id), shopCompaniesOf(id), Promise.all(RESELLER_CHANNELS.map((ch) => getShop(ch))), shopAccountsOf(id)]);
   // Großhandelspreise: Stand je Shop (ein Häkchen gilt für beide Shops)
   const resellerShops = links.map(({ channel, link }, i) => ({
     channel, link,
@@ -83,6 +84,8 @@ export default async function CustomerPage({ params, searchParams }: { params: P
           </section>}
         </div>
         <aside className="space-y-4">
+          {accounts.length > 0 && <ShopAccountCard t={t} intl={intl} accounts={accounts} group={c.priceGroup}
+            adminUrl={(ch, gid) => { const sh = shops[RESELLER_CHANNELS.indexOf(ch as ShopChannel)]; return sh?.domain ? shopAdminUrl(sh, `/customers/${gid.split("/").pop()}`) : null; }} />}
           {rights.reseller && (c.priceGroup === "WHOLESALE" || links.some(({ link }) => link && link.status !== "removed")) && <ResellerCard t={t} shops={resellerShops} email={c.email}
             customerId={c.id} wholesale={c.priceGroup === "WHOLESALE"} />}
           {money && <div className="card p-5 animate-rise">
@@ -121,6 +124,39 @@ export default async function CustomerPage({ params, searchParams }: { params: P
           )}
         </aside>
       </div>
+    </div>
+  );
+}
+
+/** Konto im Online-Shop (Wunsch Inhaber 13.11.2026): je Shop seit wann bzw. bestellt ohne Konto; Hinweis zur Preisgruppe */
+function ShopAccountCard({ t, intl, accounts, group, adminUrl }: {
+  t: Awaited<ReturnType<typeof getI18n>>["t"]; intl: string; accounts: Awaited<ReturnType<typeof shopAccountsOf>>; group: "WHOLESALE" | "RETAIL";
+  adminUrl: (channel: string, gid: string) => string | null;
+}) {
+  const A = t.customer.shopAccount;
+  const order = ["GENERAL_SHOP", "BRAND_SHOP"];
+  const rows = [...accounts].sort((a, b) => order.indexOf(a.channel) - order.indexOf(b.channel));
+  const created = rows.some((a) => a.createdCustomer);
+  return (
+    <div className="card animate-rise p-5">
+      <h3 className="mb-2 flex items-center gap-2 font-bold"><Icon name="globe" className="icon-pop h-4 w-4 text-brand-600" />{A.title}</h3>
+      <ul className="space-y-2 text-sm">
+        {rows.map((a) => {
+          const shop = t.shop.names[a.channel as "GENERAL_SHOP"] ?? a.channel;
+          const date = a.registeredAt ? formatDate(a.registeredAt.toISOString(), intl) : "";
+          const text = a.state === "ENABLED" ? A.account.replace("{shop}", shop).replace("{date}", date)
+            : a.orders > 0 ? A.ordered.replace("{shop}", shop).replace("{n}", String(a.orders)) : A.disabled.replace("{shop}", shop);
+          const url = adminUrl(a.channel, a.shopCustomerId);
+          return (
+            <li key={a.id} className={`rounded-xl p-3 ring-1 ${a.state === "ENABLED" ? "bg-emerald-50 text-emerald-900 ring-emerald-200" : "bg-slate-50 text-slate-700 ring-black/5"}`}>
+              <div className="flex items-start gap-2"><Icon name={a.state === "ENABLED" ? "check" : "cart"} className="mt-0.5 h-4 w-4 shrink-0" /><span className="min-w-0 [overflow-wrap:anywhere]">{text}</span></div>
+              {url && <a href={url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline">{A.open}<Icon name="link" className="h-3.5 w-3.5" /></a>}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-2 text-xs text-ink-soft">{created ? A.created : A.linked}</p>
+      {group === "RETAIL" && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900 ring-1 ring-amber-200">{A.hint.replace("{retail}", t.customer.RETAIL).replace("{wholesale}", t.customer.WHOLESALE)}</p>}
     </div>
   );
 }

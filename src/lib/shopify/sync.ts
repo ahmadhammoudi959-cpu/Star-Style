@@ -15,6 +15,7 @@ import { todayIso } from "../dates";
 import { verifyCustomerVat } from "../customer-vat";
 import { importShopFulfillments } from "../shipments";
 import { withOrderLock } from "./order-lock";
+import { withCustomerLock } from "./customer-lock";
 
 export const CHANNELS: ShopChannel[] = ["BRAND_SHOP", "GENERAL_SHOP"];
 
@@ -233,7 +234,12 @@ async function currentInvoice(channel: ShopChannel, externalId: string) {
   });
 }
 
-async function findOrCreateCustomer(c: ReturnType<typeof mapOrder>["customer"]) {
+// unter derselben Sperre wie der Kunden-Abgleich (./customers.ts), sonst entstehen bei gleichzeitigem Webhook zwei Kunden
+function findOrCreateCustomer(c: ReturnType<typeof mapOrder>["customer"]) {
+  return c.email ? withCustomerLock(c.email, () => findOrCreateCustomerNow(c)) : findOrCreateCustomerNow(c);
+}
+
+async function findOrCreateCustomerNow(c: ReturnType<typeof mapOrder>["customer"]) {
   if (c.email) {
     const ex = await db.query.customers.findFirst({ where: sql`lower(${schema.customers.email}) = ${c.email}` });
     if (ex) {

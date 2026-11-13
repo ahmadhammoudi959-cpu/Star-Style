@@ -16,6 +16,7 @@ import { setupSteps } from "@/lib/onboarding";
 import { fill } from "@/i18n";
 import { pendingSummary } from "@/lib/shopify/product-push";
 import { recentBackups } from "@/lib/backup-info";
+import { newShopCustomersCount } from "@/lib/shopify/customers";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
   const session = await requireSession();
@@ -26,7 +27,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const may = (p: Perm) => can(session, p);
   const opens = (href: string) => canOpen(session, href);
   const money = may("dashboard.money"), seeStock = may("products.view");
-  const [stats, al, open, ins, setup, pend, fails, toShip, backups] = await Promise.all([
+  const [stats, al, open, ins, setup, pend, fails, toShip, backups, newShop] = await Promise.all([
     seeStock || money ? dashboardStats(today) : null,
     seeStock ? alerts(today) : { low: [], expiring: [] },
     money ? openItems() : [],
@@ -36,6 +37,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     failuresSincePrevious(session.uid, session.admin),
     may("sales.shipping") ? shopOrdersToShip() : [],
     opens("/backup") ? recentBackups(1) : [],
+    opens("/customers") ? newShopCustomersCount().catch(() => 0) : 0,
   ]);
   const ai = aiConfigured() && may("ask");
   const debts = open.filter((r) => r.state.openCents > 0);
@@ -93,6 +95,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
             <span className="font-bold">{toShip.length === 1 ? t.home.toShipOne : fill(t.home.toShip, { n: toShip.length })}</span>
           </span>
           <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">{t.home.toShipAction}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></span>
+        </Link>
+      )}
+
+      {/* neue Kunden aus den Shops – Konto angelegt oder bestellt, auch unbezahlt (Wunsch Inhaber 13.11.2026) */}
+      {newShop > 0 && (
+        <Link href="/customers?src=new" className="group card flex animate-rise flex-wrap items-center justify-between gap-3 p-4 ring-1 ring-emerald-200 hover:shadow-lift">
+          <span className="flex items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Icon name="users" className="icon-pop h-5 w-5" /></span>
+            <span className="font-bold">{newShop === 1 ? t.home.newShopCustomerOne : fill(t.home.newShopCustomers, { n: newShop })}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">{t.home.newShopCustomersAction}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></span>
         </Link>
       )}
 

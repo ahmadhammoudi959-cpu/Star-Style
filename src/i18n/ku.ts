@@ -126,7 +126,7 @@ const ku: Dict = {
     scanHint: "Stok & biha di cih de",
     pendingTitle: "Hîn ne di firoşgehê de",
     pendingText: "{shop}: hîn {n} berhem li wir kêm in ({r} amade) – tu dixwazî bar bikî?",
-    pendingAction: "Binêre û bar bike", toShip: "{n} siparişên online li benda şandinê ne", toShipOne: "1 siparişa online li benda şandinê ye", toShipAction: "Niha bişîne",
+    pendingAction: "Binêre û bar bike", toShip: "{n} siparişên online li benda şandinê ne", toShipOne: "1 siparişa online li benda şandinê ye", newShopCustomers: "{n} mişteriyên nû ji firoşgeha online (7 roj)", newShopCustomerOne: "1 mişteriyek nû ji firoşgeha online (7 roj)", newShopCustomersAction: "Bibîne", toShipAction: "Niha bişîne",
   },
   login: {
     disabled: "Ev hesab hatiye rawestandin. Ji kerema xwe bi xwediyê karê re biaxive.",
@@ -526,6 +526,8 @@ const ku: Dict = {
     documents: "Belge",
     ownVatMissing: "Pêşî hejmara bacê ya EU (USt-IdNr.) ya xwe di Mîhengan de binivîse.",
     shopReseller: "Di herdu firoşgehên online de bihayên firoşkaran dibîne",
+    src: "Çavkanî", srcShop: "Ji firoşgeha online (hesab an sipariş)", srcNew: "Nû ji firoşgehê (7 roj)", newBadge: "Nû",
+    shopAccount: { title: "Hesab di firoşgeha online de", account: "{shop}: hesab ji {date} ve", ordered: "{shop}: sipariş da ({n}), bê hesab", disabled: "{shop}: hesab di firoşgehê de neçalak e", created: "Ji firoşgehê bixwe hate zêdekirin.", linked: "Bi mişteriyekî heyî ve hate girêdan (heman e-name).", open: "Mişterî di firoşgehê de", hint: "Mişteriyên ji firoşgehê koma bihayan „{retail}“ digirin – ji bo firoşkaran li jor „{wholesale}“ hilbijêre û tomar bike." },
     shopResellerHint: "Bi {email} dikeve firoşgehê (kod bi e-nameyê tê).",
     shopResellerNoEmail: "Ji bo vê yekê navnîşana e-nameyê ya mişterî pêwîst e.",
     resellerEmail: "Ji bo bihayên firoşgehê e-nameyeke derbasdar binivîse.",
@@ -1225,7 +1227,7 @@ const ku: Dict = {
       registered: "Agahdariyên yekser hatin sazkirin ({p} nû)",
       paid: "Dravdan hate wergirtin",
       products: "{p}",
-      shipped: "Wek şandî hat nîşankirin: {p}", shippedMail: " · mişterî bi e-nameyê hat agahdarkirin", trackingUpdated: "Hejmara şopandinê di firoşgehê de hat guhertin: {p}", shipmentCancelled: "Şandin di firoşgehê de paşve hat girtin: {p}", shipmentFailed: "Firoşgehê şandin red kir: {p}", needScopeFulfillment: "Sepana firoşgehê hîn nikare siparişan wek şandî nîşan bike (destûra write_merchant_managed_fulfillment_orders tune) – şandin tomarkirî dimînin û dema destûr bê dayîn diçin", needScopeFulfillments: "Sepana firoşgehê hîn nikare şandinên siparişan bixwîne – şandinên ku di Shopify-Admin de tên çêkirin heta wê demê di sîstemê de xuya nabin", shippedInShop: "Di Shopify-Admin de hat şandin – ket sîstemê: {p}", shipmentCancelledInShop: "Şandin di Shopify-Admin de hat betalkirin – di sîstemê de paşve hat girtin: {p}", resellerLinked: "Firoşkar di firoşgehê de hat girêdan: {p}", resellerRemoved: "Firoşkar ji firoşgehê hat veqetandin (dîsa bihayên asayî dibîne): {p}", resellerFailed: "Firoşkar nehat girêdan: {p}", resellerPricesPushed: "Bihayên firoşkaran di firoşgehê de: {u} hatin guhertin · {d} hatin rakirin · {f} bi xeletî", shipImportFailed: "Şandin ji firoşgehê nehatin wergirtin: {p}",
+      shipped: "Wek şandî hat nîşankirin: {p}", shippedMail: " · mişterî bi e-nameyê hat agahdarkirin", trackingUpdated: "Hejmara şopandinê di firoşgehê de hat guhertin: {p}", shipmentCancelled: "Şandin di firoşgehê de paşve hat girtin: {p}", shipmentFailed: "Firoşgehê şandin red kir: {p}", needScopeFulfillment: "Sepana firoşgehê hîn nikare siparişan wek şandî nîşan bike (destûra write_merchant_managed_fulfillment_orders tune) – şandin tomarkirî dimînin û dema destûr bê dayîn diçin", needScopeFulfillments: "Sepana firoşgehê hîn nikare şandinên siparişan bixwîne – şandinên ku di Shopify-Admin de tên çêkirin heta wê demê di sîstemê de xuya nabin", shippedInShop: "Di Shopify-Admin de hat şandin – ket sîstemê: {p}", shipmentCancelledInShop: "Şandin di Shopify-Admin de hat betalkirin – di sîstemê de paşve hat girtin: {p}", resellerLinked: "Firoşkar di firoşgehê de hat girêdan: {p}", resellerRemoved: "Firoşkar ji firoşgehê hat veqetandin (dîsa bihayên asayî dibîne): {p}", resellerFailed: "Firoşkar nehat girêdan: {p}", customerRegistered: "Mişteriyê nû ji firoşgehê – li sîstemê hate zêdekirin: {p}", customerLinked: "Mişteriyê firoşgehê bi mişteriyê heyî ve hate girêdan: {p}", needScopeCustomers: "Sepana firoşgehê hîn nikare mişteriyan bixwîne (destûra read_customers tune) – heta wê demê hesabên nû di sîstemê de xuya nabin", customersFailed: "Mişteriyên firoşgehê nehatin wergirtin: {p}", customerHooksFailed: "Agahdariya tavilê ji bo mişteriyên nû nehat sazkirin (dîsa jî her 5 deqîqeyan tên): {p}", resellerPricesPushed: "Bihayên firoşkaran di firoşgehê de: {u} hatin guhertin · {d} hatin rakirin · {f} bi xeletî", shipImportFailed: "Şandin ji firoşgehê nehatin wergirtin: {p}",
     },
     errors: {
       busy: "Anîna berheman niha didome – ji kerema xwe kêliyekê bisekine.",

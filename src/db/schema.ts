@@ -528,6 +528,8 @@ export const shops = pgTable("shops", {
   storeTypesAt: timestamp("store_types_at", { withTimezone: true }),
   // unsere Kategorie → Produkttyp im Shop, wenn die Namen nicht gleich sind (vom Nutzer gewählt)
   categoryMap: jsonb("category_map").$type<Record<string, string>>().notNull().default({}),
+  // Kundenkonten-Abgleich: bis hierher (updatedAt im Shop) übernommen; null = beim nächsten Mal alle (src/lib/shopify/customers.ts)
+  customersSince: timestamp("customers_since", { withTimezone: true }),
   updatedAt: updatedAt(),
 });
 
@@ -646,6 +648,28 @@ export const shopCompanies = pgTable("shop_companies", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => [uniqueIndex("shop_company_customer").on(t.customerId, t.channel), index("shop_company_status").on(t.status)]);
+
+/**
+ * Kunden aus den Shops (Wunsch Inhaber 13.11.2026: „أي زبون يعمل اكونت على أي من المتجرين يطلع بالسيستم“, auch wer
+ * bestellt und nicht online bezahlt, z. B. Nachnahme): je Shop-Kunde eine Zeile, verbunden mit unserem Kunden (per E-Mail).
+ */
+export const shopCustomers = pgTable("shop_customers", {
+  id: id(),
+  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(),
+  shopCustomerId: text("shop_customer_id").notNull(), // gid://shopify/Customer/…
+  email: text("email").notNull().default(""),
+  /** ENABLED = hat ein Konto (seit 28.10.2026 nach der ersten Anmeldung), DISABLED = nur bestellt (Gast) bzw. gesperrt */
+  state: text("state").notNull().default(""),
+  orders: integer("orders").notNull().default(0),
+  /** im Shop angelegt am */
+  registeredAt: timestamp("registered_at", { withTimezone: true }),
+  /** true = unser Kunde wurde dafür neu angelegt, false = mit vorhandenem Kunden (gleiche E-Mail) verbunden */
+  createdCustomer: boolean("created_customer").notNull().default(false),
+  syncedAt: timestamp("synced_at", { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex("shop_customer_shop_id").on(t.channel, t.shopCustomerId), index("shop_customer_customer").on(t.customerId)]);
 
 /** Varianten, deren Bestand sich geändert hat und an die Shops gemeldet werden muss */
 export const stockDirty = pgTable("stock_dirty", {

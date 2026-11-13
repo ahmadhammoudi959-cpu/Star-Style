@@ -100,7 +100,7 @@ export const RESET_STATEMENTS: string[] = [
   `delete from number_sequences`,
   `delete from advisor_exports`, // Test-Monatsmappen (ZIP-Dateien unten mit weg)
   // Shop-Bestellungen erst ab dem nächsten Einschalten des Abgleichs übernehmen (vorher lief der Verkauf ohne uns)
-  `update shops set orders_since = null, last_order_sync = null`,
+  `update shops set orders_since = null, last_order_sync = null, customers_since = null`, // Shop-Kunden kommen danach wieder (./shopify/customers.ts),
   `delete from stored_files f where f.id in (select id from _reset_files)
      and not exists (select 1 from products where image_file_id = f.id)
      and not exists (select 1 from variants where image_file_id = f.id)
