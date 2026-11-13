@@ -121,6 +121,8 @@ export const companySettings = pgTable("company_settings", {
   advisorEmail: text("advisor_email").notNull().default(""),
   // Belegdesign (Seite „Belegdesign“, src/lib/doc-design.ts): nur die Abweichungen vom Standard; {} = bisheriges Aussehen
   docDesign: jsonb("doc_design").$type<Record<string, unknown>>().notNull().default({}),
+  // Versanddienste (Seite „Versanddienste“, src/lib/carriers.ts): Reihenfolge, ausgeblendet, vorgewählt, eigene; {} = wie bisher
+  carriers: jsonb("carriers").$type<Record<string, unknown>>().notNull().default({}),
   updatedAt: updatedAt(),
 });
 

@@ -27,14 +27,18 @@ const URLS: Record<Known, (n: string) => string> = {
   UPS: (n) => `https://www.ups.com/track?loc=de_DE&tracknum=${n}`,
 };
 
-/** Link zur Sendungsverfolgung. OTHER: Link der Spedition, „{n}“ darin wird durch die Nummer ersetzt. */
+/** Link zur Sendungsverfolgung. OTHER: Link der Spedition, „{n}“ darin wird durch die Nummer ersetzt (ohne Nummer dann kein Link). */
 export function trackingUrl(carrier: string, n: string, customUrl = ""): string | null {
   const num = encodeURIComponent(n);
   if (carrier !== "OTHER") return n && URLS[carrier as Known] ? URLS[carrier as Known](num) : null;
   const u = customUrl.trim();
   if (!u) return null;
-  return u.includes("{n}") ? u.split("{n}").join(num) : u;
+  if (!u.includes("{n}")) return u;
+  return n ? u.split("{n}").join(num) : null;
 }
+
+/** Link eines eingebauten Versanddienstes als Vorlage mit {n} (Anzeige auf der Seite „Versanddienste“) */
+export const carrierUrlTemplate = (carrier: string): string | null => (carrier !== "OTHER" && URLS[carrier as Known] ? URLS[carrier as Known]("{n}") : null);
 
 /** Nummer vom Etikett/Handscanner: Leerzeichen weg, Großbuchstaben */
 export const normalizeTrackingNumber = (s: string) => s.replace(/[\s ]+/g, "").toUpperCase();
@@ -42,15 +46,18 @@ const NUM_RE = /^[A-Z0-9][A-Z0-9-]{4,48}[A-Z0-9]$/; // 6–50 Zeichen
 export const MAX_PARCELS = 20;
 
 export type NumbersProblem = "format" | "duplicate" | "missing" | "tooMany";
-/** Nummern prüfen: bekannte Versanddienste brauchen mindestens eine; Spedition darf ohne (dann nur Name/Link). */
-export function checkNumbers(carrier: string, raw: string[]): { numbers: string[]; problem: NumbersProblem | null; bad?: string } {
+/**
+ * Nummern prüfen: bekannte Versanddienste brauchen mindestens eine; Spedition darf ohne (dann nur Name/Link).
+ * required: im Formular auch für eigene Versanddienste mit {n} im Link (der Server lässt sie wie jede Spedition ohne zu).
+ */
+export function checkNumbers(carrier: string, raw: string[], required = carrier !== "OTHER"): { numbers: string[]; problem: NumbersProblem | null; bad?: string } {
   const numbers = raw.map(normalizeTrackingNumber).filter(Boolean);
   if (numbers.length > MAX_PARCELS) return { numbers, problem: "tooMany" };
   const bad = numbers.find((n) => !NUM_RE.test(n));
   if (bad) return { numbers, problem: "format", bad };
   const dup = numbers.find((n, i) => numbers.indexOf(n) !== i);
   if (dup) return { numbers, problem: "duplicate", bad: dup };
-  if (!numbers.length && carrier !== "OTHER") return { numbers, problem: "missing" };
+  if (!numbers.length && required) return { numbers, problem: "missing" };
   return { numbers, problem: null };
 }
 

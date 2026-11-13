@@ -1,8 +1,10 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { cancelShipmentAction, createShipmentAction, editShipmentAction, retryShipmentAction, type ShipState } from "../../ship-actions";
 import { Icon } from "@/components/Icon";
-import { CARRIERS, carrierLabel, checkNumbers, customUrlOk, type Carrier } from "@/lib/shipping";
+import { checkNumbers, customUrlOk } from "@/lib/shipping";
+import { choiceKeyFor, needsNumber, shipmentFields, type CarrierChoice } from "@/lib/carriers";
 import type { Dict } from "@/i18n/de";
 
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? `{${k}}`));
@@ -47,18 +49,31 @@ async function run(action: (s: ShipState, fd: FormData) => Promise<ShipState>, f
   return undefined;
 }
 
-type TrackingState = { carrier: Carrier; carrierName: string; url: string; numbers: string[] };
+/** key = gewählter Knopf (DHL …, eigener Versanddienst, OTHER = Spedition frei); freeName/freeUrl nur für die Spedition */
+type TrackingState = { key: string; freeName: string; freeUrl: string; numbers: string[] };
+
+const FREE: CarrierChoice = { key: "OTHER", carrier: "OTHER", name: "", url: "", kind: "free", hidden: false };
+const choiceOf = (choices: CarrierChoice[], key: string) => choices.find((c) => c.key === key) ?? choices.find((c) => c.key === "OTHER") ?? FREE;
+/** Felder für die Sendung (carrier / carrierName / trackingUrl) aus dem gewählten Knopf */
+const fieldsOf = (choices: CarrierChoice[], v: TrackingState) => shipmentFields(choiceOf(choices, v.key), { name: v.freeName, url: v.freeUrl });
 
 /**
  * Versanddienst + Nummer je Paket. Handscanner tippen die Nummer und drücken Enter → nächstes Paket statt Absenden.
  * Leere Felder zählen nicht; Fehler werden sofort gezeigt (gleiche Prüfung wie auf dem Server).
+ * Knöpfe = Seite „Versanddienste“ (Reihenfolge, ausgeblendet; eine schon gespeicherte Sendung zeigt ihren auch, wenn er ausgeblendet ist).
  */
-function TrackingFields({ t, v, set, names, idp, tried }: { t: Dict; v: TrackingState; set: (v: TrackingState) => void; names: string[]; idp: string; tried: boolean }) {
+function TrackingFields({ t, v, set, names, idp, tried, choices, manage }: {
+  t: Dict; v: TrackingState; set: (v: TrackingState) => void; names: string[]; idp: string; tried: boolean; choices: CarrierChoice[]; manage: boolean;
+}) {
   const S = t.ship;
   const refs = useRef<(HTMLInputElement | null)[]>([]);
   const [focus, setFocus] = useState<number | null>(null);
   useEffect(() => { if (focus != null) { refs.current[focus]?.focus(); setFocus(null); } }, [focus, v.numbers.length]);
-  const check = checkNumbers(v.carrier, v.numbers);
+  const cur = choiceOf(choices, v.key);
+  const need = needsNumber(cur);
+  const check = checkNumbers(cur.carrier, v.numbers, need);
+  const shown = choices.filter((c) => !c.hidden || c.key === cur.key);
+  const label = (c: CarrierChoice) => (c.kind === "free" ? S.other : c.name);
   const shownProblem = check.problem && (tried || check.problem === "format" || check.problem === "duplicate" || check.problem === "tooMany") ? check.problem : null;
   const addRow = (after: number) => {
     const next = [...v.numbers];
@@ -71,31 +86,38 @@ function TrackingFields({ t, v, set, names, idp, tried }: { t: Dict; v: Tracking
       <div>
         <div className="mb-1.5 text-xs font-bold text-ink-soft">{S.carrier}</div>
         <div role="radiogroup" aria-label={S.carrier} className="grid grid-cols-3 gap-1.5">
-          {CARRIERS.map((c) => (
-            <button key={c} type="button" role="radio" aria-checked={v.carrier === c} onClick={() => set({ ...v, carrier: c })}
-              className={`min-w-0 truncate rounded-xl px-1.5 py-2 text-sm font-bold ring-1 transition ${v.carrier === c ? "bg-brand-600 text-white shadow-card ring-brand-600" : "bg-white text-ink ring-black/10 hover:bg-brand-50"}`}>
-              {c === "OTHER" ? S.other : carrierLabel(c)}
+          {shown.map((c) => (
+            <button key={c.key} type="button" role="radio" aria-checked={cur.key === c.key} onClick={() => set({ ...v, key: c.key })} title={label(c)}
+              className={`min-w-0 truncate rounded-xl px-1.5 py-2 text-sm font-bold ring-1 transition ${cur.key === c.key ? "bg-brand-600 text-white shadow-card ring-brand-600" : "bg-white text-ink ring-black/10 hover:bg-brand-50"}`}>
+              {label(c)}
             </button>
           ))}
         </div>
+        {manage && (
+          <div className="mt-1.5 text-end">
+            <Link href="/settings/carriers" className="group inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline">
+              <Icon name="settings" className="h-3.5 w-3.5" />{t.carriers.manage}
+            </Link>
+          </div>
+        )}
       </div>
-      {v.carrier === "OTHER" && (
+      {cur.kind === "free" && (
         <div className="space-y-2 rounded-xl bg-slate-50 p-2.5 ring-1 ring-black/5">
           <label className="block text-xs font-bold text-ink-soft" htmlFor={`${idp}-name`}>{S.carrierName}</label>
-          <input id={`${idp}-name`} value={v.carrierName} onChange={(e) => set({ ...v, carrierName: e.target.value })} list={`${idp}-names`} maxLength={60}
+          <input id={`${idp}-name`} value={v.freeName} onChange={(e) => set({ ...v, freeName: e.target.value })} list={`${idp}-names`} maxLength={60}
             placeholder={S.carrierNamePh} className="input" autoComplete="off" />
           <datalist id={`${idp}-names`}>{names.map((n) => <option key={n} value={n} />)}</datalist>
           <label className="block text-xs font-bold text-ink-soft" htmlFor={`${idp}-url`}>{S.url}</label>
-          <input id={`${idp}-url`} value={v.url} onChange={(e) => set({ ...v, url: e.target.value })} dir="ltr" inputMode="url" placeholder="https://…" className="input" autoComplete="off" />
+          <input id={`${idp}-url`} value={v.freeUrl} onChange={(e) => set({ ...v, freeUrl: e.target.value })} dir="ltr" inputMode="url" placeholder="https://…" className="input" autoComplete="off" />
           <p className="text-[0.6875rem] text-ink-soft">{S.urlHint}</p>
-          {!customUrlOk(v.url) && <p className="text-xs font-semibold text-red-600">{S.errors.url}</p>}
+          {!customUrlOk(v.freeUrl) && <p className="text-xs font-semibold text-red-600">{S.errors.url}</p>}
         </div>
       )}
       <div className="space-y-1.5">
         {v.numbers.map((n, i) => (
           <div key={i}>
             <label className="mb-0.5 block text-xs font-bold text-ink-soft" htmlFor={`${idp}-n${i}`}>
-              {v.carrier === "OTHER" && i === 0 ? S.numberOther : fill(S.number, { n: i + 1 })}
+              {!need && i === 0 ? S.numberOther : fill(S.number, { n: i + 1 })}
             </label>
             <div className="flex items-center gap-1.5">
               <input id={`${idp}-n${i}`} ref={(el) => { refs.current[i] = el; }} value={n} dir="ltr" autoComplete="off" spellCheck={false} autoCapitalize="characters" enterKeyHint="next"
@@ -122,17 +144,25 @@ function TrackingFields({ t, v, set, names, idp, tried }: { t: Dict; v: Tracking
   );
 }
 
-const blank = (): TrackingState => ({ carrier: "DHL", carrierName: "", url: "", numbers: [""] });
-const okToSend = (v: TrackingState) => !checkNumbers(v.carrier, v.numbers).problem && customUrlOk(v.url) && (v.carrier !== "OTHER" || v.carrierName.trim().length > 0);
+const blank = (key: string): TrackingState => ({ key, freeName: "", freeUrl: "", numbers: [""] });
+function okToSend(choices: CarrierChoice[], v: TrackingState) {
+  const cur = choiceOf(choices, v.key);
+  const f = shipmentFields(cur, { name: v.freeName, url: v.freeUrl });
+  return !checkNumbers(f.carrier, v.numbers, needsNumber(cur)).problem && customUrlOk(f.trackingUrl) && (f.carrier !== "OTHER" || f.carrierName.trim().length > 0);
+}
+/** Spedition ohne Namen (nur bei freier Eingabe möglich) */
+const missingName = (choices: CarrierChoice[], v: TrackingState) => choiceOf(choices, v.key).kind === "free" && !v.freeName.trim();
 
 /** Neue Sendung: Versanddienst, Nummern, Inhalt (alles Offene oder Teil), E-Mail an den Kunden (nur Shop) */
-export function NewShipment({ t, invoiceId, shop, open, names }: {
+export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultKey, manage }: {
   t: Dict; invoiceId: string; shop: boolean; open: { lineId: string; description: string; qty: number }[]; names: string[];
+  choices: CarrierChoice[]; defaultKey: string; manage: boolean;
 }) {
   const S = t.ship;
   const [state, setState] = useState<ShipState>(undefined);
   const [pending, setPending] = useState(false);
-  const [v, setV] = useState<TrackingState>(blank);
+  const [v, setV] = useState<TrackingState>(() => blank(defaultKey));
+  const f = fieldsOf(choices, v);
   const [mode, setMode] = useState<"all" | "part">("all");
   const [pick, setPick] = useState<Record<string, number>>(() => Object.fromEntries(open.map((o) => [o.lineId, o.qty])));
   const [notify, setNotify] = useState(true);
@@ -144,19 +174,19 @@ export function NewShipment({ t, invoiceId, shop, open, names }: {
     <form className="space-y-4" onSubmit={async (e) => {
       e.preventDefault();
       setTried(true);
-      if (pending || !okToSend(v) || pickedNone) return;
+      if (pending || !okToSend(choices, v) || pickedNone) return;
       setPending(true); setState(undefined);
       const err = await run(createShipmentAction, new FormData(e.currentTarget), invoiceId, "create");
       if (err) { setState(err); setPending(false); }
     }}>
       <input type="hidden" name="invoiceId" value={invoiceId} />
-      <input type="hidden" name="carrier" value={v.carrier} />
-      <input type="hidden" name="carrierName" value={v.carrier === "OTHER" ? v.carrierName : ""} />
-      <input type="hidden" name="trackingUrl" value={v.carrier === "OTHER" ? v.url : ""} />
+      <input type="hidden" name="carrier" value={f.carrier} />
+      <input type="hidden" name="carrierName" value={f.carrierName} />
+      <input type="hidden" name="trackingUrl" value={f.trackingUrl} />
       <input type="hidden" name="numbers" value={JSON.stringify(v.numbers.filter((n) => n.trim()))} />
       <input type="hidden" name="notify" value={shop && notify ? "1" : ""} />
       {mode === "part" && <input type="hidden" name="pick" value={JSON.stringify(pick)} />}
-      <TrackingFields t={t} v={v} set={setV} names={names} idp="new" tried={tried} />
+      <TrackingFields t={t} v={v} set={setV} names={names} idp="new" tried={tried} choices={choices} manage={manage} />
       {choose && (
         <fieldset className="space-y-1.5">
           <legend className="mb-1 text-xs font-bold text-ink-soft">{S.contents}</legend>
@@ -184,7 +214,7 @@ export function NewShipment({ t, invoiceId, shop, open, names }: {
           <span>{S.notify}</span>
         </label>
       )}
-      {tried && v.carrier === "OTHER" && !v.carrierName.trim() && <p className="text-xs font-semibold text-red-600">{S.errors.carrierName}</p>}
+      {tried && missingName(choices, v) && <p className="text-xs font-semibold text-red-600">{S.errors.carrierName}</p>}
       <button disabled={pending} className="btn-primary group w-full">
         {pending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name="truck" className="h-4 w-4" />}
         {pending ? S.saving : shop ? S.saveShop : S.save}
@@ -195,8 +225,8 @@ export function NewShipment({ t, invoiceId, shop, open, names }: {
 }
 
 /** Ändern / Zurücknehmen / Erneut senden an einer gespeicherten Sendung */
-export function ShipmentActions({ t, invoiceId, shop, failed, names, s }: {
-  t: Dict; invoiceId: string; shop: boolean; failed: boolean; names: string[];
+export function ShipmentActions({ t, invoiceId, shop, failed, names, choices, manage, s }: {
+  t: Dict; invoiceId: string; shop: boolean; failed: boolean; names: string[]; choices: CarrierChoice[]; manage: boolean;
   s: { id: string; carrier: string; carrierName: string; trackingNumbers: string[]; trackingUrl: string };
 }) {
   const S = t.ship;
@@ -211,8 +241,13 @@ export function ShipmentActions({ t, invoiceId, shop, failed, names, s }: {
       const err = await run(action, new FormData(e.currentTarget), invoiceId, kind);
       if (err) { setState(err); setBusy(""); }
     };
-  const start = (): TrackingState => ({ carrier: (CARRIERS as readonly string[]).includes(s.carrier) ? (s.carrier as Carrier) : "OTHER", carrierName: s.carrierName, url: s.trackingUrl, numbers: s.trackingNumbers.length ? [...s.trackingNumbers] : [""] });
+  // gespeicherte Sendung → Knopf (eigener Versanddienst mit gleichem Namen, sonst Spedition mit Name/Link wie gespeichert)
+  const start = (): TrackingState => {
+    const key = choiceKeyFor(choices, s);
+    return { key, freeName: key === "OTHER" ? s.carrierName : "", freeUrl: key === "OTHER" ? s.trackingUrl : "", numbers: s.trackingNumbers.length ? [...s.trackingNumbers] : [""] };
+  };
   const [v, setV] = useState<TrackingState>(start);
+  const f = fieldsOf(choices, v);
   const [notify, setNotify] = useState(true);
   const [tried, setTried] = useState(false);
   return (
@@ -240,21 +275,21 @@ export function ShipmentActions({ t, invoiceId, shop, failed, names, s }: {
         </form>
       )}
       {mode === "edit" && (
-        <form onSubmit={go("edit", editShipmentAction, () => { setTried(true); return okToSend(v); })} className="animate-rise space-y-3 rounded-xl bg-white p-3 ring-1 ring-black/10">
+        <form onSubmit={go("edit", editShipmentAction, () => { setTried(true); return okToSend(choices, v); })} className="animate-rise space-y-3 rounded-xl bg-white p-3 ring-1 ring-black/10">
           <input type="hidden" name="id" value={s.id} /><input type="hidden" name="invoiceId" value={invoiceId} />
-          <input type="hidden" name="carrier" value={v.carrier} />
-          <input type="hidden" name="carrierName" value={v.carrier === "OTHER" ? v.carrierName : ""} />
-          <input type="hidden" name="trackingUrl" value={v.carrier === "OTHER" ? v.url : ""} />
+          <input type="hidden" name="carrier" value={f.carrier} />
+          <input type="hidden" name="carrierName" value={f.carrierName} />
+          <input type="hidden" name="trackingUrl" value={f.trackingUrl} />
           <input type="hidden" name="numbers" value={JSON.stringify(v.numbers.filter((n) => n.trim()))} />
           <input type="hidden" name="notify" value={shop && notify ? "1" : ""} />
-          <TrackingFields t={t} v={v} set={setV} names={names} idp={`e-${s.id}`} tried={tried} />
+          <TrackingFields t={t} v={v} set={setV} names={names} idp={`e-${s.id}`} tried={tried} choices={choices} manage={manage} />
           {shop && (
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600" />
               <span>{S.notifyEdit}</span>
             </label>
           )}
-          {tried && v.carrier === "OTHER" && !v.carrierName.trim() && <p className="text-xs font-semibold text-red-600">{S.errors.carrierName}</p>}
+          {tried && missingName(choices, v) && <p className="text-xs font-semibold text-red-600">{S.errors.carrierName}</p>}
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => setMode("")} className="btn-ghost px-3 py-1.5 text-xs">{S.keep}</button>
             <button disabled={Boolean(busy)} className="btn-primary px-3 py-1.5 text-xs">{busy === "edit" ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name="check" className="h-3.5 w-3.5" />}{S.saveEdit}</button>

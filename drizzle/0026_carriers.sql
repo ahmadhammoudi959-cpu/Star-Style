@@ -1,0 +1,1 @@
+ALTER TABLE "company_settings" ADD COLUMN "carriers" jsonb DEFAULT '{}'::jsonb NOT NULL;

@@ -7,6 +7,8 @@ import { carrierLabel, isDeliveryState, shippingState, trackingUrl, type Shippin
 import type { Dict } from "@/i18n/de";
 import { ClearShipNotice, NewShipment, ShipmentActions } from "./ShippingForms";
 import { can, getAuth } from "@/lib/auth";
+import { carrierChoices } from "@/lib/carriers";
+import { loadCarrierSettings } from "@/lib/carrier-settings";
 
 const TONE: Record<ShippingState, string> = {
   none: "bg-amber-100 text-amber-900", partial: "bg-sky-100 text-sky-800", done: "bg-emerald-100 text-emerald-800", nothing: "bg-slate-100 text-slate-700",
@@ -51,9 +53,15 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
   const auth = await getAuth();
   const ship = !!auth && can(auth, "sales.shipping");
   const canAdd = inv.status === "ISSUED" && st.state !== "done";
-  // schon benutzte Speditionen als Vorschlag
+  // Versanddienste (Seite „Versanddienste“): Knöpfe, vorgewählter, Link zum Bearbeiten nur mit Recht „Einstellungen“
+  const carriers = await loadCarrierSettings();
+  const choices = carrierChoices(carriers);
+  const manage = !!auth && can(auth, "settings");
+  const own = new Set(carriers.custom.map((c) => c.name.toLowerCase()));
+  // schon benutzte Speditionen als Vorschlag (ohne die eigenen Versanddienste – die haben einen Knopf)
   const names = canAdd || ships.length
-    ? (await db.execute<{ n: string }>(sql`select carrier_name as n from shipments where carrier = 'OTHER' and carrier_name <> '' group by carrier_name order by max(created_at) desc limit 12`)).rows.map((r) => r.n)
+    ? (await db.execute<{ n: string }>(sql`select carrier_name as n from shipments where carrier = 'OTHER' and carrier_name <> '' and carrier_name <> '?' group by carrier_name order by max(created_at) desc limit 24`)).rows
+      .map((r) => r.n).filter((n) => !own.has(n.toLowerCase())).slice(0, 12)
     : [];
   const badge = st.state === "nothing" ? null : shop && st.state === "none" ? S.toShip : S.state[st.state];
 
@@ -112,7 +120,7 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
                   {s.items.length > 0 && <p className="mt-1.5 text-xs text-ink-soft [overflow-wrap:anywhere]">{s.items.map((i) => `${i.qty} × ${i.description || "?"}`).join(" · ")}</p>}
                   {line && <p className={`mt-2 flex items-start gap-1.5 text-xs font-semibold ${line.tone}`}><Icon name={line.icon} className="mt-px h-3.5 w-3.5 shrink-0" /><span className="[overflow-wrap:anywhere]">{line.text}</span></p>}
                   {ship && !cancelled && inv.status === "ISSUED" && s.shopStatus !== "cancel" && (
-                    <ShipmentActions t={t} invoiceId={inv.id} shop={shop} failed={s.shopStatus === "failed"} names={names}
+                    <ShipmentActions t={t} invoiceId={inv.id} shop={shop} failed={s.shopStatus === "failed"} names={names} choices={choices} manage={manage}
                       s={{ id: s.id, carrier: s.carrier, carrierName: s.carrierName, trackingNumbers: s.trackingNumbers, trackingUrl: s.trackingUrl }} />
                   )}
                 </li>
@@ -126,7 +134,7 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
           {canAdd ? (
             <>
               <h3 className="mb-3 flex items-center gap-2 font-bold"><Icon name="plus" className="h-4 w-4 text-brand-600" />{ships.some((s) => !s.cancelledAt) ? S.moreTitle : S.newTitle}</h3>
-              <NewShipment t={t} invoiceId={inv.id} shop={shop} names={names}
+              <NewShipment t={t} invoiceId={inv.id} shop={shop} names={names} choices={choices} defaultKey={carriers.default} manage={manage}
                 open={st.open.map((o) => ({ lineId: o.line.id, description: o.line.description, qty: o.qty }))} />
             </>
           ) : <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><Icon name="check" className="h-4 w-4" />{S.allShipped}</p>}

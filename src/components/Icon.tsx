@@ -44,6 +44,8 @@ const PATHS = {
   shield: "M12 3 4 6v6c0 4.6 3.4 8.1 8 9 4.6-.9 8-4.4 8-9V6zM9 12l2 2 4-4",
   key: "M8 19a4 4 0 1 1 0-8 4 4 0 0 1 0 8zM11 12l9-9M17 6l3 3M14.5 8.5l2 2",
   phone: "M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 18h2",
+  star: "M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z",
+  chevronDown: "m6 9 6 6 6-6",
 } as const;
 
 export type IconName = keyof typeof PATHS;
