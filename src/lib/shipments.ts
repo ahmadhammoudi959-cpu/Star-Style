@@ -13,7 +13,11 @@ import {
   shippingState, urlTemplate, type ShippingState,
 } from "./shipping";
 import { getShop, refreshTokenOnce, ShopifyError, type Shop, type ShopChannel } from "./shopify/client";
-import { cancelFulfillments, createFulfillment, FulfillError, SCOPE_RE, updateFulfillmentTracking } from "./shopify/fulfill";
+import { cancelFulfillments, createFulfillment, FulfillError, prepareForPickup, SCOPE_RE, updateFulfillmentTracking } from "./shopify/fulfill";
+import { checkWeights, consigneeProblem, trackingNumberOf, type GlsConsignee } from "./gls";
+import { glsCancelParcel, glsCreateParcels, GlsError } from "./gls-client";
+import { PDFDocument } from "pdf-lib";
+import { createHash } from "node:crypto";
 import { withOrderLock } from "./shopify/order-lock";
 import { berlinDate, type ShopOrder } from "./shopify/order-map";
 
@@ -25,7 +29,10 @@ export class ShipmentError extends Error {
 /** Zustände, die noch an den Shop müssen (Worker versucht alle 5 min) */
 export const SHOP_TODO = ["pending", "update", "cancel"];
 
-type Input = { carrier: string; carrierName: string; numbers: string[]; trackingUrl: string; notify: boolean };
+type Input = { carrier: string; carrierName: string; numbers: string[]; trackingUrl: string; notify: boolean; note?: string };
+export const NOTE_MAX = 200;
+/** Name an Sendungen „Abholung“ (Kunde holt im Lager ab) – Spedition ohne Nummer, im Shop „abgeholt“ */
+export const PICKUP_NAME = "Abholung";
 function clean(i: Input) {
   if (!isCarrier(i.carrier)) throw new ShipmentError("carrier");
   const carrierName = i.carrier === "OTHER" ? i.carrierName.trim().slice(0, 60) : "";
@@ -34,7 +41,8 @@ function clean(i: Input) {
   if (!customUrlOk(trackingUrl)) throw new ShipmentError("url");
   const c = checkNumbers(i.carrier, i.numbers);
   if (c.problem) throw new ShipmentError(c.problem, c.bad ?? "");
-  return { carrier: i.carrier, carrierName, trackingUrl, trackingNumbers: c.numbers, notifyCustomer: i.notify };
+  const note = (i.note ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, NOTE_MAX);
+  return { carrier: i.carrier, carrierName, trackingUrl, trackingNumbers: c.numbers, notifyCustomer: i.notify, note };
 }
 const isShopOrder = (inv: { channel: string; externalOrderId: string | null }) => inv.channel !== "STORE" && Boolean(inv.externalOrderId);
 
@@ -48,8 +56,10 @@ async function once(key: string) {
 // ───────────────────────── Speichern, ändern, zurücknehmen ─────────────────────────
 
 /** Neue Sendung: Versanddienst, Nummer je Paket, Inhalt (pick = null → alles, was noch offen ist) */
-export async function createShipment(input: Input & { invoiceId: string; pick: Record<string, number> | null }, userId?: string): Promise<string> {
+export async function createShipment(input: Input & { invoiceId: string; pick: Record<string, number> | null; gls?: { trackIds: string[]; labelFileId: string | null } },
+  userId?: string): Promise<string> {
   const data = clean(input);
+  const gls = input.gls ? { glsTrackIds: input.gls.trackIds, glsStatus: "created", labelFileId: input.gls.labelFileId } : {};
   return db.transaction(async (tx) => {
     // gleichzeitiges Speichern (Doppelklick) wartet, damit nichts doppelt verschickt wird
     await tx.execute(sql`select id from invoices where id = ${input.invoiceId} for update`);
@@ -62,9 +72,9 @@ export async function createShipment(input: Input & { invoiceId: string; pick: R
     const shop = isShopOrder(inv);
     const [row] = await tx.insert(schema.shipments).values({
       invoiceId: inv.id, channel: inv.channel, externalOrderId: inv.externalOrderId, ...data, notifyCustomer: shop && data.notifyCustomer,
-      items: r.items, shippedOn: todayIso(), shopStatus: shop ? "pending" : "none", createdBy: userId ?? null,
+      items: r.items, shippedOn: todayIso(), shopStatus: shop ? "pending" : "none", createdBy: userId ?? null, ...gls,
     }).returning({ id: schema.shipments.id });
-    await audit(tx, { entity: "shipment", entityId: row.id, action: "create", after: { invoice: inv.number, ...data, items: r.items }, userId });
+    await audit(tx, { entity: "shipment", entityId: row.id, action: "create", after: { invoice: inv.number, ...data, items: r.items, ...(input.gls ? { gls: input.gls.trackIds } : {}) }, userId });
     return row.id;
   });
 }
@@ -77,19 +87,31 @@ export async function editShipment(id: string, input: Input, userId?: string) {
     const s = await tx.query.shipments.findFirst({ where: eq(schema.shipments.id, id) });
     if (!s) throw new ShipmentError("notFound");
     if (s.cancelledAt || s.shopStatus === "cancel") throw new ShipmentError("cancelled");
+    // GLS-Etikett: Versanddienst und Nummern kommen von GLS – nur der Hinweis ist änderbar
+    if (s.glsStatus === "created" && (data.carrier !== s.carrier || data.trackingNumbers.join(" ") !== s.trackingNumbers.join(" "))) throw new ShipmentError("glsLocked");
     const shop = s.shopStatus !== "none";
     const next = !shop ? "none" : s.shopFulfillmentIds.length ? "update" : "pending";
     await tx.update(schema.shipments).set({ ...data, notifyCustomer: shop && data.notifyCustomer, shopStatus: next, shopError: "", shopTries: 0 })
       .where(eq(schema.shipments.id, id));
     await audit(tx, {
       entity: "shipment", entityId: id, action: "edit", userId, after: data,
-      before: { carrier: s.carrier, carrierName: s.carrierName, trackingNumbers: s.trackingNumbers, trackingUrl: s.trackingUrl },
+      before: { carrier: s.carrier, carrierName: s.carrierName, trackingNumbers: s.trackingNumbers, trackingUrl: s.trackingUrl, note: s.note },
     });
   });
 }
 
 /** Sendung zurücknehmen (falsche Bestellung erwischt); im Shop gilt die Bestellung dann wieder als nicht versendet */
 export async function cancelShipment(id: string, userId?: string) {
+  // GLS-Etikett zuerst bei GLS stornieren (geht nur, solange das Paket noch nicht abgeholt ist) – klappt das nicht, bleibt alles, wie es ist
+  const first = await db.query.shipments.findFirst({ where: eq(schema.shipments.id, id) });
+  if (first && !first.cancelledAt && first.glsStatus === "created") {
+    for (const t of first.glsTrackIds) {
+      try { await glsCancelParcel(t); }
+      catch (e) { throw new ShipmentError(e instanceof GlsError && e.code !== "rejected" ? `gls_${e.code}` : "glsCancel", e instanceof Error ? e.message : ""); }
+    }
+    await db.update(schema.shipments).set({ glsStatus: "cancelled" }).where(eq(schema.shipments.id, id));
+    await db.insert(schema.auditLog).values({ entity: "shipment", entityId: id, action: "gls_cancel", after: { trackIds: first.glsTrackIds }, userId });
+  }
   await db.transaction(async (tx) => {
     await tx.execute(sql`select id from shipments where id = ${id} for update`);
     const s = await tx.query.shipments.findFirst({ where: eq(schema.shipments.id, id) });
@@ -108,6 +130,110 @@ export async function moveShipments(tx: Tx, fromInvoiceId: string, toInvoiceId: 
   const lines = await tx.select().from(schema.invoiceLines).where(eq(schema.invoiceLines.invoiceId, toInvoiceId));
   for (const r of rows) await tx.update(schema.shipments).set({ invoiceId: toInvoiceId, items: remapItems(r.items, lines) }).where(eq(schema.shipments.id, r.id));
   await audit(tx, { entity: "invoice", entityId: toInvoiceId, action: "shipments_moved", after: { from: fromInvoiceId, count: rows.length }, userId });
+}
+
+// ───────────────────────── GLS-Etikett ─────────────────────────
+
+/** Mehrere Etiketten (je Paket ein PDF) zu einem PDF zusammenfügen und speichern */
+async function storeLabel(labels: string[], name: string): Promise<string | null> {
+  if (!labels.length) return null;
+  let buf: Buffer;
+  if (labels.length === 1) buf = Buffer.from(labels[0], "base64");
+  else {
+    const out = await PDFDocument.create();
+    for (const l of labels) {
+      const src = await PDFDocument.load(Buffer.from(l, "base64"));
+      for (const p of await out.copyPages(src, src.getPageIndices())) out.addPage(p);
+    }
+    buf = Buffer.from(await out.save());
+  }
+  if (buf.subarray(0, 4).toString("ascii") !== "%PDF") return null;
+  const [row] = await db.insert(schema.storedFiles).values({
+    name: name.slice(0, 200), mime: "application/pdf", size: buf.length, sha256: createHash("sha256").update(buf).digest("hex"), data: buf,
+  }).returning({ id: schema.storedFiles.id });
+  return row.id;
+}
+
+/** Empfänger für GLS aus der Rechnung (Anschrift wie auf der Rechnung, bei Shop-Bestellungen = Lieferanschrift) + Kontakt des Kunden */
+export async function glsConsigneeFor(invoiceId: string): Promise<GlsConsignee | null> {
+  const inv = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, invoiceId), with: { customer: true } });
+  if (!inv) return null;
+  const c = inv.customer;
+  return {
+    name: inv.custName || c?.name || "", contact: c?.contact ?? "", street: inv.custStreet, zip: inv.custZip, city: inv.custCity,
+    country: (inv.custCountry || "DE").toUpperCase(), email: c?.email ?? "", phone: c?.phone ?? "", business: c?.type === "COMPANY",
+  };
+}
+
+/**
+ * Etikett bei GLS erstellen und als Sendung speichern (Wunsch Inhaber 13.11.2026): Gewicht je Paket, Inhalt wie bei jeder Sendung.
+ * Erst bei GLS anlegen, dann speichern; klappt das Speichern nicht (z. B. inzwischen alles verschickt), wird bei GLS gleich storniert.
+ * Doppelklick: zweiter Aufruf wartet auf den ersten und scheitert dann an „nichts mehr offen“.
+ */
+export async function createGlsShipment(input: { invoiceId: string; parcelsKg: number[]; pick: Record<string, number> | null; notify: boolean; note?: string },
+  userId?: string): Promise<string> {
+  return withOrderLock(`label:${input.invoiceId}`, async () => {
+    const w = checkWeights(input.parcelsKg);
+    if (w) throw new ShipmentError(`weight_${w}`);
+    const inv = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, input.invoiceId), with: { lines: true } });
+    if (!inv) throw new ShipmentError("notFound");
+    if (inv.kind !== "INVOICE" || inv.status !== "ISSUED") throw new ShipmentError("notIssued");
+    const existing = await db.select().from(schema.shipments).where(eq(schema.shipments.invoiceId, inv.id));
+    const r = resolveItems(inv.lines, existing, input.pick);
+    if (r.problem) throw new ShipmentError(r.problem);
+    const consignee = await glsConsigneeFor(inv.id);
+    const cp = consignee ? consigneeProblem(consignee) : "name";
+    if (!consignee || cp) throw new ShipmentError(`address_${cp}`);
+    let created;
+    try {
+      created = await glsCreateParcels({ reference: inv.number ?? "", shippingDate: todayIso(), consignee, parcelsKg: input.parcelsKg });
+    } catch (e) {
+      throw new ShipmentError(e instanceof GlsError ? `gls_${e.code}` : "gls_network", e instanceof Error ? e.message : "");
+    }
+    const trackIds = created.parcels.map((p) => p.trackId).filter(Boolean);
+    try {
+      const labelFileId = await storeLabel(created.labels, `GLS-${inv.number ?? inv.id}.pdf`);
+      return await createShipment({
+        invoiceId: inv.id, carrier: "GLS", carrierName: "", trackingUrl: "", numbers: created.parcels.map(trackingNumberOf),
+        notify: input.notify, note: input.note, pick: input.pick, gls: { trackIds, labelFileId },
+      }, userId);
+    } catch (e) {
+      for (const t of trackIds) await glsCancelParcel(t).catch(() => {});
+      throw e;
+    }
+  });
+}
+
+// ───────────────────────── Abholung im Lager ─────────────────────────
+
+/** „Bereit zur Abholung“: im Shop melden (Kunde bekommt die Abhol-E-Mail mit den Abholzeiten), Zeitpunkt merken */
+export async function markPickupReady(invoiceId: string, userId?: string): Promise<{ shop: "sent" | "none" | "failed"; error?: string }> {
+  const inv = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, invoiceId) });
+  if (!inv) throw new ShipmentError("notFound");
+  if (inv.kind !== "INVOICE" || inv.status !== "ISSUED") throw new ShipmentError("notIssued");
+  if (inv.deliveryMethod !== "PICK_UP") throw new ShipmentError("notPickup");
+  let shop: "sent" | "none" | "failed" = "none", error: string | undefined;
+  if (isShopOrder(inv)) {
+    const s = await getShop(inv.channel as ShopChannel);
+    if (!s?.domain) { shop = "failed"; error = "notConfigured"; }
+    else {
+      try { await withScopeRetry(s, () => prepareForPickup(s, inv.externalOrderId!)); shop = "sent"; }
+      catch (e) {
+        shop = "failed";
+        error = scopeMissing(e) ? "needScope" : e instanceof ShopifyError && ["network", "throttled", "auth"].includes(e.code) ? e.code : (e instanceof Error ? e.message : String(e)).slice(0, 200);
+      }
+    }
+  }
+  if (shop !== "failed") {
+    await db.update(schema.invoices).set({ pickupReadyAt: new Date() }).where(eq(schema.invoices.id, invoiceId));
+    await db.insert(schema.auditLog).values({ entity: "invoice", entityId: invoiceId, action: "pickup_ready", after: { shop }, userId });
+  }
+  return { shop, error };
+}
+
+/** „Abgeholt“: Sendung „Abholung“ (ohne Nummer) über alles Offene – im Shop gilt die Bestellung dann als abgeholt/erledigt */
+export function markPickedUp(invoiceId: string, userId?: string) {
+  return createShipment({ invoiceId, carrier: "OTHER", carrierName: PICKUP_NAME, trackingUrl: "", numbers: [], notify: false, pick: null }, userId);
 }
 
 // ───────────────────────── An Shopify melden ─────────────────────────
@@ -262,10 +388,11 @@ export async function shippingStates(invoiceIds: string[]): Promise<Map<string, 
  * Shop-Bestellungen (ausgestellt), die noch nicht ganz verschickt sind – Startseite und Filter „Zu versenden“.
  * Vorauswahl in SQL (verschickte Menge < Warenmenge), genauer Stand dann je Position.
  */
-export async function shopOrdersToShip(): Promise<{ id: string; state: ShippingState }[]> {
+export async function shopOrdersToShip(pickup = false): Promise<{ id: string; state: ShippingState }[]> {
   const ids = (await db.execute<{ id: string }>(sql`
     select i.id from invoices i
     where i.kind = 'INVOICE' and i.status = 'ISSUED' and i.channel <> 'STORE' and i.external_order_id is not null
+      and (i.delivery_method = 'PICK_UP') = ${pickup}
       and (select coalesce(sum(l.qty), 0) from invoice_lines l where l.invoice_id = i.id and l.qty > 0
              and coalesce(l.external_line_id, '') <> 'shipping' and (l.variant_id is not null or l.external_line_id like 'gid://shopify/LineItem/%'))
         > (select coalesce(sum((it ->> 'qty')::int), 0) from shipments s cross join lateral jsonb_array_elements(s.items) it
@@ -274,3 +401,6 @@ export async function shopOrdersToShip(): Promise<{ id: string; state: ShippingS
   const st = await shippingStates(ids);
   return ids.map((id) => ({ id, state: st.get(id) ?? "none" })).filter((x) => x.state === "none" || x.state === "partial");
 }
+
+/** Shop-Bestellungen zur Abholung im Lager, die noch nicht abgeholt sind (Startseite, Filter „Zur Abholung“) */
+export const shopOrdersToPickUp = () => shopOrdersToShip(true);

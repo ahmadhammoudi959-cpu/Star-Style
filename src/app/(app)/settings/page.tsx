@@ -22,10 +22,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     ...(admin ? [{ href: "/settings/users", icon: "users" as const, title: t.users.title, hint: t.users.cardHint }] : []),
     ...(admin ? [{ href: "/backup", icon: "download" as const, title: t.backup.title, hint: t.backup.cardHint }] : []),
     { href: "/settings/carriers", icon: "truck", title: t.carriers.title, hint: t.carriers.cardHint },
+    { href: "/settings/gls", icon: "box", title: t.gls.title, hint: t.gls.cardHint },
     { href: "/account", icon: "shield", title: t.account.cardTitle, hint: t.account.cardHint },
   ];
-  // bei 4 Karten (Admin) eine Reihe auf großen Bildschirmen
-  const cols = links.length >= 4 ? "xl:grid-cols-4" : "xl:grid-cols-3";
+  // 4 Karten in einer Reihe, sonst 3 je Reihe (Admin: 5 Karten = 3 + 2)
+  const cols = links.length === 4 ? "xl:grid-cols-4" : "xl:grid-cols-3";
   return (
     <div>
       <PageHeader title={t.settings.title} />

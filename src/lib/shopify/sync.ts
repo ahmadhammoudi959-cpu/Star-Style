@@ -7,7 +7,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, schema } from "@/db";
 import { gql, getShop, refreshTokenOnce, ShopifyError, type Shop, type ShopChannel } from "./client";
-import { berlinDate, cents, mapOrder, PAID, quantitiesAfterRefund, type ShopOrder } from "./order-map";
+import { berlinDate, deliveryMethodOf, cents, mapOrder, PAID, quantitiesAfterRefund, type ShopOrder } from "./order-map";
 import { cancelInvoice, issueInvoice, saveInvoiceDraft, startCorrection, SalesError } from "../sales";
 import { cancelPayment, PaymentError, recordPayment } from "../payments";
 import { bookWriteOff } from "../stock";
@@ -170,7 +170,8 @@ const ORDER_BASE = `id name createdAt updatedAt processedAt cancelledAt test ema
 const EXTRAS = [
   { key: "taxid", fields: ` customer { taxSettings { taxId } }`, match: /taxSettings|customer|read_taxes/i, log: "needScopeTaxes" },
   { key: "fulfil", log: "needScopeFulfillments", match: /fulfil/i, fields: ` fulfillments(first: 20) { id status displayStatus createdAt
-    trackingInfo(first: 10) { company number url } fulfillmentLineItems(first: 100) { nodes { quantity lineItem { id } } } }` },
+    trackingInfo(first: 10) { company number url } fulfillmentLineItems(first: 100) { nodes { quantity lineItem { id } } } }
+    fulfillmentOrders(first: 10) { nodes { deliveryMethod { methodType } } }` },
 ];
 const extraAccess = new Map<string, { ok: boolean; at: number }>();
 const SCOPE_ERROR = /access denied|not approved|required access|access scope|taxSettings|read_customers|read_taxes/i;
@@ -379,6 +380,9 @@ async function doProcessOrder(shop: Shop, o: ShopOrder) {
 
   // 5) Sendungen: im Shopify-Admin versendet → ins System übernehmen; dort storniert → zurücknehmen; Zustellstatus
   inv = (await currentInvoice(channel, o.id))!;
+  // Abholung im Lager (Shopify „Abholung im Geschäft“) → nicht „zu versenden“, sondern „zur Abholung“
+  const dm = deliveryMethodOf(o);
+  if (dm != null && inv.status === "ISSUED" && inv.deliveryMethod !== dm) await db.update(schema.invoices).set({ deliveryMethod: dm }).where(eq(schema.invoices.id, inv.id));
   if (inv.status === "ISSUED") await importShopFulfillments(channel, o, inv.id).catch((e) => logEvent(channel, "warn", "shipment", `shipImportFailed:${(e as Error).message}`, o.name, inv!.id));
 }
 

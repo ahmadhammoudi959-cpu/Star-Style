@@ -123,6 +123,8 @@ export const companySettings = pgTable("company_settings", {
   docDesign: jsonb("doc_design").$type<Record<string, unknown>>().notNull().default({}),
   // Versanddienste (Seite „Versanddienste“, src/lib/carriers.ts): Reihenfolge, ausgeblendet, vorgewählt, eigene; {} = wie bisher
   carriers: jsonb("carriers").$type<Record<string, unknown>>().notNull().default({}),
+  // GLS-Anbindung (ShipIT, Seite „GLS“, src/lib/gls.ts): Adresse, Benutzer, Passwort (verschlüsselt), Contact-ID, Dienste; {} = nicht eingerichtet
+  gls: jsonb("gls").$type<Record<string, unknown>>().notNull().default({}),
   updatedAt: updatedAt(),
 });
 
@@ -429,6 +431,9 @@ export const invoices = pgTable("invoices", {
   pricesGross: boolean("prices_gross").notNull().default(false),
   /** Steuer nicht neu berechnen (Shop hat Steuer bereits festgelegt und kassiert) */
   taxLocked: boolean("tax_locked").notNull().default(false),
+  /** Shop-Bestellung zur Abholung im Lager (Shopify PICK_UP) – nicht „zu versenden“, sondern „zur Abholung“ */
+  deliveryMethod: text("delivery_method").notNull().default(""),
+  pickupReadyAt: timestamp("pickup_ready_at", { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => [index("invoice_status_date").on(t.status, t.issueDate), index("invoice_customer").on(t.customerId), index("invoice_external").on(t.channel, t.externalOrderId)]);
@@ -622,6 +627,11 @@ export const shipments = pgTable("shipments", {
   shopError: text("shop_error").notNull().default(""),
   shopTries: integer("shop_tries").notNull().default(0),
   deliveryStatus: text("delivery_status").notNull().default(""),    // Shopify displayStatus (IN_TRANSIT, DELIVERED …), wenn gemeldet
+  note: text("note").notNull().default(""),                        // z. B. „1 Palette, 85 kg“ (Spedition)
+  /** GLS-Etikett aus dem System (ShipIT): TrackIDs zum Stornieren, Etikett als PDF, Stand created | cancelled */
+  glsTrackIds: jsonb("gls_track_ids").$type<string[]>().notNull().default([]),
+  glsStatus: text("gls_status").notNull().default(""),
+  labelFileId: text("label_file_id"),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   createdBy: text("created_by"),
   createdAt: createdAt(),

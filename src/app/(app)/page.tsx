@@ -10,7 +10,7 @@ import { aiConfigured } from "@/lib/ai/client";
 import { formatCents } from "@/lib/money";
 import { daysBetween, formatDate, formatDateTime, todayIso } from "@/lib/dates";
 import { EXPIRY_BADGE, expiryState } from "@/lib/expiry";
-import { shopOrdersToShip } from "@/lib/shipments";
+import { shopOrdersToPickUp, shopOrdersToShip } from "@/lib/shipments";
 import { failuresSincePrevious } from "@/lib/login";
 import { setupSteps } from "@/lib/onboarding";
 import { fill } from "@/i18n";
@@ -27,7 +27,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const may = (p: Perm) => can(session, p);
   const opens = (href: string) => canOpen(session, href);
   const money = may("dashboard.money"), seeStock = may("products.view");
-  const [stats, al, open, ins, setup, pend, fails, toShip, backups, newShop] = await Promise.all([
+  const [stats, al, open, ins, setup, pend, fails, toShip, backups, newShop, toPickUp] = await Promise.all([
     seeStock || money ? dashboardStats(today) : null,
     seeStock ? alerts(today) : { low: [], expiring: [] },
     money ? openItems() : [],
@@ -38,6 +38,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     may("sales.shipping") ? shopOrdersToShip() : [],
     opens("/backup") ? recentBackups(1) : [],
     opens("/customers") ? newShopCustomersCount().catch(() => 0) : 0,
+    may("sales.shipping") ? shopOrdersToPickUp() : [],
   ]);
   const ai = aiConfigured() && may("ask");
   const debts = open.filter((r) => r.state.openCents > 0);
@@ -95,6 +96,16 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
             <span className="font-bold">{toShip.length === 1 ? t.home.toShipOne : fill(t.home.toShip, { n: toShip.length })}</span>
           </span>
           <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">{t.home.toShipAction}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></span>
+        </Link>
+      )}
+      {/* Online-Bestellungen zur Abholung im Lager (Shopify „Abholung im Geschäft“) */}
+      {toPickUp.length > 0 && (
+        <Link href="/sales?ship=pickup" className="group card flex animate-rise flex-wrap items-center justify-between gap-3 p-4 ring-2 ring-brand-500/25 hover:shadow-lift">
+          <span className="flex items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600"><Icon name="box" className="icon-pop h-5 w-5" /></span>
+            <span className="font-bold">{toPickUp.length === 1 ? t.home.toPickUpOne : fill(t.home.toPickUp, { n: toPickUp.length })}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">{t.home.toPickUpAction}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></span>
         </Link>
       )}
 

@@ -21,6 +21,8 @@ export type ShopOrder = {
   customer?: { taxSettings?: { taxId?: string | null } | null } | null;
   /** Sendungen (auch die im Shopify-Admin angelegten) – fehlt, wenn die App das Feld nicht lesen darf */
   fulfillments?: ShopFulfillment[];
+  /** Lieferart je Fulfillment-Auftrag (Abholung im Lager = PICK_UP) – fehlt ohne Recht wie fulfillments */
+  fulfillmentOrders?: { nodes: { deliveryMethod: { methodType: string | null } | null }[] };
 };
 export type ShopFulfillment = {
   id: string; status: string; displayStatus: string | null; createdAt: string;
@@ -114,4 +116,15 @@ export function quantitiesAfterRefund(current: { externalLineId: string | null; 
   const minus = new Map<string, number>();
   for (const r of refund.refundLineItems.nodes) minus.set(r.lineItem.id, (minus.get(r.lineItem.id) ?? 0) + r.quantity);
   return current.map((l) => ({ ...l, qty: l.externalLineId && minus.has(l.externalLineId) ? Math.max(0, l.qty - minus.get(l.externalLineId)!) : l.qty }));
+}
+
+/**
+ * Lieferart der Bestellung für die Rechnung: „PICK_UP“, wenn der Kunde im Lager abholt (alle Aufträge mit Lieferart sind Abholung),
+ * sonst "". null = unbekannt (Feld nicht gelesen) → nichts ändern.
+ */
+export function deliveryMethodOf(o: ShopOrder): "PICK_UP" | "" | null {
+  if (!o.fulfillmentOrders) return null;
+  const types = o.fulfillmentOrders.nodes.map((n) => n.deliveryMethod?.methodType ?? "").filter(Boolean);
+  if (!types.length) return null;
+  return types.every((t) => t === "PICK_UP") ? "PICK_UP" : "";
 }

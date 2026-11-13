@@ -82,3 +82,23 @@ export async function cancelFulfillments(shop: Shop, ids: string[]) {
     userErrors(d.fulfillmentCancel.userErrors);
   }
 }
+
+const PICKUP_Q = `query($id: ID!) { order(id: $id) { id fulfillmentOrders(first: 20) { nodes { id status deliveryMethod { methodType } } } } }`;
+const PICKUP_M = `mutation($input: FulfillmentOrderLineItemsPreparedForPickupInput!) {
+  fulfillmentOrderLineItemsPreparedForPickup(input: $input) { userErrors { field message } } }`;
+
+/**
+ * Abholung im Lager: offene Abhol-Aufträge als „bereit zur Abholung“ melden – Shopify schickt dem Kunden dann die
+ * Abhol-E-Mail (mit dem Text aus Einstellungen → Versand → Abholung, z. B. Abholzeiten 11–19 Uhr).
+ */
+export async function prepareForPickup(shop: Shop, orderId: string): Promise<number> {
+  const d = await gql<{ order: { fulfillmentOrders: { nodes: { id: string; status: string; deliveryMethod: { methodType: string } | null }[] } } | null }>(shop, PICKUP_Q, { id: orderId });
+  if (!d.order) throw new FulfillError("notFound");
+  const fos = d.order.fulfillmentOrders.nodes.filter((f) => f.deliveryMethod?.methodType === "PICK_UP" && ["OPEN", "IN_PROGRESS"].includes(f.status));
+  if (!fos.length) return 0;
+  const r = await gql<{ fulfillmentOrderLineItemsPreparedForPickup: { userErrors: UserError[] } }>(shop, PICKUP_M, {
+    input: { lineItemsByFulfillmentOrder: fos.map((f) => ({ fulfillmentOrderId: f.id })) },
+  });
+  userErrors(r.fulfillmentOrderLineItemsPreparedForPickup.userErrors);
+  return fos.length;
+}

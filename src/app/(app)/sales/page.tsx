@@ -13,7 +13,7 @@ import { openItems } from "@/lib/receivables";
 import { OpenButton } from "@/components/OpenButton";
 import { FilterSelect } from "@/components/FilterSelect";
 import { SearchPick } from "@/components/SearchPick";
-import { shippingStates, shopOrdersToShip } from "@/lib/shipments";
+import { shippingStates, shopOrdersToPickUp, shopOrdersToShip } from "@/lib/shipments";
 import type { ShippingState } from "@/lib/shipping";
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; customer?: string; status?: string; ship?: string }> }) {
@@ -26,8 +26,9 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
   // Filter „Status“: Angebote nach Angebotsstatus; Rechnungen nach Entwurf/ausgestellt/storniert oder Zahlungsstand
   const st = status || null;
   // Filter „Versand“ (Wunsch Inhaber 12.11.2026): „Zu versenden“ = alle Shop-Bestellungen, die noch nicht ganz verschickt sind (ohne 200er-Grenze)
-  const ship = tab === "invoices" && (shipParam === "open" || shipParam === "done") ? shipParam : "";
-  const toShipIds = ship === "open" ? (await shopOrdersToShip()).map((x) => x.id) : null;
+  // „Zur Abholung“ = Shop-Bestellungen mit Abholung im Lager, noch nicht abgeholt (Wunsch Inhaber 13.11.2026)
+  const ship = tab === "invoices" && (shipParam === "open" || shipParam === "done" || shipParam === "pickup") ? shipParam : "";
+  const toShipIds = ship === "open" ? (await shopOrdersToShip()).map((x) => x.id) : ship === "pickup" ? (await shopOrdersToPickUp()).map((x) => x.id) : null;
   const rows = tab === "offers"
     ? (await db.execute<Record<string, unknown>>(sql`
         select o.id, o.number, o.status::text as status, o.date as d, o.valid_until, c.name as customer,
@@ -38,7 +39,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         order by o.created_at desc limit 200`)).rows
     : (await db.execute<Record<string, unknown>>(sql`
         select i.id, coalesce(i.number, '—') as number, i.status::text as status, i.kind::text as kind, coalesce(i.issue_date, i.created_at::date) as d,
-               i.due_date, c.name as customer, i.gross_cents as amount, i.channel::text as channel
+               i.due_date, c.name as customer, i.gross_cents as amount, i.channel::text as channel, i.delivery_method
         from invoices i join customers c on c.id = i.customer_id
         where (${like}::text is null or lower(coalesce(i.number,'')) like ${like} or lower(c.name) like ${like})
           and (${cust}::text is null or i.customer_id = ${cust})
@@ -81,6 +82,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
     const s = shipState.get(String(r.id));
     const isShop = r.channel !== "STORE";
     if (!s || s === "nothing" || (!isShop && s === "none")) return null;
+    if (r.delivery_method === "PICK_UP" && s !== "done") return <span className={`badge ms-1 ${SHIP_TONE.none}`}><Icon name="box" className="h-3 w-3" />{t.ship.pickupBadge}</span>;
     return <span className={`badge ms-1 ${SHIP_TONE[s]}`}><Icon name="truck" className="h-3 w-3" />{isShop && s === "none" ? t.ship.toShip : t.ship.state[s]}</span>;
   };
   const payBadge = (r: Record<string, unknown>) => {
@@ -115,7 +117,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
           options={customers.map((c) => ({ value: c.id, label: c.name }))} />}
         <FilterSelect name="status" label={t.lists.status} allLabel={t.lists.allStatuses} defaultValue={status} icon="check" className="md:w-56" options={statusOptions} />
         {tab === "invoices" && <FilterSelect name="ship" label={t.lists.shipping} allLabel={t.lists.allShipping} defaultValue={ship} icon="truck" className="md:w-52"
-          options={[{ value: "open", label: t.ship.toShip }, { value: "done", label: t.ship.state.done }]} />}
+          options={[{ value: "open", label: t.ship.toShip }, { value: "pickup", label: t.ship.toPickUp }, { value: "done", label: t.ship.state.done }]} />}
         {filtered && <Link href={`/sales?tab=${tab}`} className="btn-ghost group"><Icon name="x" className="h-4 w-4" />{t.stock.clear}</Link>}
       </form>
       {totals && (

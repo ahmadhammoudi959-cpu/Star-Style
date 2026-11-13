@@ -81,7 +81,8 @@ export const RESET_STATEMENTS: string[] = [
      union select export_proof_file_id from invoices where export_proof_file_id is not null
      union select photo_file_id from write_offs where photo_file_id is not null
      union select file_id from expenses where file_id is not null
-     union select file_id from advisor_exports`,
+     union select file_id from advisor_exports
+     union select label_file_id from shipments where label_file_id is not null`,
   // kein Shop läuft (geprüft); beim Einschalten gleicht der Abgleich ohnehin alle Bestände ab
   `delete from stock_dirty`,
   `delete from payments`,

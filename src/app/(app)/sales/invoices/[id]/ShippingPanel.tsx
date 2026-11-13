@@ -1,11 +1,14 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { fill } from "@/i18n";
 import { Icon, type IconName } from "@/components/Icon";
-import { formatDate } from "@/lib/dates";
+import { formatDate, formatDateTime } from "@/lib/dates";
 import { carrierLabel, isDeliveryState, shippingState, trackingUrl, type ShippingState } from "@/lib/shipping";
 import type { Dict } from "@/i18n/de";
-import { ClearShipNotice, NewShipment, ShipmentActions } from "./ShippingForms";
+import { ClearShipNotice, NewShipment, PickupActions, ShipmentActions } from "./ShippingForms";
+import { glsConfigured } from "@/lib/gls-client";
+import { consigneeProblem } from "@/lib/gls";
+import { glsConsigneeFor, PICKUP_NAME } from "@/lib/shipments";
 import { can, getAuth } from "@/lib/auth";
 import { carrierChoices } from "@/lib/carriers";
 import { loadCarrierSettings } from "@/lib/carrier-settings";
@@ -15,6 +18,8 @@ const TONE: Record<ShippingState, string> = {
 };
 
 type Ship = typeof schema.shipments.$inferSelect;
+/** Sendung „Abholung“ (Kunde hat im Lager abgeholt) */
+const isPickup = (s: Ship) => s.carrier === "OTHER" && s.carrierName === PICKUP_NAME && !s.trackingNumbers.length;
 
 /** Zeile „Stand im Shop“ unter einer Sendung */
 function shopLine(S: Dict["ship"], s: Ship): { text: string; tone: string; icon: IconName } | null {
@@ -63,7 +68,17 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
     ? (await db.execute<{ n: string }>(sql`select carrier_name as n from shipments where carrier = 'OTHER' and carrier_name <> '' and carrier_name <> '?' group by carrier_name order by max(created_at) desc limit 24`)).rows
       .map((r) => r.n).filter((n) => !own.has(n.toLowerCase())).slice(0, 12)
     : [];
-  const badge = st.state === "nothing" ? null : shop && st.state === "none" ? S.toShip : S.state[st.state];
+  const pickup = inv.deliveryMethod === "PICK_UP";
+  const badge = st.state === "nothing" ? null : pickup && st.state !== "done" ? S.pickupBadge : shop && st.state === "none" ? S.toShip : S.state[st.state];
+  // GLS: Etikett direkt aus dem System (eingerichtet + Anschrift vollständig); Gewicht der offenen Ware als Vorschlag für die Pakete
+  const glsReady = canAdd && !pickup ? await glsConfigured() : false;
+  const consignee = glsReady ? await glsConsigneeFor(inv.id) : null;
+  const glsProblem = glsReady ? (consignee ? consigneeProblem(consignee) : "name") : null;
+  const variantIds = [...new Set(st.open.map((o) => o.line.variantId).filter((x): x is string => Boolean(x)))];
+  const grams = new Map(variantIds.length
+    ? (await db.select({ id: schema.variants.id, g: schema.variants.weightGrams }).from(schema.variants).where(inArray(schema.variants.id, variantIds))).map((r) => [r.id, r.g])
+    : []);
+  const weights = Object.fromEntries(st.open.map((o) => [o.line.id, o.line.variantId ? grams.get(o.line.variantId) ?? null : null]));
 
   return (
     <section id="shipping" className="mt-6 grid scroll-mt-20 gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -80,7 +95,7 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
             <ClearShipNotice />
           </div>
         )}
-        {inv.status === "ISSUED" && <p className="px-5 pt-4 text-sm text-ink-soft">{shop ? S.shopHint : S.storeHint}</p>}
+        {inv.status === "ISSUED" && <p className="px-5 pt-4 text-sm text-ink-soft">{pickup ? S.pickupInfo : shop ? S.shopHint : S.storeHint}</p>}
         {ships.length === 0 ? <p className="p-5 text-sm text-ink-soft">{S.empty}</p> : (
           <ul className="space-y-3 p-5">
             {ships.map((s) => {
@@ -91,8 +106,8 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
               return (
                 <li key={s.id} className={`rounded-xl p-3 ring-1 ${cancelled ? "bg-slate-50 opacity-75 ring-black/5" : "bg-brand-50/40 ring-brand-100"}`}>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`font-bold ${cancelled ? "line-through decoration-slate-400" : ""}`}>{carrierLabel(s.carrier, s.carrierName)}</span>
-                    <span className="text-xs text-ink-soft">{fill(S.shippedOn, { d: formatDate(s.shippedOn, intl) })}</span>
+                    <span className={`font-bold ${cancelled ? "line-through decoration-slate-400" : ""}`}>{isPickup(s) ? S.pickupTitle : carrierLabel(s.carrier, s.carrierName)}</span>
+                    <span className="text-xs text-ink-soft">{fill(isPickup(s) ? S.pickedUpOn : S.shippedOn, { d: formatDate(s.shippedOn, intl) })}</span>
                     {s.trackingNumbers.length > 1 && <span className="badge bg-white text-ink-soft ring-1 ring-black/5">{fill(S.parcels, { n: s.trackingNumbers.length })}</span>}
                     {s.source === "shop" && <span className="badge bg-slate-100 text-slate-700">{S.fromShop}</span>}
                     {cancelled && <span className="badge bg-slate-200 text-slate-700">{S.cancelled}</span>}
@@ -118,10 +133,17 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
                     </ul>
                   )}
                   {s.items.length > 0 && <p className="mt-1.5 text-xs text-ink-soft [overflow-wrap:anywhere]">{s.items.map((i) => `${i.qty} × ${i.description || "?"}`).join(" · ")}</p>}
+                  {s.note && <p className="mt-1 flex items-start gap-1.5 text-xs text-ink [overflow-wrap:anywhere]"><Icon name="edit" className="mt-px h-3.5 w-3.5 shrink-0 text-ink-soft" />{s.note}</p>}
+                  {s.labelFileId && !cancelled && (
+                    <a href={`/api/files/${s.labelFileId}`} target="_blank" rel="noopener noreferrer" className="btn-primary mt-2 inline-flex px-3 py-1.5 text-xs">
+                      <Icon name="file" className="h-3.5 w-3.5" />{S.glsPrint}
+                    </a>
+                  )}
+                  {s.glsStatus === "cancelled" && <p className="mt-1.5 text-xs font-semibold text-slate-600">{S.glsCancelled}</p>}
                   {line && <p className={`mt-2 flex items-start gap-1.5 text-xs font-semibold ${line.tone}`}><Icon name={line.icon} className="mt-px h-3.5 w-3.5 shrink-0" /><span className="[overflow-wrap:anywhere]">{line.text}</span></p>}
                   {ship && !cancelled && inv.status === "ISSUED" && s.shopStatus !== "cancel" && (
                     <ShipmentActions t={t} invoiceId={inv.id} shop={shop} failed={s.shopStatus === "failed"} names={names} choices={choices} manage={manage}
-                      s={{ id: s.id, carrier: s.carrier, carrierName: s.carrierName, trackingNumbers: s.trackingNumbers, trackingUrl: s.trackingUrl }} />
+                      s={{ id: s.id, carrier: s.carrier, carrierName: s.carrierName, trackingNumbers: s.trackingNumbers, trackingUrl: s.trackingUrl, note: s.note, gls: s.glsStatus === "created", pickup: isPickup(s) }} />
                   )}
                 </li>
               );
@@ -131,10 +153,16 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
       </div>
       {inv.status === "ISSUED" && (ship || !canAdd) && (
         <aside className="card h-fit animate-rise p-5">
-          {canAdd ? (
+          {canAdd && pickup ? (
+            <>
+              <h3 className="mb-3 flex items-center gap-2 font-bold"><Icon name="box" className="h-4 w-4 text-brand-600" />{S.pickupTitle}</h3>
+              <PickupActions t={t} invoiceId={inv.id} shop={shop} readyAt={inv.pickupReadyAt ? formatDateTime(inv.pickupReadyAt.toISOString(), intl) : null} />
+            </>
+          ) : canAdd ? (
             <>
               <h3 className="mb-3 flex items-center gap-2 font-bold"><Icon name="plus" className="h-4 w-4 text-brand-600" />{ships.some((s) => !s.cancelledAt) ? S.moreTitle : S.newTitle}</h3>
               <NewShipment t={t} invoiceId={inv.id} shop={shop} names={names} choices={choices} defaultKey={carriers.default} manage={manage}
+                gls={{ ready: glsReady, problem: glsProblem }} weights={weights}
                 open={st.open.map((o) => ({ lineId: o.line.id, description: o.line.description, qty: o.qty }))} />
             </>
           ) : <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><Icon name="check" className="h-4 w-4" />{S.allShipped}</p>}

@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { cancelShipmentAction, createShipmentAction, editShipmentAction, retryShipmentAction, type ShipState } from "../../ship-actions";
+import { cancelShipmentAction, createGlsShipmentAction, createShipmentAction, editShipmentAction, pickedUpAction, pickupReadyAction, retryShipmentAction, type ShipState } from "../../ship-actions";
 import { Icon } from "@/components/Icon";
 import { checkNumbers, customUrlOk } from "@/lib/shipping";
 import { choiceKeyFor, needsNumber, shipmentFields, type CarrierChoice } from "@/lib/carriers";
+import { checkWeights, GLS_MAX_KG, GLS_MAX_PARCELS, parseKg, suggestParcels } from "@/lib/gls";
 import type { Dict } from "@/i18n/de";
 
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? `{${k}}`));
@@ -29,11 +30,15 @@ export function ClearShipNotice() {
 }
 
 /** Hinweis nach dem Speichern (Wert für ?ship=) aus dem Ergebnis der Action */
-function noticeOf(r: ShipState, kind: "create" | "edit" | "cancel"): string {
+type Kind = "create" | "edit" | "cancel" | "label" | "pickupReady" | "pickedUp";
+function noticeOf(r: ShipState, kind: Kind): string {
+  if (kind === "pickupReady") return r?.shop === "sent" ? "pickupReadyMail" : "pickupReady";
   if (r?.shop === "failed") return "failed";
   if (r?.shop === "pending" || r?.shop === "update" || r?.shop === "cancel") return "pending";
   if (kind === "cancel") return "cancelled";
   if (kind === "edit") return r?.shop === "sent" && r.notify ? "updatedMail" : "updated";
+  if (kind === "pickedUp") return "pickedUp";
+  if (kind === "label") return r?.shop === "sent" ? (r.notify ? "labelSent" : "labelSentQuiet") : "label";
   return r?.shop === "sent" ? (r.notify ? "sent" : "sentQuiet") : "saved";
 }
 
@@ -41,7 +46,7 @@ function noticeOf(r: ShipState, kind: "create" | "edit" | "cancel"): string {
  * Action aufrufen (ohne Übergang/Transition) und danach die Seite neu laden – zuverlässig, siehe ship-actions.ts.
  * Rückgabe nur bei Fehler; bei Erfolg wird navigiert.
  */
-async function run(action: (s: ShipState, fd: FormData) => Promise<ShipState>, fd: FormData, invoiceId: string, kind: "create" | "edit" | "cancel"): Promise<ShipState> {
+async function run(action: (s: ShipState, fd: FormData) => Promise<ShipState>, fd: FormData, invoiceId: string, kind: Kind): Promise<ShipState> {
   let r: ShipState;
   try { r = await action(undefined, fd); } catch { return { error: "error" }; }
   if (!r?.ok) return r ?? { error: "error" };
@@ -62,8 +67,10 @@ const fieldsOf = (choices: CarrierChoice[], v: TrackingState) => shipmentFields(
  * Leere Felder zählen nicht; Fehler werden sofort gezeigt (gleiche Prüfung wie auf dem Server).
  * Knöpfe = Seite „Versanddienste“ (Reihenfolge, ausgeblendet; eine schon gespeicherte Sendung zeigt ihren auch, wenn er ausgeblendet ist).
  */
-function TrackingFields({ t, v, set, names, idp, tried, choices, manage }: {
+function TrackingFields({ t, v, set, names, idp, tried, choices, manage, carrierOnly = false }: {
   t: Dict; v: TrackingState; set: (v: TrackingState) => void; names: string[]; idp: string; tried: boolean; choices: CarrierChoice[]; manage: boolean;
+  /** nur die Knöpfe (GLS-Etikett: Nummern kommen von GLS) */
+  carrierOnly?: boolean;
 }) {
   const S = t.ship;
   const refs = useRef<(HTMLInputElement | null)[]>([]);
@@ -101,7 +108,7 @@ function TrackingFields({ t, v, set, names, idp, tried, choices, manage }: {
           </div>
         )}
       </div>
-      {cur.kind === "free" && (
+      {!carrierOnly && cur.kind === "free" && (
         <div className="space-y-2 rounded-xl bg-slate-50 p-2.5 ring-1 ring-black/5">
           <label className="block text-xs font-bold text-ink-soft" htmlFor={`${idp}-name`}>{S.carrierName}</label>
           <input id={`${idp}-name`} value={v.freeName} onChange={(e) => set({ ...v, freeName: e.target.value })} list={`${idp}-names`} maxLength={60}
@@ -113,7 +120,7 @@ function TrackingFields({ t, v, set, names, idp, tried, choices, manage }: {
           {!customUrlOk(v.freeUrl) && <p className="text-xs font-semibold text-red-600">{S.errors.url}</p>}
         </div>
       )}
-      <div className="space-y-1.5">
+      {!carrierOnly && <div className="space-y-1.5">
         {v.numbers.map((n, i) => (
           <div key={i}>
             <label className="mb-0.5 block text-xs font-bold text-ink-soft" htmlFor={`${idp}-n${i}`}>
@@ -139,7 +146,7 @@ function TrackingFields({ t, v, set, names, idp, tried, choices, manage }: {
           </button>
         )}
         {shownProblem && <p role="alert" className="text-xs font-semibold text-red-600">{fill((S.errors as Record<string, string>)[shownProblem], { x: check.bad ?? "" })}</p>}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -154,9 +161,13 @@ function okToSend(choices: CarrierChoice[], v: TrackingState) {
 const missingName = (choices: CarrierChoice[], v: TrackingState) => choiceOf(choices, v.key).kind === "free" && !v.freeName.trim();
 
 /** Neue Sendung: Versanddienst, Nummern, Inhalt (alles Offene oder Teil), E-Mail an den Kunden (nur Shop) */
-export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultKey, manage }: {
+export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultKey, manage, gls, weights }: {
   t: Dict; invoiceId: string; shop: boolean; open: { lineId: string; description: string; qty: number }[]; names: string[];
   choices: CarrierChoice[]; defaultKey: string; manage: boolean;
+  /** GLS eingerichtet? problem = an der Anschrift fehlt etwas, das GLS braucht (Etikett dann nicht möglich) */
+  gls: { ready: boolean; problem: string | null };
+  /** Gewicht je offener Position (Gramm je Stück, null = unbekannt) – Vorschlag für die Pakete */
+  weights: Record<string, number | null>;
 }) {
   const S = t.ship;
   const [state, setState] = useState<ShipState>(undefined);
@@ -170,13 +181,25 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
   const totalOpen = open.reduce((s, o) => s + o.qty, 0);
   const choose = open.length > 1 || (open[0]?.qty ?? 0) > 1;
   const pickedNone = mode === "part" && !open.some((o) => (pick[o.lineId] ?? 0) > 0);
+  const [note, setNote] = useState("");
+  // GLS: Etikett direkt bei GLS erstellen (Standard, wenn eingerichtet) oder Nummer selbst eintragen
+  const isGls = v.key === "GLS";
+  const [labelMode, setLabelMode] = useState(true);
+  const label = isGls && gls.ready && labelMode;
+  const items = open.map((o) => ({ grams: weights[o.lineId] ?? null, qty: mode === "part" ? pick[o.lineId] ?? 0 : o.qty }));
+  const sug = suggestParcels(items);
+  const [kgs, setKgs] = useState<string[] | null>(null); // null = Vorschlag aus dem Gewicht der Ware
+  const kgList = kgs ?? sug.kgs.map((k) => String(k).replace(".", ","));
+  const wProblem = label ? checkWeights(kgList.map(parseKg)) : null;
+  const parcelCarrier = choiceOf(choices, v.key).kind === "builtin";
   return (
     <form className="space-y-4" onSubmit={async (e) => {
       e.preventDefault();
       setTried(true);
-      if (pending || !okToSend(choices, v) || pickedNone) return;
+      if (pending || pickedNone) return;
+      if (label ? Boolean(wProblem || gls.problem) : !okToSend(choices, v)) return;
       setPending(true); setState(undefined);
-      const err = await run(createShipmentAction, new FormData(e.currentTarget), invoiceId, "create");
+      const err = await run(label ? createGlsShipmentAction : createShipmentAction, new FormData(e.currentTarget), invoiceId, label ? "label" : "create");
       if (err) { setState(err); setPending(false); }
     }}>
       <input type="hidden" name="invoiceId" value={invoiceId} />
@@ -186,7 +209,53 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
       <input type="hidden" name="numbers" value={JSON.stringify(v.numbers.filter((n) => n.trim()))} />
       <input type="hidden" name="notify" value={shop && notify ? "1" : ""} />
       {mode === "part" && <input type="hidden" name="pick" value={JSON.stringify(pick)} />}
-      <TrackingFields t={t} v={v} set={setV} names={names} idp="new" tried={tried} choices={choices} manage={manage} />
+      <input type="hidden" name="note" value={note} />
+      {label && <input type="hidden" name="weights" value={JSON.stringify(kgList)} />}
+      {label ? (
+        <TrackingFields t={t} v={{ ...v, numbers: [] }} set={(x) => setV({ ...x, numbers: v.numbers })} names={names} idp="new" tried={false} choices={choices} manage={manage} carrierOnly />
+      ) : <TrackingFields t={t} v={v} set={setV} names={names} idp="new" tried={tried} choices={choices} manage={manage} />}
+      {isGls && gls.ready && (
+        <div role="radiogroup" aria-label={S.glsMode} className="grid grid-cols-2 gap-1.5 rounded-xl bg-slate-50 p-1 ring-1 ring-black/5">
+          {([true, false] as const).map((m) => (
+            <button key={String(m)} type="button" role="radio" aria-checked={labelMode === m} onClick={() => setLabelMode(m)}
+              className={`rounded-lg px-2 py-1.5 text-xs font-bold transition ${labelMode === m ? "bg-white text-brand-700 shadow-card ring-1 ring-brand-200" : "text-ink-soft hover:text-ink"}`}>
+              {m ? S.glsLabel : S.glsManual}
+            </button>
+          ))}
+        </div>
+      )}
+      {isGls && !gls.ready && manage && (
+        <p className="text-xs text-ink-soft">{S.glsNotSetUp} <Link href="/settings/gls" className="font-semibold text-brand-700 hover:underline">{S.glsSetUp}</Link></p>
+      )}
+      {label && (
+        <fieldset className="space-y-1.5 rounded-xl bg-brand-50/50 p-2.5 ring-1 ring-brand-100">
+          <legend className="sr-only">{S.glsParcels}</legend>
+          <div className="text-xs font-bold text-ink-soft">{S.glsParcels}</div>
+          {kgList.map((k, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <label htmlFor={`kg-${i}`} className="w-20 shrink-0 text-xs text-ink-soft">{fill(S.glsParcelN, { n: i + 1 })}</label>
+              <input id={`kg-${i}`} value={k} inputMode="decimal" dir="ltr" className="input num min-w-0 flex-1 py-1.5 text-end"
+                onChange={(e) => setKgs(kgList.map((x, j) => (j === i ? e.target.value : x)))} />
+              <span className="text-xs text-ink-soft">kg</span>
+              {kgList.length > 1 && (
+                <button type="button" aria-label={S.removeParcel} title={S.removeParcel} onClick={() => setKgs(kgList.filter((_, j) => j !== i))}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink-soft ring-1 ring-black/5 hover:bg-red-50 hover:text-red-600"><Icon name="x" className="h-4 w-4" /></button>
+              )}
+            </div>
+          ))}
+          {kgList.length < GLS_MAX_PARCELS && (
+            <button type="button" onClick={() => setKgs([...kgList, "1"])} className="btn-ghost group w-full justify-center py-1 text-xs"><Icon name="plus" className="h-3.5 w-3.5" />{S.addParcel}</button>
+          )}
+          {sug.unknown > 0 && <p className="text-[0.6875rem] text-amber-800">{fill(S.glsWeightUnknown, { n: sug.unknown })}</p>}
+          {wProblem && <p role="alert" className="text-xs font-semibold text-red-600">{fill((S.errors as Record<string, string>)[`weight_${wProblem}`] ?? S.errors.error, { x: GLS_MAX_KG })}</p>}
+          {gls.problem && <p role="alert" className="text-xs font-semibold text-red-600">{(S.errors as Record<string, string>)[`address_${gls.problem}`] ?? S.errors.error}</p>}
+        </fieldset>
+      )}
+      {sug.heavy && parcelCarrier && <p className="flex items-start gap-1.5 rounded-xl bg-amber-50 p-2.5 text-xs font-semibold text-amber-900 ring-1 ring-amber-200"><Icon name="alert" className="mt-px h-3.5 w-3.5 shrink-0" />{fill(S.heavy, { x: GLS_MAX_KG })}</p>}
+      <div>
+        <label htmlFor="new-note" className="mb-1 block text-xs font-bold text-ink-soft">{S.note}</label>
+        <input id="new-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={S.notePh} className="input" autoComplete="off" />
+      </div>
       {choose && (
         <fieldset className="space-y-1.5">
           <legend className="mb-1 text-xs font-bold text-ink-soft">{S.contents}</legend>
@@ -214,10 +283,10 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
           <span>{S.notify}</span>
         </label>
       )}
-      {tried && missingName(choices, v) && <p className="text-xs font-semibold text-red-600">{S.errors.carrierName}</p>}
+      {tried && !label && missingName(choices, v) && <p className="text-xs font-semibold text-red-600">{S.errors.carrierName}</p>}
       <button disabled={pending} className="btn-primary group w-full">
-        {pending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name="truck" className="h-4 w-4" />}
-        {pending ? S.saving : shop ? S.saveShop : S.save}
+        {pending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name={label ? "file" : "truck"} className="h-4 w-4" />}
+        {pending ? (label ? S.glsCreating : S.saving) : label ? (shop ? S.glsCreateShop : S.glsCreate) : shop ? S.saveShop : S.save}
       </button>
       <Msg t={t} state={state} />
     </form>
@@ -227,7 +296,8 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
 /** Ändern / Zurücknehmen / Erneut senden an einer gespeicherten Sendung */
 export function ShipmentActions({ t, invoiceId, shop, failed, names, choices, manage, s }: {
   t: Dict; invoiceId: string; shop: boolean; failed: boolean; names: string[]; choices: CarrierChoice[]; manage: boolean;
-  s: { id: string; carrier: string; carrierName: string; trackingNumbers: string[]; trackingUrl: string };
+  /** gls = Etikett aus dem System (Nummern kommen von GLS – nur Zurücknehmen = bei GLS stornieren) */
+  s: { id: string; carrier: string; carrierName: string; trackingNumbers: string[]; trackingUrl: string; note: string; gls: boolean; pickup: boolean };
 }) {
   const S = t.ship;
   const [mode, setMode] = useState<"" | "edit" | "cancel">("");
@@ -250,6 +320,7 @@ export function ShipmentActions({ t, invoiceId, shop, failed, names, choices, ma
   const f = fieldsOf(choices, v);
   const [notify, setNotify] = useState(true);
   const [tried, setTried] = useState(false);
+  const [note, setNote] = useState(s.note);
   return (
     <div className="mt-2.5 space-y-2">
       <div className="flex flex-wrap gap-1.5">
@@ -259,14 +330,14 @@ export function ShipmentActions({ t, invoiceId, shop, failed, names, choices, ma
             <button disabled={Boolean(busy)} className="btn-primary px-3 py-1.5 text-xs">{busy === "retry" ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name="history" className="h-3.5 w-3.5" />}{S.retry}</button>
           </form>
         )}
-        <button type="button" disabled={Boolean(busy)} onClick={() => { setV(start()); setTried(false); setState(undefined); setMode(mode === "edit" ? "" : "edit"); }} aria-expanded={mode === "edit"} className="btn-ghost px-3 py-1.5 text-xs"><Icon name="edit" className="h-3.5 w-3.5" />{S.edit}</button>
+        {!s.gls && !s.pickup && <button type="button" disabled={Boolean(busy)} onClick={() => { setV(start()); setNote(s.note); setTried(false); setState(undefined); setMode(mode === "edit" ? "" : "edit"); }} aria-expanded={mode === "edit"} className="btn-ghost px-3 py-1.5 text-xs"><Icon name="edit" className="h-3.5 w-3.5" />{S.edit}</button>}
         <button type="button" disabled={Boolean(busy)} onClick={() => { setState(undefined); setMode(mode === "cancel" ? "" : "cancel"); }} aria-expanded={mode === "cancel"} className="btn-danger px-3 py-1.5 text-xs"><Icon name="x" className="h-3.5 w-3.5" />{S.cancel}</button>
       </div>
       {mode === "" && <Msg t={t} state={state} />}
       {mode === "cancel" && (
         <form onSubmit={go("cancel", cancelShipmentAction)} className="animate-rise space-y-2 rounded-xl bg-red-50/70 p-3 ring-1 ring-red-100">
           <input type="hidden" name="id" value={s.id} /><input type="hidden" name="invoiceId" value={invoiceId} />
-          <p className="text-sm text-red-900">{shop ? S.cancelConfirm : `${S.cancel}?`}</p>
+          <p className="text-sm text-red-900">{s.gls ? S.cancelConfirmGls : shop ? S.cancelConfirm : `${S.cancel}?`}</p>
           <div className="flex flex-wrap gap-2">
             <button type="button" autoFocus onClick={() => setMode("")} className="btn-ghost px-3 py-1.5 text-xs">{S.keep}</button>
             <button disabled={Boolean(busy)} className="btn-danger px-3 py-1.5 text-xs">{busy === "cancel" ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-red-200 border-t-red-600" /> : <Icon name="x" className="h-3.5 w-3.5" />}{S.cancelYes}</button>
@@ -282,7 +353,12 @@ export function ShipmentActions({ t, invoiceId, shop, failed, names, choices, ma
           <input type="hidden" name="trackingUrl" value={f.trackingUrl} />
           <input type="hidden" name="numbers" value={JSON.stringify(v.numbers.filter((n) => n.trim()))} />
           <input type="hidden" name="notify" value={shop && notify ? "1" : ""} />
+          <input type="hidden" name="note" value={note} />
           <TrackingFields t={t} v={v} set={setV} names={names} idp={`e-${s.id}`} tried={tried} choices={choices} manage={manage} />
+          <div>
+            <label htmlFor={`note-${s.id}`} className="mb-1 block text-xs font-bold text-ink-soft">{S.note}</label>
+            <input id={`note-${s.id}`} value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={S.notePh} className="input" autoComplete="off" />
+          </div>
           {shop && (
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600" />
@@ -297,6 +373,43 @@ export function ShipmentActions({ t, invoiceId, shop, failed, names, choices, ma
           <Msg t={t} state={state} />
         </form>
       )}
+    </div>
+  );
+}
+
+/** Abholung im Lager (Shop-Bestellung mit „Abholung im Geschäft“): „Bereit zur Abholung“ (Kunde bekommt die Abhol-E-Mail) und „Abgeholt“ */
+export function PickupActions({ t, invoiceId, shop, readyAt }: { t: Dict; invoiceId: string; shop: boolean; readyAt: string | null }) {
+  const S = t.ship;
+  const [busy, setBusy] = useState<"" | "ready" | "done">("");
+  const [state, setState] = useState<ShipState>(undefined);
+  const go = (kind: "pickupReady" | "pickedUp") => async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(kind === "pickupReady" ? "ready" : "done"); setState(undefined);
+    const err = await run(kind === "pickupReady" ? pickupReadyAction : pickedUpAction, new FormData(e.currentTarget), invoiceId, kind);
+    if (err) { setState(err); setBusy(""); }
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-ink-soft">{S.pickupHint}</p>
+      {readyAt && <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-700"><Icon name="check" className="h-4 w-4" />{fill(S.pickupReadySince, { d: readyAt })}</p>}
+      {!readyAt && (
+        <form onSubmit={go("pickupReady")}>
+          <input type="hidden" name="invoiceId" value={invoiceId} />
+          <button disabled={Boolean(busy)} className="btn-ghost group w-full justify-center">
+            {busy === "ready" ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" /> : <Icon name="mail" className="h-4 w-4" />}
+            {shop ? S.pickupReadyShop : S.pickupReady}
+          </button>
+        </form>
+      )}
+      <form onSubmit={go("pickedUp")}>
+        <input type="hidden" name="invoiceId" value={invoiceId} />
+        <button disabled={Boolean(busy)} className="btn-primary group w-full">
+          {busy === "done" ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name="check" className="h-4 w-4" />}
+          {S.pickedUp}
+        </button>
+      </form>
+      <Msg t={t} state={state} />
     </div>
   );
 }
