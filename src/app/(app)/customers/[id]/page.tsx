@@ -12,8 +12,8 @@ import { formatDate } from "@/lib/dates";
 import { CustomerForm, type CustomerData } from "../CustomerForm";
 import { VatCheckButton } from "../VatCheckButton";
 import { openItems } from "@/lib/receivables";
-import { shopCompanyOf } from "@/lib/shopify/b2b";
-import { getShop } from "@/lib/shopify/client";
+import { RESELLER_CHANNELS, shopCompaniesOf, type ShopCompany } from "@/lib/shopify/b2b";
+import { getShop, type ShopChannel } from "@/lib/shopify/client";
 import { shopAdminUrl } from "@/lib/shopify/admin";
 import { ResellerRetry } from "../ResellerRetry";
 import { can, requireSession } from "@/lib/auth";
@@ -38,7 +38,13 @@ export default async function CustomerPage({ params, searchParams }: { params: P
       select 'invoice', id, coalesce(number, '—'), status::text, coalesce(issue_date, created_at::date), gross_cents from invoices where customer_id = ${id}
       order by d desc limit 30`),
   ]);
-  const [items, link, generalShop] = await Promise.all([openItems(id), shopCompanyOf(id), getShop("GENERAL_SHOP")]);
+  const [items, links, shops] = await Promise.all([openItems(id), shopCompaniesOf(id), Promise.all(RESELLER_CHANNELS.map((ch) => getShop(ch)))]);
+  // Großhandelspreise: Stand je Shop (ein Häkchen gilt für beide Shops)
+  const resellerShops = links.map(({ channel, link }, i) => ({
+    channel, link,
+    companyUrl: link?.companyId && shops[i]?.domain ? shopAdminUrl(shops[i]!, `/companies/${link.companyId.split("/").pop()}`) : null,
+  }));
+  const resellerOn = links.some(({ link }) => link?.wanted);
   const openC = items.reduce((s, r) => s + r.state.openCents, 0);
   const overdueC = items.reduce((s, r) => s + r.state.overdueCents, 0);
   const mode = determineTaxMode(c);
@@ -56,7 +62,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
             country: c.country, vatId: c.vatId, vatIdStatus: c.vatIdStatus, priceGroup: c.priceGroup,
             creditLimit: c.creditLimitCents != null ? (c.creditLimitCents / 100).toFixed(2).replace(".", ",") : "",
             paymentTermDays: c.paymentTermDays != null ? String(c.paymentTermDays) : "", notes: c.notes,
-            shopReseller: Boolean(link?.wanted),
+            shopReseller: resellerOn,
           }} />
           {sales && <section className="card overflow-hidden animate-rise">
             <h2 className="px-5 pt-5 text-lg font-bold">{t.customer.documents}</h2>
@@ -77,9 +83,8 @@ export default async function CustomerPage({ params, searchParams }: { params: P
           </section>}
         </div>
         <aside className="space-y-4">
-          {rights.reseller && (c.priceGroup === "WHOLESALE" || (link && link.status !== "removed")) && <ResellerCard t={t} link={link} email={c.email}
-            customerId={c.id} wholesale={c.priceGroup === "WHOLESALE"}
-            companyUrl={link?.companyId && generalShop?.domain ? shopAdminUrl(generalShop, `/companies/${link.companyId.split("/").pop()}`) : null} />}
+          {rights.reseller && (c.priceGroup === "WHOLESALE" || links.some(({ link }) => link && link.status !== "removed")) && <ResellerCard t={t} shops={resellerShops} email={c.email}
+            customerId={c.id} wholesale={c.priceGroup === "WHOLESALE"} />}
           {money && <div className="card p-5 animate-rise">
             <div className="text-sm text-ink-soft">{openC < 0 ? t.pay.credit : t.pay.openNow}</div>
             <div className={`num text-2xl font-bold ${overdueC ? "text-red-600" : openC < 0 ? "text-violet-700" : ""}`}>{formatCents(Math.abs(openC), intl)}</div>
@@ -120,9 +125,26 @@ export default async function CustomerPage({ params, searchParams }: { params: P
   );
 }
 
-/** Großhandelspreise im allgemeinen Shop (Shopify B2B): Stand der Verbindung über die E-Mail */
-function ResellerCard({ t, link, email, customerId, wholesale, companyUrl }: {
-  t: Awaited<ReturnType<typeof getI18n>>["t"]; link: Awaited<ReturnType<typeof shopCompanyOf>>; email: string; customerId: string; wholesale: boolean; companyUrl: string | null;
+/** Großhandelspreise in den Online-Shops (Shopify B2B): Stand der Verbindung über die E-Mail, je Shop eine Zeile */
+function ResellerCard({ t, shops, email, customerId, wholesale }: {
+  t: Awaited<ReturnType<typeof getI18n>>["t"]; shops: { channel: ShopChannel; link: ShopCompany | null; companyUrl: string | null }[];
+  email: string; customerId: string; wholesale: boolean;
+}) {
+  const R = t.customer.reseller;
+  const failed = shops.some(({ link }) => link?.wanted && link.status === "failed");
+  return (
+    <div className="card animate-rise p-5">
+      <h3 className="mb-2 flex items-center gap-2 font-bold"><Icon name="globe" className="icon-pop h-4 w-4 text-brand-600" />{R.title}</h3>
+      <div className="space-y-3">
+        {shops.map((s) => <ResellerShop key={s.channel} t={t} name={t.shop.names[s.channel]} link={s.link} email={email} wholesale={wholesale} companyUrl={s.companyUrl} />)}
+      </div>
+      {failed && <ResellerRetry customerId={customerId} label={R.retry} />}
+    </div>
+  );
+}
+
+function ResellerShop({ t, name, link, email, wholesale, companyUrl }: {
+  t: Awaited<ReturnType<typeof getI18n>>["t"]; name: string; link: ShopCompany | null; email: string; wholesale: boolean; companyUrl: string | null;
 }) {
   const R = t.customer.reseller;
   const why = (code: string) => {
@@ -145,8 +167,8 @@ function ResellerCard({ t, link, email, customerId, wholesale, companyUrl }: {
     : state === "pending" ? "bg-amber-50 text-amber-900 ring-amber-200" : "bg-slate-50 text-slate-700 ring-black/5";
   const icon = state === "linked" ? "check" : state === "failed" ? "alert" : state === "pending" ? "clock" : "globe";
   return (
-    <div className="card animate-rise p-5">
-      <h3 className="mb-2 flex items-center gap-2 font-bold"><Icon name="globe" className="icon-pop h-4 w-4 text-brand-600" />{R.title}</h3>
+    <div>
+      <div className="mb-1 text-xs font-bold text-ink-soft">{name}</div>
       <div className={`flex items-start gap-2 rounded-xl p-3 text-sm ring-1 ${tone}`}>
         <Icon name={icon} className="mt-0.5 h-4 w-4 shrink-0" />
         <div className="min-w-0 [overflow-wrap:anywhere]">
@@ -162,7 +184,6 @@ function ResellerCard({ t, link, email, customerId, wholesale, companyUrl }: {
           <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />{why(n)}
         </p>
       ))}
-      {state === "failed" && <ResellerRetry customerId={customerId} label={R.retry} />}
       {companyUrl && state === "linked" && (
         <a href={companyUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline">{R.openShop}<Icon name="link" className="h-3.5 w-3.5" /></a>
       )}

@@ -306,9 +306,38 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
     await b2b.setResellerWanted(id, true);
     expect(await b2b.syncShopCompany(id)).toMatchObject({ status: "pending", error: "needScope" });
     S.deny = false;
+    // der Worker nimmt höchstens 30 vorgemerkte je Durchlauf (in der Test-DB warten evtl. ältere, z. B. im Marken-Shop ohne Domain)
     expect(await b2b.retryShopCompanies()).toBeGreaterThanOrEqual(1);
+    for (let i = 0; i < 10 && (await link(id)).status !== "linked"; i++) await b2b.retryShopCompanies();
     expect(await link(id)).toMatchObject({ status: "linked", error: "" });
-  }, 30_000);
+  }, 60_000);
+
+  it("Ein Häkchen gilt für beide Shops: Unternehmen im allgemeinen UND im Marken-Shop (13.11.2026)", async () => {
+    const before = await db.query.shops.findFirst({ where: eq(schema.shops.channel, "BRAND_SHOP") });
+    await db.insert(schema.shops).values({ channel: "BRAND_SHOP", domain: "star-brand.myshopify.com", staticTokenEnc: encrypt("shpat_brand"), locationId: "gid://shopify/Location/2", active: false })
+      .onConflictDoUpdate({ target: schema.shops.channel, set: { domain: "star-brand.myshopify.com", staticTokenEnc: encrypt("shpat_brand"), locationId: "gid://shopify/Location/2" } });
+    try {
+      const f = mock();
+      vi.stubGlobal("fetch", f);
+      const id = await customer("Dana Barber", mail("dana"));
+      for (const ch of b2b.RESELLER_CHANNELS) expect(await b2b.setResellerWanted(id, true, undefined, ch)).toBe(true);
+      // der Nachbau teilt sich die Kunden zwischen den Shops → nacheinander (echt: jeder Shop hat eigene Kunden, dann parallel)
+      const rows = [...await b2b.syncShopCompanyNow(id, 20_000, ["GENERAL_SHOP"]), ...await b2b.syncShopCompanyNow(id, 20_000, ["BRAND_SHOP"])];
+      expect(rows.map((r) => r.channel).sort()).toEqual(["BRAND_SHOP", "GENERAL_SHOP"]);
+      for (const r of rows) expect(r).toMatchObject({ status: "linked", email: mail("dana") });
+      // beide Shops wurden gefragt
+      const hosts = new Set(f.mock.calls.map(([u]) => new URL(String(u)).host));
+      expect(hosts).toEqual(new Set(["star-general.myshopify.com", "star-brand.myshopify.com"]));
+      // Kundenseite: Stand je Shop in fester Reihenfolge
+      expect((await b2b.shopCompaniesOf(id)).map((x) => [x.channel, x.link?.status])).toEqual([["GENERAL_SHOP", "linked"], ["BRAND_SHOP", "linked"]]);
+      // Häkchen weg → in beiden Shops getrennt
+      for (const ch of b2b.RESELLER_CHANNELS) expect(await b2b.setResellerWanted(id, false, undefined, ch)).toBe(true);
+      for (const r of await b2b.syncShopCompanyNow(id, 20_000)) expect(r).toMatchObject({ status: "removed", contactId: "" });
+    } finally {
+      await db.update(schema.shops).set({ domain: before?.domain ?? "", staticTokenEnc: before?.staticTokenEnc ?? "", locationId: before?.locationId ?? "" })
+        .where(eq(schema.shops.channel, "BRAND_SHOP"));
+    }
+  }, 60_000);
 
   it("Preisliste: Großhandelspreise brutto, Variantenpreis vor Artikelpreis, ohne Preis → entfernt; kein B2B-Markt → nichts", async () => {
     vi.stubGlobal("fetch", mock());

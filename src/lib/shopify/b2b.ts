@@ -1,6 +1,6 @@
 import "server-only";
 /**
- * Wiederverkäufer im Online-Shop (Wunsch Inhaber 12.11.2026): Kunden „جملة الجملة“ sehen nach dem Anmelden im Shop ihre Preise.
+ * Wiederverkäufer im Online-Shop (Wunsch Inhaber 12.11.2026, seit 13.11.2026 in beiden Shops): Kunden „جملة الجملة“ sehen nach dem Anmelden im Shop ihre Preise.
  * Shopify B2B (seit 04/2026 auch im Basic-Tarif): im Shop ein B2B-Markt für alle Unternehmensstandorte mit Katalog + Preisliste.
  * - Kunde: Häkchen am Kunden → Unternehmen im Shop (Firma, Standort mit Anschrift + USt-IdNr.), Kontakt = Shop-Kunde mit
  *   derselben E-Mail (nie über den Namen). Anmeldung im Shop mit dieser E-Mail (Code per E-Mail) → Preise der Preisliste.
@@ -396,11 +396,18 @@ async function removeContact(shop: Shop, contactId: string) {
   check(r.companyContactRevokeRoles.userErrors, `companyContactRemoveFromCompany: ${errs[0].message} / companyContactRevokeRoles`);
 }
 
-/** gleich abgleichen und höchstens timeoutMs warten (Kundenformular); länger → läuft im Hintergrund weiter */
-export async function syncShopCompanyNow(customerId: string, timeoutMs = 8000): Promise<ShopCompany | null> {
-  const work = syncShopCompany(customerId).catch((e) => { console.error("shopify b2b", e); return null; });
+/** Großhandelspreise in beiden Shops (Wunsch Inhaber 13.11.2026: „كل شي بمتجر البراند زي المتجر العام“) – ein Häkchen am Kunden gilt für beide */
+export const RESELLER_CHANNELS: readonly ShopChannel[] = ["GENERAL_SHOP", "BRAND_SHOP"]; // Reihenfolge = Anzeige (allgemeiner Shop zuerst)
+
+/**
+ * Gleich abgleichen (alle Shops parallel, nur wo es eine Zeile gibt) und höchstens timeoutMs warten (Kundenformular);
+ * länger → läuft im Hintergrund weiter, der Worker versucht vorgemerkte alle 5 min wieder.
+ */
+export async function syncShopCompanyNow(customerId: string, timeoutMs = 8000, channels: readonly ShopChannel[] = RESELLER_CHANNELS): Promise<ShopCompany[]> {
+  const work = Promise.all(channels.map((ch) => syncShopCompany(customerId, ch).catch((e) => { console.error("shopify b2b", ch, e); return null; })))
+    .then((rows) => rows.filter((r): r is ShopCompany => r != null));
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const late = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); });
+  const late = new Promise<ShopCompany[]>((resolve) => { timer = setTimeout(() => resolve([]), timeoutMs); });
   try { return await Promise.race([work, late]); } finally { clearTimeout(timer); }
 }
 
@@ -423,6 +430,12 @@ export async function pushResellerPricesPeriodically() {
 /** Stand für die Oberfläche (Kunde) */
 export async function shopCompanyOf(customerId: string, channel: ShopChannel = "GENERAL_SHOP") {
   return (await db.query.shopCompanies.findFirst({ where: and(eq(schema.shopCompanies.customerId, customerId), eq(schema.shopCompanies.channel, channel)) })) ?? null;
+}
+
+/** Stand je Shop (Kundenseite), in der Reihenfolge von RESELLER_CHANNELS; ohne Zeile = null */
+export async function shopCompaniesOf(customerId: string): Promise<{ channel: ShopChannel; link: ShopCompany | null }[]> {
+  const rows = await db.query.shopCompanies.findMany({ where: eq(schema.shopCompanies.customerId, customerId) });
+  return RESELLER_CHANNELS.map((channel) => ({ channel, link: rows.find((r) => r.channel === channel) ?? null }));
 }
 
 /** Zahlen für die Shop-Seite */

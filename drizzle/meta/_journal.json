@@ -162,6 +162,13 @@
       "when": 1794514800518,
       "tag": "0022_user_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794563866467,
+      "tag": "0023_shop_companies_brand",
+      "breakpoints": true
     }
   ]
 }
