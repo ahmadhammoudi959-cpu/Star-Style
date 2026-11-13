@@ -151,6 +151,35 @@ run("Shop-Kunden (Datenbank, Shopify simuliert)", async () => {
     expect(await sc.newShopCustomersCount(36500)).toBeGreaterThanOrEqual(1);
   }, 30_000);
 
+  it("Ein Kunde, der nicht übernommen werden kann, hält die anderen nicht auf; Stand bleibt vor ihm → nächstes Mal wieder versucht", async () => {
+    vi.stubGlobal("fetch", mock());
+    // Datenbankfehler nur für diese E-Mail nachstellen (Trigger), danach wieder entfernen
+    await db.execute(sql`create or replace function ss_test_boom() returns trigger language plpgsql as $$
+      begin if new.email like 'boom.%@example.com' then raise exception 'boom test'; end if; return new; end $$`);
+    await db.execute(sql`drop trigger if exists ss_test_boom on customers`);
+    await db.execute(sql`create trigger ss_test_boom before insert on customers for each row execute function ss_test_boom()`);
+    try {
+      const before = (await db.query.shops.findFirst({ where: eq(schema.shops.channel, "GENERAL_SHOP") }))!.customersSince;
+      S["star-general.myshopify.com"].push(
+        node({ id: `gid://shopify/Customer/${stamp}9`, email: mail("boom"), updatedAt: "2026-11-13T13:00:01Z" }),
+        node({ id: `gid://shopify/Customer/${stamp}10`, email: mail("after"), updatedAt: "2026-11-13T13:00:02Z" }),
+      );
+      expect(await sc.syncShopCustomers("GENERAL_SHOP")).toMatchObject({ failed: 1, created: 1 });
+      expect(await customerByEmail(mail("after"))).toHaveLength(1);
+      expect(await customerByEmail(mail("boom"))).toEqual([]);
+      const ev = await db.select().from(schema.shopEvents).where(sql`message like ${"customersFailed:" + mail("boom") + "%"}`);
+      expect(ev).toHaveLength(1);
+      expect((await db.query.shops.findFirst({ where: eq(schema.shops.channel, "GENERAL_SHOP") }))!.customersSince).toEqual(before);
+    } finally {
+      await db.execute(sql`drop trigger if exists ss_test_boom on customers`);
+      await db.execute(sql`drop function if exists ss_test_boom()`);
+    }
+    expect(await sc.syncShopCustomers("GENERAL_SHOP")).toMatchObject({ failed: 0, created: 1 });
+    expect(await customerByEmail(mail("boom"))).toHaveLength(1);
+    expect(await customerByEmail(mail("after"))).toHaveLength(1);
+    expect((await db.query.shops.findFirst({ where: eq(schema.shops.channel, "GENERAL_SHOP") }))!.customersSince?.toISOString()).toBe("2026-11-13T13:00:02.000Z");
+  }, 30_000);
+
   it("Beide Shops gleichzeitig mit derselben E-Mail → genau EIN Kunde (Sperre je E-Mail)", async () => {
     vi.stubGlobal("fetch", mock());
     const a = node({ id: `gid://shopify/Customer/${stamp}7`, email: mail("twin"), updatedAt: "2026-11-13T12:00:00Z" });

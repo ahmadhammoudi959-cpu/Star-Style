@@ -27,7 +27,7 @@ const ONE_Q = `query($id: ID!) { customer(id: $id) { ${FIELDS} } }`;
 
 const SCOPE_RE = /access denied|not approved|required access|access scope|read_customers/i;
 const isScope = (e: unknown) => e instanceof ShopifyError && (e.code === "graphql" || e.code === "auth") && SCOPE_RE.test(e.message);
-const isTransient = (e: unknown) => !(e instanceof ShopifyError) || e.code === "network" || e.code === "throttled";
+const isTransient = (e: unknown) => e instanceof ShopifyError && (e.code === "network" || e.code === "throttled");
 
 /** fehlendes Recht → einmal mit neuem Token (der zwischengespeicherte kann von vor der Freigabe stammen) */
 async function call<T>(shop: Shop, query: string, variables: Record<string, unknown>): Promise<T> {
@@ -105,34 +105,44 @@ async function logDaily(channel: ShopChannel, message: string) {
   if (r.length) await logEvent(channel, "warn", "customers", message);
 }
 
-export type CustomersSync = { seen: number; created: number; linked: number; updated: number; problem?: "needScope" | "unreachable" | "error" };
+export type CustomersSync = { seen: number; created: number; linked: number; updated: number; failed: number; problem?: "needScope" | "unreachable" | "error" };
 
 /**
- * Alle seit dem letzten Mal geänderten Shop-Kunden übernehmen (erstes Mal: alle). Shopify sortiert nach updatedAt, 1 min
- * Überlappung (doppelt schadet nicht). Klappt etwas nicht, bleibt der alte Stand → nächstes Mal noch einmal.
+ * Alle seit dem letzten Mal geänderten Shop-Kunden übernehmen (erstes Mal: alle). Shopify liefert aufsteigend nach updatedAt,
+ * 1 min Überlappung (doppelt schadet nicht). Shop nicht erreichbar → alter Stand, nächstes Mal noch einmal. Ein einzelner Kunde,
+ * der nicht übernommen werden kann, hält die anderen nicht auf: Protokoll 1×/Tag, Stand bleibt vor ihm → er wird jedes Mal
+ * wieder versucht (alle danach sind trotzdem schon da).
  */
 export async function syncShopCustomers(channel: ShopChannel): Promise<CustomersSync | null> {
   const shop = await getShop(channel);
   if (!configured(shop)) return null;
   const since = shop.customersSince;
   const q = since ? `updated_at:>='${new Date(since.getTime() - 60_000).toISOString()}'` : null;
-  const out: CustomersSync = { seen: 0, created: 0, linked: 0, updated: 0 };
+  const out: CustomersSync = { seen: 0, created: 0, linked: 0, updated: 0, failed: 0 };
   let after: string | null = null, max = since?.getTime() ?? 0;
   try {
     do {
       const d: { customers: { nodes: ShopCustomerNode[]; pageInfo: { hasNextPage: boolean; endCursor: string } } } = await call(shop, LIST_Q, { q, after });
       for (const n of d.customers.nodes) {
         out.seen++;
-        const r = await upsertShopCustomer(channel, n);
-        if (r === "created") out.created++; else if (r === "linked") out.linked++; else if (r === "updated") out.updated++;
-        max = Math.max(max, Date.parse(n.updatedAt) || 0);
+        try {
+          const r = await upsertShopCustomer(channel, n);
+          if (r === "created") out.created++; else if (r === "linked") out.linked++; else if (r === "updated") out.updated++;
+          if (!out.failed) max = Math.max(max, Date.parse(n.updatedAt) || 0);
+        } catch (e) {
+          out.failed++;
+          console.error("shopify customer", channel, n.id, e);
+          const who = n.defaultEmailAddress?.emailAddress || n.id;
+          await logDaily(channel, `customersFailed:${who} – ${String((e as Error)?.message ?? e).slice(0, 160)}`);
+        }
       }
       after = d.customers.pageInfo.hasNextPage ? d.customers.pageInfo.endCursor : null;
     } while (after);
   } catch (e) {
     if (isScope(e)) { await logDaily(channel, "needScopeCustomers"); return { ...out, problem: "needScope" }; }
     if (isTransient(e)) return { ...out, problem: "unreachable" };
-    await logDaily(channel, `customersFailed:${(e as Error).message.slice(0, 200)}`);
+    console.error("shopify customers", channel, e);
+    await logDaily(channel, `customersFailed:${String((e as Error)?.message ?? e).slice(0, 200)}`);
     return { ...out, problem: "error" };
   }
   if (max && max !== since?.getTime()) await db.update(schema.shops).set({ customersSince: new Date(max) }).where(eq(schema.shops.channel, channel));
