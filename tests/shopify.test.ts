@@ -205,7 +205,7 @@ run("Shopify-Abgleich (Datenbank, Shopify simuliert)", async () => {
     const inv = await db.query.invoices.findFirst({ where: and(eq(schema.invoices.externalOrderId, ok.id), eq(schema.invoices.status, "ISSUED")) });
     expect(inv).toMatchObject({ taxMode: "EU_REVERSE_CHARGE", grossCents: 1678, netCents: 1678, vatCents: 0, custVatId: "ATU12345678" });
     const cust = await db.query.customers.findFirst({ where: eq(schema.customers.id, inv!.customerId) });
-    expect(cust).toMatchObject({ vatId: "ATU12345678", vatIdStatus: "VALID", type: "COMPANY" });
+    expect(cust).toMatchObject({ vatId: "ATU12345678", vatIdStatus: "VALID", type: "COMPANY", fromShop: "BRAND_SHOP" }); // aus der Bestellung angelegt → Herkunft Shop
     expect((await db.select().from(schema.vatChecks).where(eq(schema.vatChecks.customerId, cust!.id))).some((c) => c.source === "VIES" && c.valid)).toBe(true);
 
     viesValid = false;

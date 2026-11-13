@@ -104,7 +104,7 @@ run("Shop-Kunden (Datenbank, Shopify simuliert)", async () => {
     const r = await sc.syncShopCustomers("GENERAL_SHOP");
     expect(r).toMatchObject({ created: 2, linked: 0 });
     const [dana] = await customerByEmail(mail("dana"));
-    expect(dana).toMatchObject({ name: mail("dana"), priceGroup: "RETAIL", type: "PERSON" }); // Name kommt später
+    expect(dana).toMatchObject({ name: mail("dana"), priceGroup: "RETAIL", type: "PERSON", fromShop: "GENERAL_SHOP" }); // Name kommt später
     expect(await links(dana.id)).toEqual([expect.objectContaining({ channel: "GENERAL_SHOP", state: "ENABLED", createdCustomer: true, email: mail("dana") })]);
     const [omar] = await customerByEmail(mail("cod"));
     expect(omar).toMatchObject({ name: "Omar Haddad", street: "Ringstr. 1", zip: "45711", city: "Datteln", phone: "+49 2363 123", priceGroup: "RETAIL" });
@@ -128,7 +128,7 @@ run("Shop-Kunden (Datenbank, Shopify simuliert)", async () => {
     expect(await sc.syncShopCustomers("BRAND_SHOP")).toMatchObject({ created: 0, linked: 1 });
     const all = await customerByEmail(mail("kaya"));
     expect(all).toHaveLength(1);
-    expect(all[0]).toMatchObject({ name: "Salon Kaya GmbH", priceGroup: "WHOLESALE", city: "Essen", street: "", phone: "+49 178 9", contact: "Ali Kaya" });
+    expect(all[0]).toMatchObject({ name: "Salon Kaya GmbH", priceGroup: "WHOLESALE", city: "Essen", street: "", phone: "+49 178 9", contact: "Ali Kaya", fromShop: null }); // bleibt „im System angelegt“
     expect((await links(own.id)).map((l) => [l.channel, l.createdCustomer]).sort()).toEqual([["BRAND_SHOP", false], ["GENERAL_SHOP", false]]);
   }, 30_000);
 
@@ -189,5 +189,8 @@ run("Shop-Kunden (Datenbank, Shopify simuliert)", async () => {
     const all = await customerByEmail(mail("twin"));
     expect(all).toHaveLength(1);
     expect(await links(all[0].id)).toHaveLength(2);
+    // Herkunft = der Shop, der ihn angelegt hat (der andere ist nur verbunden)
+    const created = (await links(all[0].id)).find((l) => l.createdCustomer)!;
+    expect(all[0].fromShop).toBe(created.channel);
   }, 30_000);
 });

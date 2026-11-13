@@ -210,6 +210,9 @@ export const customers = pgTable("customers", {
   paymentTermDays: integer("payment_term_days"),
   notes: text("notes").notNull().default(""),
   active: boolean("active").notNull().default(true),
+  // Herkunft (Wunsch Inhaber 13.11.2026: „تفصل بين الزباين يلي بكريتها من السيستم والزباين يلي جاية من المتجرين“):
+  // null = im System angelegt; sonst der Shop, aus dem er kam (Konto oder Bestellung). Ändert sich nie, auch nicht beim Verbinden.
+  fromShop: channel("from_shop"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

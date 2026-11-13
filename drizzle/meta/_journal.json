@@ -176,6 +176,13 @@
       "when": 1794566160060,
       "tag": "0024_shop_customers",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794568054469,
+      "tag": "0025_customer_origin",
+      "breakpoints": true
     }
   ]
 }

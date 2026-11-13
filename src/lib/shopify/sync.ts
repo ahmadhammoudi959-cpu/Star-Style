@@ -235,11 +235,11 @@ async function currentInvoice(channel: ShopChannel, externalId: string) {
 }
 
 // unter derselben Sperre wie der Kunden-Abgleich (./customers.ts), sonst entstehen bei gleichzeitigem Webhook zwei Kunden
-function findOrCreateCustomer(c: ReturnType<typeof mapOrder>["customer"]) {
-  return c.email ? withCustomerLock(c.email, () => findOrCreateCustomerNow(c)) : findOrCreateCustomerNow(c);
+function findOrCreateCustomer(c: ReturnType<typeof mapOrder>["customer"], channel: ShopChannel) {
+  return c.email ? withCustomerLock(c.email, () => findOrCreateCustomerNow(c, channel)) : findOrCreateCustomerNow(c, channel);
 }
 
-async function findOrCreateCustomerNow(c: ReturnType<typeof mapOrder>["customer"]) {
+async function findOrCreateCustomerNow(c: ReturnType<typeof mapOrder>["customer"], channel: ShopChannel) {
   if (c.email) {
     const ex = await db.query.customers.findFirst({ where: sql`lower(${schema.customers.email}) = ${c.email}` });
     if (ex) {
@@ -252,7 +252,7 @@ async function findOrCreateCustomerNow(c: ReturnType<typeof mapOrder>["customer"
   }
   const [row] = await db.insert(schema.customers).values({
     name: c.name, type: c.type, contact: c.contact, email: c.email, phone: c.phone, street: c.street, zip: c.zip, city: c.city, country: c.country,
-    vatId: c.vatId, vatIdStatus: c.vatId ? "PENDING" : "NONE", priceGroup: "RETAIL", notes: "aus Shopify angelegt",
+    vatId: c.vatId, vatIdStatus: c.vatId ? "PENDING" : "NONE", priceGroup: "RETAIL", notes: "aus Shopify angelegt", fromShop: channel,
   }).returning({ id: schema.customers.id });
   return row.id;
 }
@@ -289,7 +289,7 @@ async function doProcessOrder(shop: Shop, o: ShopOrder) {
       if (await once(`review:${channel}:${o.id}`)) await logEvent(channel, "warn", "review", `skip:${m.skip}`, o.name);
       return;
     }
-    const customerId = await findOrCreateCustomer(m.customer);
+    const customerId = await findOrCreateCustomer(m.customer, channel);
     if (m.taxMode === "EU_REVERSE_CHARGE") {
       // Shopify hat die USt-IdNr. im Checkout geprüft; wir prüfen selbst noch einmal (BZSt/VIES) und speichern den Nachweis
       const v = await verifyCustomerVat(customerId);

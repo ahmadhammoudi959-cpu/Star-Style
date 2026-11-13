@@ -11,7 +11,7 @@ export const PERMISSION_GROUPS = {
   products: ["products.view", "products.edit", "products.prices", "products.cost", "suppliers"],
   stock: ["stock.receive", "stock.count", "stock.writeoff"],
   sales: [
-    "customers", "customers.reseller", "customers.credit", "sales.view", "sales.offers", "sales.invoices", "sales.discount",
+    "customers", "customers.reseller", "customers.credit", "customers.export", "sales.view", "sales.offers", "sales.invoices", "sales.discount",
     "sales.correct", "sales.delivery", "sales.shipping", "sales.email",
   ],
   money: ["payments.record", "payments.cancel", "payments.plans", "receivables", "customers.statement", "expenses.view", "expenses.edit"],
@@ -31,7 +31,7 @@ export const isPerm = (p: unknown): p is Perm => typeof p === "string" && (ALL_P
 export const IMPLIES: Partial<Record<Perm, Perm[]>> = {
   "products.edit": ["products.view"], "products.prices": ["products.view"], "products.cost": ["products.view"],
   "stock.receive": ["products.view"], "stock.count": ["products.view"], "stock.writeoff": ["products.view"],
-  "customers.reseller": ["customers"], "customers.credit": ["customers"], "customers.statement": ["customers"],
+  "customers.reseller": ["customers"], "customers.credit": ["customers"], "customers.statement": ["customers"], "customers.export": ["customers"],
   "sales.offers": ["sales.view", "customers", "products.view"], "sales.invoices": ["sales.view", "customers", "products.view"],
   "sales.discount": ["sales.view"], "sales.correct": ["sales.view"], "sales.delivery": ["sales.view"],
   "sales.shipping": ["sales.view"], "sales.email": ["sales.view"],
@@ -106,6 +106,8 @@ export const ROUTES: [RegExp, Need][] = [
   [R("/shops/[^/]+/mapping"), { any: ["shops.manage"] }],
   [R("/shops"), { any: ["shops.view"] }],
   [R("/design"), { any: ["design"] }],
+  // Kundenliste als Excel (alle E-Mails auf einmal) – eigenes Recht, nicht schon mit „Kunden“
+  [R("/api/customers/export"), { any: ["customers.export"] }],
   [R("/api/pdf/design-preview"), { any: ["design"] }],
   [R("/api/pdf/goods-receipt"), { any: ["stock.receive"] }],
   [R("/api/pdf/dunning"), { any: ["receivables"] }],

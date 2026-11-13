@@ -85,7 +85,7 @@ export async function upsertShopCustomer(channel: ShopChannel, n: ShopCustomerNo
         customerId = ex.id; name = ex.name;
         await fill(tx, customerId, fields, channel);
       } else {
-        const values = { ...fields, priceGroup: "RETAIL" as const };
+        const values = { ...fields, priceGroup: "RETAIL" as const, fromShop: channel };
         const [row] = await tx.insert(schema.customers).values(values).returning({ id: schema.customers.id });
         customerId = row.id; name = fields.name; created = true;
         await tx.insert(schema.auditLog).values({ entity: "customer", entityId: row.id, action: "create", after: { ...values, source: channel, shopCustomerId: n.id } });
@@ -169,12 +169,16 @@ export async function shopAccountsOf(customerId: string) {
   return db.query.shopCustomers.findMany({ where: eq(schema.shopCustomers.customerId, customerId) });
 }
 
-/** Startseite: so viele Kunden kamen in den letzten 7 Tagen neu aus den Shops (gleiche Regel wie „neu“ in der Kundenliste) */
+/**
+ * Seit wann ein Kunde aus dem Shop „neu“ ist (gleiche Regel für Kundenliste und Startseite): Anmeldung im Shop (bzw. Anlage hier)
+ * des Kontos, mit dem er angelegt wurde – sonst (aus einer Bestellung angelegt) die Anlage hier. Im System angelegte: nie neu.
+ */
+export const shopNewAtSql = sql`case when c.from_shop is not null then coalesce(
+  (select min(coalesce(sc.registered_at, sc.created_at)) from shop_customers sc where sc.customer_id = c.id and sc.created_customer), c.created_at) end`;
+
+/** Startseite: so viele Kunden kamen in den letzten 7 Tagen neu aus den Shops */
 export async function newShopCustomersCount(days = 7) {
   const r = await db.execute<{ n: number }>(sql`
-    select count(*)::int as n from (
-      select customer_id, min(coalesce(registered_at, created_at)) as at from shop_customers where created_customer group by customer_id
-    ) x join customers c on c.id = x.customer_id
-    where c.active and x.at > now() - make_interval(days => ${days})`);
+    select count(*)::int as n from customers c where c.active and ${shopNewAtSql} > now() - make_interval(days => ${days})`);
   return Number(r.rows[0]?.n ?? 0);
 }
