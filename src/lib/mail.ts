@@ -27,5 +27,5 @@ export async function sendMail(o: { to: string; subject: string; text: string; a
   if (!(await mailboxConfigured())) throw new Error("mailNotConfigured");
   const to = parseAddressList(o.to);
   if (!to.ok.length || to.bad.length) throw new Error("mailAddress");
-  await sendFromMailbox({ to: to.ok, cc: [], subject: o.subject, text: o.text, attachments: o.attachments }, o.userId);
+  await sendFromMailbox({ to: to.ok, cc: [], subject: o.subject, text: o.text, attachments: o.attachments, withSignature: true }, o.userId);
 }

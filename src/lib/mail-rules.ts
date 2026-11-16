@@ -8,7 +8,10 @@ export type MailSettings = {
   imapHost: string; imapPort: number; smtpHost: string; smtpPort: number;
   user: string; password: string; // Passwort (App-Passwort) verschlüsselt (crypto.ts)
   fromName: string; signature: string;
+  /** Signatur mit Logo (HTML, z. B. aus dem Hostinger-Webmail kopiert) – beim Speichern bereinigt (sanitizeSignatureHtml) */
+  signatureHtml: string;
 };
+export const SIGNATURE_HTML_MAX = 20_000;
 
 /** Hostinger (hPanel → E-Mails → Connect apps & devices, 16.11.2026): IMAP 993 und SMTP 465, beide SSL/TLS */
 export const MAIL_DEFAULTS = { imapHost: "imap.hostinger.com", imapPort: 993, smtpHost: "smtp.hostinger.com", smtpPort: 465 } as const;
@@ -30,6 +33,7 @@ export function parseMailSettings(raw: unknown, fallbackUser = ""): MailSettings
     smtpHost: host("smtpHost", MAIL_DEFAULTS.smtpHost), smtpPort: num("smtpPort", MAIL_DEFAULTS.smtpPort),
     user: str("user").toLowerCase() || fallbackUser.trim().toLowerCase(), password: typeof o.password === "string" ? o.password : "",
     fromName: str("fromName", 80), signature: typeof o.signature === "string" ? o.signature.slice(0, 2000) : "",
+    signatureHtml: typeof o.signatureHtml === "string" ? o.signatureHtml.slice(0, SIGNATURE_HTML_MAX) : "",
   };
 }
 
@@ -108,4 +112,48 @@ export function pageRange(exists: number, page: number, size = 50): { from: numb
 export function humanSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+// ───────────────────────── Signatur mit Logo (HTML) ─────────────────────────
+
+const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** Stelle für die Signatur: vor dem zitierten Original (Antworten/Weiterleiten aus quoteText/forwardText), sonst am Ende */
+export function signatureSplit(text: string): number {
+  const m = /\n\n\nAm [^\n]* schrieb [^\n]*:\n|\n\n\n---------- Weitergeleitete Nachricht ----------\n/.exec(text);
+  return m ? m.index : text.length;
+}
+
+/** Text der Nachricht → einfaches HTML (Zeilen bleiben, „> “-Zeilen als graues Zitat) */
+export function textToHtml(text: string): string {
+  const out: string[] = [];
+  let quote: string[] = [];
+  const flush = () => {
+    if (!quote.length) return;
+    out.push(`<blockquote style="margin:0 0 0 4px;border-left:2px solid #c7cbd3;padding-left:8px;color:#5B6475">${quote.join("<br>")}</blockquote>`);
+    quote = [];
+  };
+  for (const line of text.replace(/\r\n/g, "\n").split("\n")) {
+    if (line.startsWith(">")) { quote.push(escHtml(line.replace(/^> ?/, ""))); continue; }
+    flush();
+    out.push(escHtml(line) + "<br>");
+  }
+  flush();
+  return out.join("");
+}
+
+/**
+ * Text + Signatur → Text- und HTML-Teil der E-Mail. Die Signatur steht unter dem eigenen Text, vor dem zitierten Original.
+ * sigHtml ist schon bereinigt (sanitizeSignatureHtml); sigText ist die Textfassung für Programme ohne HTML.
+ */
+export function buildMailBodies(text: string, sig: { html: string; text: string } | null): { text: string; html?: string } {
+  if (!sig || !sig.html.trim()) return { text };
+  const t = text.replace(/\r\n/g, "\n");
+  const i = signatureSplit(t);
+  const head = t.slice(0, i).replace(/\s+$/, "");
+  const tail = t.slice(i);
+  const plain = `${head}\n\n-- \n${sig.text.trim()}\n${tail}`;
+  const html = `<div dir="auto" style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#0B1222">`
+    + `${head ? `${textToHtml(head)}<br>` : ""}${sig.html}${tail.trim() ? `<br>${textToHtml(tail.replace(/^\n+/, ""))}` : ""}</div>`;
+  return { text: plain, html };
 }

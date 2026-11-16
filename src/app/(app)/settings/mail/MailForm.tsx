@@ -3,8 +3,9 @@ import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
 import { saveMailAction, testMailAction, type MailSaveResult } from "./actions";
+import { SignaturePreview } from "@/components/SignaturePreview";
 
-type Initial = { imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; user: string; fromName: string; signature: string; hasPassword: boolean };
+type Initial = { imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; user: string; fromName: string; signature: string; signatureHtml: string; hasPassword: boolean };
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
 
 /** Zugang zum Postfach: Adresse + App-Passwort (Hostinger), Server sind vorbelegt; „Speichern“ prüft gleich die Anmeldung */
@@ -67,6 +68,13 @@ export function MailForm({ t, initial, ready }: { t: Dict; initial: Initial; rea
             <label htmlFor="m-signature" className="mb-1 block text-xs font-bold text-ink-soft">{M.signature}</label>
             <textarea id="m-signature" value={v.signature} onChange={(e) => setV({ ...v, signature: e.target.value })} rows={4} dir="auto" className="input" maxLength={2000} />
             <p className="mt-1 text-[0.6875rem] text-ink-soft">{M.signatureHint}</p>
+          </div>
+          <div className="col-span-2 space-y-2">
+            <label htmlFor="m-signatureHtml" className="block text-xs font-bold text-ink-soft">{M.signatureHtml}</label>
+            <textarea id="m-signatureHtml" value={v.signatureHtml} onChange={(e) => setV({ ...v, signatureHtml: e.target.value })} rows={5} dir="ltr" spellCheck={false}
+              className="input font-mono text-xs" maxLength={40000} placeholder="<table …>…</table>" />
+            <p className="text-[0.6875rem] text-ink-soft">{M.signatureHtmlHint}</p>
+            {v.signatureHtml.trim() && <><p className="text-xs font-bold text-ink-soft">{M.signaturePreview}</p><SignaturePreview html={v.signatureHtml} title={M.signaturePreview} /></>}
           </div>
         </div>
         <details open={advanced} onToggle={(e) => setAdvanced((e.target as HTMLDetailsElement).open)} className="rounded-xl bg-slate-50 p-3 ring-1 ring-black/5">

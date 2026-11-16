@@ -15,7 +15,8 @@ export const PERMISSION_GROUPS = {
     "sales.correct", "sales.delivery", "sales.shipping", "sales.email", "sales.returns",
   ],
   // Kommunikation (Wunsch Inhaber 16.11.2026): Postfach info@ und WhatsApp im System
-  contact: ["mail", "whatsapp"],
+  // Wunsch Inhaber 16.11.2026: lesen und schreiben getrennt
+  contact: ["mail", "mail.send", "mail.delete", "whatsapp", "whatsapp.send"],
   money: ["payments.record", "payments.cancel", "payments.plans", "receivables", "customers.statement", "expenses.view", "expenses.edit"],
   accounting: ["reports.view", "reports.export", "reports.lock"],
   system: ["shops.view", "shops.manage", "design", "settings"],
@@ -41,6 +42,7 @@ export const IMPLIES: Partial<Record<Perm, Perm[]>> = {
   "expenses.edit": ["expenses.view"],
   "reports.export": ["reports.view"], "reports.lock": ["reports.export"],
   "shops.manage": ["shops.view"],
+  "mail.send": ["mail"], "mail.delete": ["mail"], "whatsapp.send": ["whatsapp"],
 };
 
 /** Gespeicherte Liste → wirksame Rechte (unbekannte Schlüssel fallen weg, Abhängigkeiten kommen dazu; Admin = alle) */
@@ -57,12 +59,12 @@ export const normalizePerms = (raw: unknown): Perm[] => { const s = effectivePer
 
 /** Vorlagen zum schnellen Vorbelegen (danach frei änderbar) – Vorschlag aus der Besprechung 12.11.2026 */
 export const PRESETS: Record<"sales" | "warehouse" | "teamLead" | "accountant", Perm[]> = {
-  sales: ["products.view", "customers", "customers.statement", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "sales.email", "sales.returns", "whatsapp"],
+  sales: ["products.view", "customers", "customers.statement", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "sales.email", "sales.returns", "whatsapp", "whatsapp.send"],
   warehouse: ["products.view", "stock.count", "stock.writeoff", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "sales.returns", "insights"],
   teamLead: [
     "products.view", "products.edit", "suppliers", "stock.receive", "stock.count", "stock.writeoff", "customers", "customers.reseller", "customers.statement",
     "sales.offers", "sales.invoices", "sales.discount", "sales.correct", "sales.delivery", "sales.shipping", "sales.email", "sales.returns", "insights", "shops.view",
-    "mail", "whatsapp",
+    "mail", "mail.send", "whatsapp", "whatsapp.send",
   ],
   accountant: ["reports.view", "reports.export"],
 };
@@ -111,6 +113,7 @@ export const ROUTES: [RegExp, Need][] = [
   [R("/shops/[^/]+/mapping"), { any: ["shops.manage"] }],
   [R("/shops"), { any: ["shops.view"] }],
   [R("/design"), { any: ["design"] }],
+  [R("/mail/compose"), { any: ["mail.send"] }],
   [R("/mail"), { any: ["mail"] }],
   [R("/api/mail"), { any: ["mail"] }],
   [R("/whatsapp"), { any: ["whatsapp"] }],

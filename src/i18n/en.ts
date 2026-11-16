@@ -741,8 +741,8 @@ const en: Dict = {
     },
     perms: {
       "sales.returns": "Record returns (take goods back, refund money)",
-      mail: "Email inbox (info@) – read and write",
-      whatsapp: "WhatsApp messages – read and write",
+      mail: "Read the mailbox (info@)", "mail.send": "Write, reply to and forward emails", "mail.delete": "Move emails to the trash",
+      whatsapp: "Open WhatsApp in the system and read chats", "whatsapp.send": "Write and send WhatsApp messages",
       "dashboard.money": "Money figures on the home page (sales, receivables, stock value)",
       insights: "Insights (reorder, expiry)",
       ask: "“Ask your business” (AI – sees all figures)",
@@ -840,6 +840,9 @@ const en: Dict = {
     },
   },
   mailSet: {
+    signatureHtml: "Signature with logo (HTML)",
+    signatureHtmlHint: "From Hostinger webmail: Settings → Signature → copy the source code and paste it here. Goes under every email from the system (invoices and offers too). Empty = only the text signature above.",
+    signaturePreview: "Preview",
     title: "Email inbox", subtitle: "Read and answer info@ inside the system (Hostinger)", cardHint: "Connect the inbox: address and app password.",
     access: "Inbox access", ready: "Connected", notReady: "Not set up yet",
     user: "Email address", userHint: "The inbox, e.g. info@starstyle-shop.de",
@@ -867,6 +870,7 @@ const en: Dict = {
     },
   },
   mail: {
+    withSignature: "Send with signature (logo)",
     title: "Email", subtitle: "Inbox info@", notSetUp: "Inbox not connected yet", notSetUpHint: "Enter the address and the Hostinger app password once – then all emails arrive here.",
     setUp: "Set up now", unreadN: "{n} unread", refresh: "Refresh", compose: "New email", sentOk: "Email sent ✓", trashedOk: "Moved to trash ✓",
     foldersTitle: "Folders", folders: { inbox: "Inbox", sent: "Sent", drafts: "Drafts", junk: "Spam", trash: "Trash", archive: "Archive", other: "Folder" },
@@ -938,6 +942,9 @@ const en: Dict = {
     },
   },
   waWeb: {
+    readOnly: "Read only: writing is locked for you (permission “Write WhatsApp” is missing).",
+    updateTitle: "Update the extension",
+    updateHint: "For “read only” this computer needs the extension version {v} or newer: download it again, replace the folder and press ↻ in chrome://extensions.",
     subtitle: "WhatsApp Business inside the system",
     checking: "Preparing WhatsApp …",
     installTitle: "One-time setup: extension “Star Style – WhatsApp im System”",

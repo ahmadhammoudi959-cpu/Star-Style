@@ -13,14 +13,14 @@ const fail = (e: unknown): WaResult<never> => {
 const Id = z.string().min(1).max(100);
 
 export async function waSendTextAction(raw: unknown): Promise<WaResult> {
-  const s = await requirePerm("whatsapp");
+  const s = await requirePerm("whatsapp.send");
   const p = z.object({ chatId: Id, text: z.string().min(1).max(4096) }).safeParse(raw);
   if (!p.success) return { ok: false, error: "invalid" };
   try { await sendWaText(p.data.chatId, p.data.text, s.uid); return { ok: true }; } catch (e) { return fail(e); }
 }
 
 export async function waSendFileAction(fd: FormData): Promise<WaResult> {
-  const s = await requirePerm("whatsapp");
+  const s = await requirePerm("whatsapp.send");
   const chatId = String(fd.get("chatId") ?? "");
   const file = fd.get("file");
   if (!chatId || !file || typeof file !== "object" || !("arrayBuffer" in file) || !(file as File).size) return { ok: false, error: "invalid" };
@@ -37,7 +37,7 @@ export async function waTemplatesAction(): Promise<WaResult<WaTemplate[]>> {
 }
 
 export async function waSendTemplateAction(raw: unknown): Promise<WaResult> {
-  const s = await requirePerm("whatsapp");
+  const s = await requirePerm("whatsapp.send");
   const p = z.object({ chatId: Id, name: z.string().min(1).max(512), language: z.string().min(2).max(15), params: z.array(z.string().max(500)).max(20) }).safeParse(raw);
   if (!p.success) return { ok: false, error: "invalid" };
   try { await sendWaTemplate(p.data.chatId, p.data, s.uid); return { ok: true }; } catch (e) { return fail(e); }

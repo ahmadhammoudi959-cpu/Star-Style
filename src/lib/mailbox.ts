@@ -14,7 +14,7 @@ import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { decrypt, encrypt } from "./crypto";
 import {
-  folderRole, mailboxReady, pageRange, parseMailSettings, ROLE_ORDER, validEmail, validHost, validPort,
+  buildMailBodies, folderRole, mailboxReady, pageRange, parseMailSettings, ROLE_ORDER, SIGNATURE_HTML_MAX, validEmail, validHost, validPort,
   type FolderRole, type MailSettings,
 } from "./mail-rules";
 
@@ -40,7 +40,7 @@ export const mailboxConfigured = async () => { try { return mailboxReady(await l
 
 export type MailSettingsInput = {
   imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; user: string; password: string;
-  fromName: string; signature: string; disconnect?: boolean;
+  fromName: string; signature: string; signatureHtml?: string; disconnect?: boolean;
 };
 export type MailSettingsProblem = "imapHost" | "smtpHost" | "port" | "user" | "password";
 
@@ -60,16 +60,17 @@ export async function saveMailSettings(input: MailSettingsInput, userId?: string
     const before = parseMailSettings(row?.mail, row?.email ?? "");
     const password = input.disconnect ? "" : input.password ? encrypt(input.password.slice(0, 300)) : before.user === user ? before.password : "";
     if (!input.disconnect && !password) return { problem: "password" as const };
-    const next = input.disconnect ? { fromName: before.fromName, signature: before.signature } : {
+    const signatureHtml = input.signatureHtml === undefined ? before.signatureHtml : sanitizeSignatureHtml(input.signatureHtml);
+    const next = input.disconnect ? { fromName: before.fromName, signature: before.signature, signatureHtml: before.signatureHtml } : {
       imapHost, imapPort: input.imapPort, smtpHost, smtpPort: input.smtpPort, user, password,
-      fromName: input.fromName.trim().slice(0, 80), signature: input.signature.slice(0, 2000),
+      fromName: input.fromName.trim().slice(0, 80), signature: input.signature.slice(0, 2000), signatureHtml,
     };
     if (row) await tx.update(schema.companySettings).set({ mail: next }).where(eq(schema.companySettings.id, row.id));
     else await tx.insert(schema.companySettings).values({ id: "company", mail: next });
     const show = (s: Partial<MailSettings>) => ({ imapHost: s.imapHost, imapPort: s.imapPort, smtpHost: s.smtpHost, smtpPort: s.smtpPort, user: s.user, fromName: s.fromName, password: s.password ? "gesetzt" : "" });
     await tx.insert(schema.auditLog).values({
       entity: "settings", entityId: "mail", action: input.disconnect ? "disconnect" : "update", userId: userId ?? null,
-      before: show(before), after: { ...show(next as Partial<MailSettings>), passwordChanged: Boolean(input.password) }, // nie das Passwort ins Protokoll
+      before: show(before), after: { ...show(next as Partial<MailSettings>), passwordChanged: Boolean(input.password), signatureHtmlChanged: signatureHtml !== before.signatureHtml }, // nie das Passwort ins Protokoll
     });
     forgetUnread();
     return { ok: true as const };
@@ -187,6 +188,32 @@ const parsedAddr = (a?: AddressObject | AddressObject[]): MailAddress[] =>
   (Array.isArray(a) ? a : a ? [a] : []).flatMap((x) => addr(x.value.map((v) => ({ name: v.name, address: v.address }))));
 
 /** HTML aus E-Mails: nur Formatierung, keine Skripte/Formulare; Bilder nur eingebettete (cid/data) – fremde Bilder (Zählpixel) blockiert */
+/**
+ * Signatur mit Logo (HTML aus dem Webmail): nur Tabellen/Text/Links/Bilder, Bilder nur über https, Links http(s)/mailto/tel,
+ * keine Skripte, Formulare, Event-Attribute, <style>; Stil-Angaben mit url()/expression/javascript fallen weg.
+ */
+export function sanitizeSignatureHtml(html: string): string {
+  const clean = sanitizeHtml(String(html ?? "").slice(0, SIGNATURE_HTML_MAX * 2), {
+    allowedTags: ["table", "tbody", "thead", "tfoot", "tr", "td", "th", "div", "span", "p", "a", "img", "br", "strong", "b", "em", "i", "u", "small", "font", "hr", "center"],
+    allowedAttributes: {
+      "*": ["style", "dir", "align", "valign", "width", "height", "bgcolor", "title"],
+      a: ["href", "target", "rel"], img: ["src", "alt", "width", "height", "border"],
+      table: ["cellpadding", "cellspacing", "border", "role"], td: ["colspan", "rowspan"], th: ["colspan", "rowspan"], font: ["color", "face", "size"],
+    },
+    allowedSchemes: ["http", "https", "mailto", "tel"],
+    allowedSchemesByTag: { img: ["https"] },
+    allowProtocolRelative: false,
+    transformTags: {
+      "*": (tagName, attribs) => {
+        const style = attribs.style;
+        if (style && /url\s*\(|expression|javascript:|@import|behavior/i.test(style)) { const { style: _drop, ...rest } = attribs; void _drop; return { tagName, attribs: rest }; }
+        return { tagName, attribs };
+      },
+    },
+  }).trim();
+  return clean.length > SIGNATURE_HTML_MAX ? "" : clean;
+}
+
 export function sanitizeEmailHtml(html: string, cid: Map<string, string>): { html: string; blocked: number } {
   let blocked = 0;
   const out = sanitizeHtml(html, {
@@ -327,6 +354,8 @@ export async function moveToTrash(path: string, uid: number, userId?: string) {
 
 export type SendInput = {
   to: string[]; cc: string[]; subject: string; text: string;
+  /** Signatur mit Logo (aus den Einstellungen) unter den Text setzen – nur wenn eine hinterlegt ist */
+  withSignature?: boolean;
   attachments: { filename: string; content: Buffer; contentType?: string }[];
   inReplyTo?: string; references?: string[]; answered?: { path: string; uid: number };
 };
@@ -338,9 +367,10 @@ export async function sendFromMailbox(input: SendInput, userId?: string): Promis
   const company = await db.query.companySettings.findFirst({ columns: { name: true } });
   const domain = s.user.split("@")[1] || "starstyle.local";
   const messageId = `<${crypto.randomUUID()}@${domain}>`;
+  const bodies = buildMailBodies(input.text, input.withSignature && s.signatureHtml ? { html: s.signatureHtml, text: htmlToPlain(s.signatureHtml).replace(/\n{2,}/g, "\n") } : null);
   const options = {
     from: { name: s.fromName || company?.name || "Star Style", address: s.user },
-    to: input.to, cc: input.cc.length ? input.cc : undefined, subject: input.subject, text: input.text,
+    to: input.to, cc: input.cc.length ? input.cc : undefined, subject: input.subject, text: bodies.text, ...(bodies.html ? { html: bodies.html } : {}),
     attachments: input.attachments.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType })),
     messageId, date: new Date(),
     ...(input.inReplyTo ? { inReplyTo: input.inReplyTo, references: [...(input.references ?? []), input.inReplyTo].slice(-20) } : {}),

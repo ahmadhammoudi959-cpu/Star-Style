@@ -8,7 +8,7 @@ export type MailSaveResult = { ok: true; total?: number; unseen?: number } | { o
 
 const input = z.object({
   imapHost: z.string().max(253), imapPort: z.number().int(), smtpHost: z.string().max(253), smtpPort: z.number().int(),
-  user: z.string().max(254), password: z.string().max(300), fromName: z.string().max(80), signature: z.string().max(2000),
+  user: z.string().max(254), password: z.string().max(300), fromName: z.string().max(80), signature: z.string().max(2000), signatureHtml: z.string().max(40_000).optional(),
   disconnect: z.boolean().optional(),
 });
 

@@ -740,8 +740,8 @@ const de = {
     },
     perms: {
       "sales.returns": "Retouren erfassen (Ware zurücknehmen, Geld erstatten)",
-      mail: "E-Mail-Postfach (info@) lesen und schreiben",
-      whatsapp: "WhatsApp-Nachrichten lesen und schreiben",
+      mail: "E-Mail-Postfach (info@) lesen", "mail.send": "E-Mails schreiben, antworten und weiterleiten", "mail.delete": "E-Mails in den Papierkorb verschieben",
+      whatsapp: "WhatsApp im System öffnen und Chats lesen", "whatsapp.send": "WhatsApp-Nachrichten schreiben und senden",
       "dashboard.money": "Geld-Zahlen auf der Startseite (Umsatz, offene Posten, Lagerwert)",
       insights: "Hinweise (Nachbestellen, Ablauf)",
       ask: "„Frag dein Geschäft“ (KI – sieht alle Zahlen)",
@@ -839,6 +839,9 @@ const de = {
     },
   },
   mailSet: {
+    signatureHtml: "Signatur mit Logo (HTML)",
+    signatureHtmlHint: "Aus dem Hostinger-Webmail: Einstellungen → Unterschrift → Quellcode kopieren und hier einfügen. Steht unter jeder E-Mail aus dem System (auch Rechnungen und Angebote). Leer = nur die Text-Signatur oben.",
+    signaturePreview: "Vorschau",
     title: "E-Mail-Postfach", subtitle: "info@ im System lesen und beantworten (Hostinger)", cardHint: "Postfach verbinden: Adresse und App-Passwort.",
     access: "Zugang zum Postfach", ready: "Verbunden", notReady: "Noch nicht eingerichtet",
     user: "E-Mail-Adresse", userHint: "Das Postfach, z. B. info@starstyle-shop.de",
@@ -866,6 +869,7 @@ const de = {
     },
   },
   mail: {
+    withSignature: "Mit Signatur (Logo) senden",
     title: "E-Mail", subtitle: "Postfach info@", notSetUp: "Postfach noch nicht verbunden", notSetUpHint: "Einmal Adresse und App-Passwort von Hostinger eintragen – dann kommen alle E-Mails hier an.",
     setUp: "Jetzt einrichten", unreadN: "{n} ungelesen", refresh: "Aktualisieren", compose: "Neue E-Mail", sentOk: "E-Mail gesendet ✓", trashedOk: "In den Papierkorb gelegt ✓",
     foldersTitle: "Ordner", folders: { inbox: "Posteingang", sent: "Gesendet", drafts: "Entwürfe", junk: "Spam", trash: "Papierkorb", archive: "Archiv", other: "Ordner" },
@@ -937,6 +941,9 @@ const de = {
     },
   },
   waWeb: {
+    readOnly: "Nur lesen: Schreiben ist für dich gesperrt (Recht „WhatsApp schreiben“ fehlt).",
+    updateTitle: "Erweiterung aktualisieren",
+    updateHint: "Für „nur lesen“ braucht dieser Computer die Erweiterung ab Version {v}: neu herunterladen, den Ordner ersetzen und in chrome://extensions auf ↻ drücken.",
     subtitle: "WhatsApp Business direkt im System",
     checking: "WhatsApp wird vorbereitet …",
     installTitle: "Einmal einrichten: Erweiterung „Star Style – WhatsApp im System“",

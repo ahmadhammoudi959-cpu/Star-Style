@@ -21,7 +21,8 @@ function contentSecurityPolicy(nonce: string) {
     // strict-dynamic: Skripte, die unsere Skripte nachladen, sind erlaubt; wasm-unsafe-eval für den Barcode-Leser (WebAssembly)
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${dev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://cdn.shopify.com",
+    // starstyle-shop.de: Logo der E-Mail-Signatur (Vorschau)
+    "img-src 'self' data: blob: https://cdn.shopify.com https://starstyle-shop.de",
     "font-src 'self' data:",
     `connect-src 'self'${dev ? " ws: wss:" : ""}`,
     "media-src 'self' blob:",

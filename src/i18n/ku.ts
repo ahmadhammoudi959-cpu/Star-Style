@@ -1673,8 +1673,8 @@ const ku: Dict = {
     },
     perms: {
       "sales.returns": "Vegerandinan tomar bike (malan paşve bigire, pereyan vegerîne)",
-      mail: "Sindoqa e-nameyê (info@) – bixwîne û binivîse",
-      whatsapp: "Peyamên WhatsApp – bixwîne û binivîse",
+      mail: "Qutiya e-nameyê (info@) bixwîne", "mail.send": "E-nameyan binivîse, bersiv bide û bişîne", "mail.delete": "E-nameyan bavêje çopê",
+      whatsapp: "WhatsApp di sîstemê de veke û sohbetan bixwîne", "whatsapp.send": "Peyamên WhatsApp binivîse û bişîne",
       "dashboard.money": "Hejmarên pereyan li rûpela sereke (firotin, deynên vekirî, nirxa embarê)",
       insights: "Agahdarî (dîsa siparîş, xerabûn)",
       ask: "“Ji karê xwe bipirse” (KI – hemû hejmaran dibîne)",
@@ -1772,6 +1772,9 @@ const ku: Dict = {
     },
   },
   mailSet: {
+    signatureHtml: "Îmze bi logo (HTML)",
+    signatureHtmlHint: "Ji Hostinger Webmail: Mîheng → Îmze → koda çavkaniyê kopî bike û li vir bixe. Di binê her e-nameyekê ya sîstemê de ye (fatûre û pêşniyar jî). Vala = tenê îmzeya nivîsê ya jorîn.",
+    signaturePreview: "Pêşdîtin",
     title: "Sindoqa e-nameyê", subtitle: "E-nameyên info@ di sîstemê de bixwîne û bersiv bide (Hostinger)", cardHint: "Sindoqê girêde: navnîşan û şîfreya sepanê.",
     access: "Gihîştina sindoqê", ready: "Girêdayî ye", notReady: "Hêj nehatiye sazkirin",
     user: "Navnîşana e-nameyê", userHint: "Sindoq, mînak info@starstyle-shop.de",
@@ -1799,6 +1802,7 @@ const ku: Dict = {
     },
   },
   mail: {
+    withSignature: "Bi îmzeyê (logo) bişîne",
     title: "E-name", subtitle: "Sindoqa info@", notSetUp: "Sindoqa e-nameyê hêj ne girêdayî ye", notSetUpHint: "Carekê navnîşan û şîfreya sepanê ya Hostinger binivîse – paşê hemû e-name tên vir.",
     setUp: "Niha saz bike", unreadN: "{n} nexwendî", refresh: "Nû bike", compose: "E-nameya nû", sentOk: "E-name hat şandin ✓", trashedOk: "Ket nav sêlika çopê ✓",
     foldersTitle: "Peldank", folders: { inbox: "Hatî", sent: "Şandî", drafts: "Reşnivîs", junk: "Spam", trash: "Sêlika çopê", archive: "Arşîv", other: "Peldank" },
@@ -1870,6 +1874,9 @@ const ku: Dict = {
     },
   },
   waWeb: {
+    readOnly: "Tenê xwendin: nivîsandin ji te re girtî ye (destûra «WhatsApp binivîse» tune).",
+    updateTitle: "Pêvekê nû bike",
+    updateHint: "Ji bo «tenê xwendin» ev komputer pêvekê ji guhertoya {v} û nûtir dixwaze: dîsa daxe, peldankê biguherîne û di chrome://extensions de ↻ bitikîne.",
     subtitle: "WhatsApp Business di nav sîstemê de",
     checking: "WhatsApp tê amadekirin …",
     installTitle: "Carekê saz bike: pêveka «Star Style – WhatsApp im System»",

@@ -13,7 +13,14 @@ const ON_KEY = "ss-wa-on"; // nach dem ersten Öffnen lädt WhatsApp bei jedem S
  * Braucht die Chrome-Erweiterung „Star Style – WhatsApp im System“ (src/lib/wa-extension.ts); ohne sie: Anleitung + Download,
  * auf dem Handy: Hinweis auf die App (?to=<Nummer> öffnet dort den Chat in der App).
  */
-export function WaDock({ t }: { t: Dict["waWeb"] }) {
+/** "1.0.10" ≥ "1.0.2"? */
+const atLeast = (v: string, min: string) => {
+  const a = v.split(".").map(Number), b = min.split(".").map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] ?? 0) - (b[i] ?? 0); if (d) return d > 0; }
+  return true;
+};
+
+export function WaDock({ t, canSend, minReadOnlyVersion }: { t: Dict["waWeb"]; canSend: boolean; minReadOnlyVersion: string }) {
   const path = usePathname();
   const sp = useSearchParams();
   const on = path === "/whatsapp";
@@ -24,6 +31,7 @@ export function WaDock({ t }: { t: Dict["waWeb"] }) {
   const [key, setKey] = useState(0);
   const frame = useRef<HTMLIFrameElement>(null);
   const lastTo = useRef<string | null>(null);
+  const readOnlyRef = useRef(!canSend);
 
   // Erweiterung da? (sie antwortet auf unserer Seite per postMessage) + Zahl ungelesener Chats aus dem Rahmen
   useEffect(() => {
@@ -52,7 +60,7 @@ export function WaDock({ t }: { t: Dict["waWeb"] }) {
 
   // Rahmen laden: beim ersten Öffnen von /whatsapp – danach (gemerkt) auch gleich beim Start
   useEffect(() => {
-    if (!ext || src) return;
+    if (!ext || src || (readOnlyRef.current && !atLeast(ext, minReadOnlyVersion))) return;
     let remembered = false;
     try { remembered = localStorage.getItem(ON_KEY) === "1"; } catch { /* ohne Speicher: erst beim Öffnen */ }
     if (on || remembered) {
@@ -71,7 +79,18 @@ export function WaDock({ t }: { t: Dict["waWeb"] }) {
     if (waDigits(to)) { setSrc(waWebUrl(to)); setKey((k) => k + 1); }
   }, [to, ext, phone, src]);
 
-  const visible = on && !!ext && !!src;
+  // Recht „WhatsApp schreiben“ fehlt → Erweiterung sperrt im Rahmen das Schreiben (alle 2 s, WhatsApp lädt sich auch selbst neu)
+  const readOnly = !canSend;
+  const tooOld = readOnly && typeof ext === "string" && !atLeast(ext, minReadOnlyVersion);
+  useEffect(() => {
+    if (!src) return;
+    const tell = () => { try { frame.current?.contentWindow?.postMessage({ ssWaReadOnly: readOnly }, WA_WEB_ORIGIN); } catch { /* lädt noch */ } };
+    tell();
+    const id = window.setInterval(tell, 2000);
+    return () => window.clearInterval(id);
+  }, [src, key, readOnly]);
+
+  const visible = on && !!ext && !!src && !tooOld;
   return (
     <>
       {on && ext === null && (
@@ -107,8 +126,15 @@ export function WaDock({ t }: { t: Dict["waWeb"] }) {
           <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-900">{t.safety} {t.otherBrowser}</p>
         </div>
       )}
+      {on && tooOld && (
+        <div className="card animate-rise flex flex-wrap items-center justify-between gap-4 p-6" data-wa-update>
+          <div><h2 className="font-bold">{t.updateTitle}</h2><p className="text-sm text-ink-soft">{t.updateHint.replace("{v}", minReadOnlyVersion)}</p></div>
+          <a href="/api/whatsapp/extension" className="btn-primary group bg-emerald-600 hover:bg-emerald-700" download><Icon name="download" className="h-4 w-4" />{t.download}</a>
+        </div>
+      )}
       {src && (
         <div className={visible ? "card animate-rise overflow-hidden p-0" : "hidden"} data-wa-dock>
+          {readOnly && <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900" data-wa-readonly>{t.readOnly}</p>}
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/5 px-4 py-2 text-xs text-ink-soft">
             <span className="min-w-0" dir="auto">{t.linkHint} · {t.stays}</span>
             <button type="button" className="btn-ghost group shrink-0 px-3 py-1.5 text-xs" onClick={() => { setSrc(waWebUrl(null)); setKey((k) => k + 1); }}>

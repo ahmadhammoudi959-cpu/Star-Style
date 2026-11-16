@@ -21,7 +21,7 @@ export async function mailFlagAction(raw: unknown): Promise<MailActionResult> {
 }
 
 export async function mailTrashAction(raw: unknown): Promise<MailActionResult> {
-  const s = await requirePerm("mail");
+  const s = await requirePerm("mail.delete");
   const p = Ref.safeParse(raw);
   if (!p.success) return { ok: false, error: "invalid" };
   try { await moveToTrash(p.data.f, p.data.u, s.uid); return { ok: true }; } catch (e) { return fail(e); }
@@ -31,7 +31,7 @@ const MAX_TOTAL = 20 * 1024 * 1024; // Hostinger: Anhänge bis 25 MB, Nachricht 
 
 /** Senden (FormData wegen Dateien): to, cc, subject, text, files[], mode (new|reply|all|fwd), f, u, withOriginal */
 export async function sendMailAction(fd: FormData): Promise<MailActionResult> {
-  const s = await requirePerm("mail");
+  const s = await requirePerm("mail.send");
   const to = parseAddressList(String(fd.get("to") ?? ""));
   const cc = parseAddressList(String(fd.get("cc") ?? ""));
   if (to.bad.length || cc.bad.length) return { ok: false, error: "address", detail: [...to.bad, ...cc.bad].join(", ").slice(0, 200) };
@@ -60,7 +60,7 @@ export async function sendMailAction(fd: FormData): Promise<MailActionResult> {
         attachments.push(...extra);
       }
     }
-    await sendFromMailbox({ to: to.ok, cc: cc.ok, subject: subject || replySubject(""), text, attachments, inReplyTo, references, answered }, s.uid);
+    await sendFromMailbox({ to: to.ok, cc: cc.ok, subject: subject || replySubject(""), text, attachments, inReplyTo, references, answered, withSignature: fd.get("withSignature") === "1" }, s.uid);
     return { ok: true };
   } catch (e) { return fail(e); }
 }

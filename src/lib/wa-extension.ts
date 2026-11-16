@@ -8,11 +8,14 @@
  *     das Dokument mit Sec-Fetch-Dest „document“ / Sec-Fetch-Site „none“ an (sonst liefert WhatsApp eine Fehlerseite).
  *     Jede andere Seite kann WhatsApp weiterhin nicht einbetten (Initiator ≠ unsere Adresse → Regel greift nicht).
  *  2. system.js (nur auf unserer Adresse, oberstes Fenster): meldet „Erweiterung da“ (Version) per postMessage – liest nichts.
- *  3. whatsapp.js (nur in WhatsApp-Rahmen, nicht im normalen WhatsApp-Tab): liest die Zahl ungelesener Chats aus dem
+ *  3. whatsapp.js (nur in WhatsApp-Rahmen, nicht im normalen WhatsApp-Tab): sperrt auf Wunsch des Systems das Schreiben
+ *     („nur lesen“ für Mitarbeiter ohne Recht „WhatsApp schreiben“, ab 1.0.2) und liest die Zahl ungelesener Chats aus dem
  *     Fenstertitel „(3) WhatsApp“ und schickt nur diese Zahl an unsere Adresse (postMessage mit festem Ziel).
  * Nachrichten, Kontakte, Sitzung: bleiben in WhatsApp Web im Chrome des Laptops, nichts geht an unseren Server.
  */
-export const WA_EXT_VERSION = "1.0.1";
+export const WA_EXT_VERSION = "1.0.2";
+/** ab dieser Version kann die Erweiterung „nur lesen“ (Mitarbeiter ohne Recht „WhatsApp schreiben“) */
+export const WA_EXT_READONLY_VERSION = "1.0.2";
 export const WA_EXT_FOLDER = "star-style-whatsapp";
 
 /** Nur ein schlichter Hostname (keine Muster, kein Port, kein Pfad) – sonst Fehler */
@@ -96,6 +99,20 @@ export function waExtensionFiles(rawHost: string, withIcons = false): Record<str
     "  };",
     "  send();",
     "  setInterval(send, 2000);",
+    "  // Nur lesen (Wunsch Inhaber 16.11.2026: Rechte lesen/schreiben getrennt): das System meldet { ssWaReadOnly: true }",
+    "  // → Eingabefeld, Senden, Weiterleiten, Reaktionen, Anhängen und Sprachnachricht im Rahmen gesperrt.",
+    "  let ro = false;",
+    "  const css = document.createElement(\"style\");",
+    "  css.textContent = \"footer, footer *, [data-icon='send'], [data-icon='forward'], [data-icon='forward-chat'], [data-icon='react'], [data-icon='emoji-input'], [data-icon='plus'], [data-icon='plus-rounded'], [data-icon='attach-menu-plus'], [data-icon='ptt'], [data-icon='mic-outlined'] { pointer-events: none !important; } footer { opacity: .35 !important; } [data-icon='send'], [data-icon='forward'], [data-icon='react'] { opacity: .3 !important; }\";",
+    "  const inFooter = (e) => e.target instanceof Element && !!e.target.closest(\"footer\");",
+    "  const stop = (e) => { if (ro && (e.type === \"drop\" || inFooter(e))) { e.stopImmediatePropagation(); e.preventDefault(); } };",
+    "  for (const ev of [\"keydown\", \"keypress\", \"beforeinput\", \"paste\", \"drop\", \"click\"]) window.addEventListener(ev, stop, true);",
+    "  window.addEventListener(\"message\", (e) => {",
+    "    if (e.origin !== target || !e.data || typeof e.data.ssWaReadOnly !== \"boolean\") return;",
+    "    ro = e.data.ssWaReadOnly;",
+    "    if (ro && !css.isConnected) (document.head || document.documentElement).appendChild(css);",
+    "    if (!ro && css.isConnected) css.remove();",
+    "  });",
     "})();",
     "",
   ].join("\n");

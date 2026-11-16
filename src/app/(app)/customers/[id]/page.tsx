@@ -56,7 +56,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
       <PageHeader title={c.name} subtitle={`${t.customer.number} ${c.number}`} back="/customers"
         actions={<>
           {can(session, "whatsapp") && c.phone && <Link href={`/whatsapp?${new URLSearchParams({ to: c.phone, customer: c.id })}`} className="btn-ghost group"><Icon name="chat" className="h-4 w-4 text-emerald-600" />{t.wa.writeTo}</Link>}
-          {can(session, "mail") && c.email && <Link href={`/mail/compose?to=${encodeURIComponent(c.email)}`} className="btn-ghost group"><Icon name="mail" className="h-4 w-4" />{t.mail.writeTo}</Link>}
+          {can(session, "mail.send") && c.email && <Link href={`/mail/compose?to=${encodeURIComponent(c.email)}`} className="btn-ghost group"><Icon name="mail" className="h-4 w-4" />{t.mail.writeTo}</Link>}
           {can(session, "sales.offers") && <Link href={`/sales/offers/new?customer=${c.id}`} className="btn-primary group"><Icon name="cart" className="h-4 w-4" />{t.sales.newOffer}</Link>}
         </>} />
       {saved && <div className="mb-4 flex animate-rise items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700"><Icon name="check" className="h-4 w-4" />{t.common.saved}</div>}

@@ -16,7 +16,8 @@ export default async function ComposePage({ searchParams }: { searchParams: Prom
   const s = await loadMailSettings();
   if (!mailboxReady(s)) redirect("/mail");
   const mode: "new" | "reply" | "all" | "fwd" = sp.mode === "reply" || sp.mode === "all" || sp.mode === "fwd" ? sp.mode : "new";
-  const sig = s.signature.trim() ? `\n\n${s.signature.trim()}\n` : "\n";
+  // Signatur mit Logo (HTML) kommt beim Senden dazu – dann keine Text-Signatur im Feld
+  const sig = !s.signatureHtml && s.signature.trim() ? `\n\n${s.signature.trim()}\n` : "\n";
   const toParam = (sp.to ?? "").trim().toLowerCase();
   const initial = {
     mode, f: sp.f ?? "", u: Number(sp.u) || 0, to: validEmail(toParam) ? toParam : "", cc: "", subject: (sp.subject ?? "").slice(0, 200), text: sig,
@@ -51,7 +52,7 @@ export default async function ComposePage({ searchParams }: { searchParams: Prom
     <div>
       <PageHeader title={title} subtitle={initial.refSubject || s.user} back={initial.f && initial.u ? `/mail?${new URLSearchParams({ f: initial.f, u: String(initial.u) })}` : "/mail"} />
       {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800 ring-1 ring-red-200">{(t.mail.errors as Record<string, string>)[error] ?? t.mail.errors.network}</p>}
-      <ComposeForm t={t} intl={intl} from={s.fromName ? `${s.fromName} <${s.user}>` : s.user} initial={initial} />
+      <ComposeForm t={t} intl={intl} from={s.fromName ? `${s.fromName} <${s.user}>` : s.user} initial={initial} signatureHtml={s.signatureHtml} />
     </div>
   );
 }

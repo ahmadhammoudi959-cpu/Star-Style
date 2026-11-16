@@ -85,7 +85,7 @@ export default async function MailPage({ searchParams }: { searchParams: Promise
       <PageHeader title={M.title} subtitle={current ? `${folderName(current)} · ${M.unreadN.replace("{n}", String(current.unseen))}` : M.subtitle}
         actions={<>
           <Link href={href({})} className="btn-ghost group" aria-label={M.refresh}><Icon name="refresh" className="h-4 w-4" /><span className="hidden sm:inline">{M.refresh}</span></Link>
-          <Link href="/mail/compose" className="btn-primary group"><Icon name="edit" className="h-4 w-4" />{M.compose}</Link>
+          {can(session, "mail.send") && <Link href="/mail/compose" className="btn-primary group"><Icon name="edit" className="h-4 w-4" />{M.compose}</Link>}
         </>} />
       {sp.sent === "1" && <Notice tone="ok" text={M.sentOk} />}
       {sp.trashed === "1" && <Notice tone="ok" text={M.trashedOk} />}
@@ -166,7 +166,7 @@ export default async function MailPage({ searchParams }: { searchParams: Promise
                       <Icon name="users" className="h-3.5 w-3.5" />{M.customer}: <span dir="auto">{customer.name}</span>
                     </Link>
                   )}
-                  <MailTools t={t} f={f} u={msg.uid} flagged={msg.flagged} trashHref={href({ u: 0 })} />
+                  <MailTools t={t} f={f} u={msg.uid} flagged={msg.flagged} trashHref={href({ u: 0 })} canSend={can(session, "mail.send")} canDelete={can(session, "mail.delete")} />
                 </div>
                 {msg.attachments.length > 0 && (
                   <ul className="flex flex-wrap gap-2 border-b border-black/5 px-5 py-3">
