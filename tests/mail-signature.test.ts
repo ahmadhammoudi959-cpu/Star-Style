@@ -76,3 +76,24 @@ describe("Rechte: E-Mail und WhatsApp lesen/schreiben getrennt", () => {
     expect(() => new Function(js)).not.toThrow();
   });
 });
+
+describe("Text der Beleg-E-Mails (selbst änderbar)", () => {
+  it("Standardtext mit Absendername statt Firmenname, Platzhalter gefüllt", async () => {
+    const { fillDocText } = await import("../src/lib/mail-rules");
+    expect(fillDocText("invoice", "", { doc: "Rechnung", number: "RE-2026-0004", due: "Zahlbar bis 30.11.2026.", sender: "Star Style" }))
+      .toBe("Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie unsere Rechnung RE-2026-0004. Zahlbar bis 30.11.2026.\n\nMit freundlichen Grüßen\nStar Style");
+    // Storno ohne Fälligkeit: kein Leerzeichen am Zeilenende
+    expect(fillDocText("invoice", "", { doc: "Stornorechnung", number: "ST-1", due: "", sender: "S" })).toContain("Stornorechnung ST-1.\n\n");
+    expect(fillDocText("offer", "Hallo,\n\nAngebot {number} bis {valid}. {due} {x}\n\n\n\n{sender}", { number: "AN-1", valid: "01.12.2026", sender: "Star Style" }))
+      .toBe("Hallo,\n\nAngebot AN-1 bis 01.12.2026. {due} {x}\n\nStar Style");
+    expect(parseMailSettings({ invoiceText: "x" }).invoiceText).toBe("x");
+    expect(parseMailSettings({}).offerText).toBe("");
+  });
+
+  it("Beleg-E-Mails nehmen Text und Absendername aus den E-Mail-Einstellungen", () => {
+    const src = readFileSync("src/app/(app)/sales/actions.ts", "utf8");
+    expect(src).toContain('fillDocText("invoice", ms?.invoiceText');
+    expect(src).toContain('fillDocText("offer", ms?.offerText');
+    expect(src).not.toMatch(/Mit freundlichen Grüßen\\n\$\{company/);
+  });
+});

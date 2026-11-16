@@ -840,6 +840,10 @@ const en: Dict = {
     },
   },
   mailSet: {
+    docTextsTitle: "Email text for invoices and quotes",
+    docTextsHint: "Appears above the signature when you email an invoice or a quote. The blue buttons insert fields the system fills in.",
+    invoiceText: "Invoice email", offerText: "Quote email", docTextReset: "Default text",
+    docKeys: { doc: "Document type (invoice/cancellation)", number: "Number", due: "Payable by …", valid: "Valid until (date)", sender: "Sender name" },
     signatureHtml: "Signature with logo (HTML)",
     signatureHtmlHint: "From Hostinger webmail: Settings → Signature → copy the source code and paste it here. Goes under every email from the system (invoices and offers too). Empty = only the text signature above.",
     signaturePreview: "Preview",

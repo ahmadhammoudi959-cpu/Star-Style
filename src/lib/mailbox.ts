@@ -14,7 +14,7 @@ import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { decrypt, encrypt } from "./crypto";
 import {
-  buildMailBodies, folderRole, mailboxReady, pageRange, parseMailSettings, ROLE_ORDER, SIGNATURE_HTML_MAX, validEmail, validHost, validPort,
+  buildMailBodies, DOC_TEXT_MAX, folderRole, mailboxReady, pageRange, parseMailSettings, ROLE_ORDER, SIGNATURE_HTML_MAX, validEmail, validHost, validPort,
   type FolderRole, type MailSettings,
 } from "./mail-rules";
 
@@ -40,7 +40,7 @@ export const mailboxConfigured = async () => { try { return mailboxReady(await l
 
 export type MailSettingsInput = {
   imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; user: string; password: string;
-  fromName: string; signature: string; signatureHtml?: string; disconnect?: boolean;
+  fromName: string; signature: string; signatureHtml?: string; invoiceText?: string; offerText?: string; disconnect?: boolean;
 };
 export type MailSettingsProblem = "imapHost" | "smtpHost" | "port" | "user" | "password";
 
@@ -61,16 +61,20 @@ export async function saveMailSettings(input: MailSettingsInput, userId?: string
     const password = input.disconnect ? "" : input.password ? encrypt(input.password.slice(0, 300)) : before.user === user ? before.password : "";
     if (!input.disconnect && !password) return { problem: "password" as const };
     const signatureHtml = input.signatureHtml === undefined ? before.signatureHtml : sanitizeSignatureHtml(input.signatureHtml);
-    const next = input.disconnect ? { fromName: before.fromName, signature: before.signature, signatureHtml: before.signatureHtml } : {
+    const docTexts = {
+      invoiceText: input.invoiceText === undefined ? before.invoiceText : input.invoiceText.replace(/\r\n?/g, "\n").slice(0, DOC_TEXT_MAX),
+      offerText: input.offerText === undefined ? before.offerText : input.offerText.replace(/\r\n?/g, "\n").slice(0, DOC_TEXT_MAX),
+    };
+    const next = input.disconnect ? { fromName: before.fromName, signature: before.signature, signatureHtml: before.signatureHtml, ...docTexts } : {
       imapHost, imapPort: input.imapPort, smtpHost, smtpPort: input.smtpPort, user, password,
-      fromName: input.fromName.trim().slice(0, 80), signature: input.signature.slice(0, 2000), signatureHtml,
+      fromName: input.fromName.trim().slice(0, 80), signature: input.signature.slice(0, 2000), signatureHtml, ...docTexts,
     };
     if (row) await tx.update(schema.companySettings).set({ mail: next }).where(eq(schema.companySettings.id, row.id));
     else await tx.insert(schema.companySettings).values({ id: "company", mail: next });
     const show = (s: Partial<MailSettings>) => ({ imapHost: s.imapHost, imapPort: s.imapPort, smtpHost: s.smtpHost, smtpPort: s.smtpPort, user: s.user, fromName: s.fromName, password: s.password ? "gesetzt" : "" });
     await tx.insert(schema.auditLog).values({
       entity: "settings", entityId: "mail", action: input.disconnect ? "disconnect" : "update", userId: userId ?? null,
-      before: show(before), after: { ...show(next as Partial<MailSettings>), passwordChanged: Boolean(input.password), signatureHtmlChanged: signatureHtml !== before.signatureHtml }, // nie das Passwort ins Protokoll
+      before: show(before), after: { ...show(next as Partial<MailSettings>), passwordChanged: Boolean(input.password), signatureHtmlChanged: signatureHtml !== before.signatureHtml, invoiceText: docTexts.invoiceText, offerText: docTexts.offerText }, // nie das Passwort ins Protokoll
     });
     forgetUnread();
     return { ok: true as const };

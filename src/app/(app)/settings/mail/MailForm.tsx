@@ -1,17 +1,48 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
 import { saveMailAction, testMailAction, type MailSaveResult } from "./actions";
 import { SignaturePreview } from "@/components/SignaturePreview";
+import { DEFAULT_DOC_TEXTS, DOC_TEXT_KEYS, DOC_TEXT_MAX } from "@/lib/mail-rules";
 
-type Initial = { imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; user: string; fromName: string; signature: string; signatureHtml: string; hasPassword: boolean };
+type Initial = { imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; user: string; fromName: string; signature: string; signatureHtml: string; invoiceText: string; offerText: string; hasPassword: boolean };
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
 
 /** Zugang zum Postfach: Adresse + App-Passwort (Hostinger), Server sind vorbelegt; „Speichern“ prüft gleich die Anmeldung */
 export function MailForm({ t, initial, ready }: { t: Dict; initial: Initial; ready: boolean }) {
   const M = t.mailSet;
-  const [v, setV] = useState({ ...initial, password: "" });
+  const [v, setV] = useState({ ...initial, password: "", invoiceText: initial.invoiceText || DEFAULT_DOC_TEXTS.invoice, offerText: initial.offerText || DEFAULT_DOC_TEXTS.offer });
+  const docRefs = { invoice: useRef<HTMLTextAreaElement>(null), offer: useRef<HTMLTextAreaElement>(null) };
+  /** Platzhalter an der Schreibmarke einfügen */
+  const insertKey = (kind: "invoice" | "offer", key: string) => {
+    const el = docRefs[kind].current, field = kind === "invoice" ? "invoiceText" : "offerText";
+    const cur = v[field], token = `{${key}}`;
+    const a = el?.selectionStart ?? cur.length, b = el?.selectionEnd ?? cur.length;
+    setV({ ...v, [field]: (cur.slice(0, a) + token + cur.slice(b)).slice(0, DOC_TEXT_MAX) });
+    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(a + token.length, a + token.length); });
+  };
+  const docText = (kind: "invoice" | "offer") => {
+    const field = kind === "invoice" ? "invoiceText" : "offerText";
+    return (
+      <div className="col-span-2 md:col-span-1 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor={`m-${field}`} className="block text-xs font-bold text-ink-soft">{kind === "invoice" ? M.invoiceText : M.offerText}</label>
+          {v[field] !== DEFAULT_DOC_TEXTS[kind] && (
+            <button type="button" className="text-[0.6875rem] font-semibold text-brand-700 hover:underline" onClick={() => setV({ ...v, [field]: DEFAULT_DOC_TEXTS[kind] })}>↺ {M.docTextReset}</button>
+          )}
+        </div>
+        <textarea id={`m-${field}`} ref={docRefs[kind]} value={v[field]} onChange={(e) => setV({ ...v, [field]: e.target.value })} rows={7} dir="ltr" className="input text-sm" maxLength={DOC_TEXT_MAX} />
+        <div className="flex flex-wrap gap-1.5">
+          {DOC_TEXT_KEYS[kind].map((k) => (
+            <button key={k} type="button" onClick={() => insertKey(kind, k)} className="rounded-full bg-brand-50 px-2.5 py-1 text-[0.6875rem] font-semibold text-brand-800 ring-1 ring-brand-100 hover:bg-brand-100" title={`{${k}}`}>
+              + {(M.docKeys as Record<string, string>)[k]}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
   const [busy, setBusy] = useState<"" | "save" | "test" | "off">("");
   const [msg, setMsg] = useState<{ tone: "ok" | "err" | "warn"; text: string } | null>(null);
   const [advanced, setAdvanced] = useState(false);
@@ -26,7 +57,7 @@ export function MailForm({ t, initial, ready }: { t: Dict; initial: Initial; rea
     setBusy(kind); setMsg(null);
     let r: MailSaveResult;
     try {
-      r = kind === "test" ? await testMailAction() : await saveMailAction({ ...v, disconnect: kind === "off" });
+      r = kind === "test" ? await testMailAction() : await saveMailAction({ ...v, invoiceText: v.invoiceText.trim() === DEFAULT_DOC_TEXTS.invoice ? "" : v.invoiceText, offerText: v.offerText.trim() === DEFAULT_DOC_TEXTS.offer ? "" : v.offerText, disconnect: kind === "off" });
     } catch { r = { ok: false, error: "error" }; }
     setBusy("");
     if (!r.ok) { setMsg({ tone: r.error.startsWith("saved_") ? "warn" : "err", text: errText(r) }); if (r.error.startsWith("saved_")) setV((x) => ({ ...x, password: "" })); return; }
@@ -76,6 +107,12 @@ export function MailForm({ t, initial, ready }: { t: Dict; initial: Initial; rea
             <p className="text-[0.6875rem] text-ink-soft">{M.signatureHtmlHint}</p>
             {v.signatureHtml.trim() && <><p className="text-xs font-bold text-ink-soft">{M.signaturePreview}</p><SignaturePreview html={v.signatureHtml} title={M.signaturePreview} /></>}
           </div>
+          <div className="col-span-2 border-t border-black/5 pt-4">
+            <h3 className="text-sm font-bold">{M.docTextsTitle}</h3>
+            <p className="text-[0.6875rem] text-ink-soft">{M.docTextsHint}</p>
+          </div>
+          {docText("invoice")}
+          {docText("offer")}
         </div>
         <details open={advanced} onToggle={(e) => setAdvanced((e.target as HTMLDetailsElement).open)} className="rounded-xl bg-slate-50 p-3 ring-1 ring-black/5">
           <summary className="cursor-pointer text-sm font-semibold text-ink-soft">{M.servers}</summary>

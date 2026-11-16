@@ -22,7 +22,7 @@ export default async function MailSettingsPage() {
       <PageHeader title={t.mailSet.title} subtitle={t.mailSet.subtitle} back="/settings" />
       <MailForm t={t} ready={mailboxReady(s)} initial={{
         imapHost: s.imapHost, imapPort: s.imapPort, smtpHost: s.smtpHost, smtpPort: s.smtpPort, user: s.user,
-        fromName: s.fromName || company?.name || "", signature: s.signature || (defaultSignature ? `--\n${defaultSignature}` : ""), hasPassword: Boolean(s.password), signatureHtml: s.signatureHtml,
+        fromName: s.fromName || company?.name || "", signature: s.signature || (defaultSignature ? `--\n${defaultSignature}` : ""), hasPassword: Boolean(s.password), signatureHtml: s.signatureHtml, invoiceText: s.invoiceText, offerText: s.offerText,
       }} />
     </div>
   );

@@ -5,6 +5,8 @@ import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { sendMail } from "@/lib/mail";
+import { loadMailSettings } from "@/lib/mailbox";
+import { fillDocText } from "@/lib/mail-rules";
 import { validatePlan } from "@/lib/payments";
 import { archivedInvoicePdf, offerPdf } from "@/lib/pdf";
 import { formatDate } from "@/lib/dates";
@@ -148,13 +150,16 @@ export async function emailDocAction(_: DocState, fd: FormData): Promise<DocStat
   const to = String(fd.get("to") ?? "").trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return { error: "required" };
   const company = await db.query.companySettings.findFirst();
+  const ms = await loadMailSettings().catch(() => null);
+  // Absender in Betreff und Gruß = Absendername aus E-Mail-Einstellungen (z. B. „Star Style“), sonst Firmenname
+  const sender = ms?.fromName.trim() || company?.name || "";
   try {
     if (kind === "offer") {
       const o = await db.query.offers.findFirst({ where: eq(schema.offers.id, id) });
       if (!o) return { error: "notFound" };
       await sendMail({
-        to, subject: `Angebot ${o.number} – ${company?.name ?? ""}`,
-        text: `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie unser Angebot ${o.number}. Es ist gültig bis ${formatDate(o.validUntil)}.\n\nMit freundlichen Grüßen\n${company?.name ?? ""}`,
+        to, subject: `Angebot ${o.number} – ${sender}`,
+        text: fillDocText("offer", ms?.offerText ?? "", { number: o.number, valid: formatDate(o.validUntil), sender }),
         attachments: [{ filename: `Angebot-${o.number}.pdf`, content: Buffer.from(await offerPdf(id)) }],
       });
       if (o.status === "DRAFT") await setOfferStatus(id, "SENT", "", s.uid);
@@ -163,8 +168,11 @@ export async function emailDocAction(_: DocState, fd: FormData): Promise<DocStat
       if (!inv?.number) return { error: "notFound" };
       const label = inv.kind === "CANCELLATION" ? "Stornorechnung" : "Rechnung";
       await sendMail({
-        to, subject: `${label} ${inv.number} – ${company?.name ?? ""}`,
-        text: `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie unsere ${label} ${inv.number}.${inv.dueDate && inv.kind === "INVOICE" ? ` Zahlbar bis ${formatDate(inv.dueDate)}.` : ""}\n\nMit freundlichen Grüßen\n${company?.name ?? ""}`,
+        to, subject: `${label} ${inv.number} – ${sender}`,
+        text: fillDocText("invoice", ms?.invoiceText ?? "", {
+          doc: label, number: inv.number, sender,
+          due: inv.dueDate && inv.kind === "INVOICE" ? `Zahlbar bis ${formatDate(inv.dueDate)}.` : "",
+        }),
         attachments: [{ filename: `${label}-${inv.number}.pdf`, content: Buffer.from(await archivedInvoicePdf(id)) }],
       });
       await db.update(schema.invoices).set({ sentAt: new Date() }).where(eq(schema.invoices.id, id));

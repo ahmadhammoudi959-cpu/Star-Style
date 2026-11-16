@@ -10,8 +10,29 @@ export type MailSettings = {
   fromName: string; signature: string;
   /** Signatur mit Logo (HTML, z. B. aus dem Hostinger-Webmail kopiert) – beim Speichern bereinigt (sanitizeSignatureHtml) */
   signatureHtml: string;
+  /** Text der E-Mail zu Rechnung/Angebot (Wunsch Inhaber 16.11.2026: selbst ändern); leer = Standardtext */
+  invoiceText: string; offerText: string;
 };
 export const SIGNATURE_HTML_MAX = 20_000;
+export const DOC_TEXT_MAX = 3000;
+
+/** Standardtexte der Beleg-E-Mails – Platzhalter {doc} {number} {due} {valid} {sender} */
+export const DEFAULT_DOC_TEXTS = {
+  invoice: "Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie unsere {doc} {number}. {due}\n\nMit freundlichen Grüßen\n{sender}",
+  offer: "Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie unser Angebot {number}. Es ist gültig bis {valid}.\n\nMit freundlichen Grüßen\n{sender}",
+} as const;
+export const DOC_TEXT_KEYS = { invoice: ["doc", "number", "due", "sender"], offer: ["number", "valid", "sender"] } as const;
+
+/** Platzhalter füllen (nur bekannte), Leerzeichen am Zeilenende weg, höchstens 2 Leerzeilen hintereinander */
+export function fillDocText(kind: "invoice" | "offer", template: string, vars: Record<string, string>): string {
+  const tpl = template.trim() ? template : DEFAULT_DOC_TEXTS[kind];
+  const keys: readonly string[] = DOC_TEXT_KEYS[kind];
+  return tpl
+    .replace(/\{(\w+)\}/g, (m, k: string) => (keys.includes(k) ? (vars[k] ?? "") : m))
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 /** Hostinger (hPanel → E-Mails → Connect apps & devices, 16.11.2026): IMAP 993 und SMTP 465, beide SSL/TLS */
 export const MAIL_DEFAULTS = { imapHost: "imap.hostinger.com", imapPort: 993, smtpHost: "smtp.hostinger.com", smtpPort: 465 } as const;
@@ -34,6 +55,8 @@ export function parseMailSettings(raw: unknown, fallbackUser = ""): MailSettings
     user: str("user").toLowerCase() || fallbackUser.trim().toLowerCase(), password: typeof o.password === "string" ? o.password : "",
     fromName: str("fromName", 80), signature: typeof o.signature === "string" ? o.signature.slice(0, 2000) : "",
     signatureHtml: typeof o.signatureHtml === "string" ? o.signatureHtml.slice(0, SIGNATURE_HTML_MAX) : "",
+    invoiceText: typeof o.invoiceText === "string" ? o.invoiceText.slice(0, DOC_TEXT_MAX) : "",
+    offerText: typeof o.offerText === "string" ? o.offerText.slice(0, DOC_TEXT_MAX) : "",
   };
 }
 

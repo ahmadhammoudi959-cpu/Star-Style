@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { loadMailSettings } from "@/lib/mailbox";
 import { requirePerm, can } from "@/lib/auth";
 import { createAndStorePackage } from "@/lib/advisor";
 import { lockMonth, unlockMonth } from "@/lib/periods";
@@ -38,11 +39,12 @@ export async function sendPackageAction(_: { error?: string; ok?: boolean } | un
   const f = await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, fileId) });
   if (!f) return { error: "error" };
   const company = await db.query.companySettings.findFirst();
+  const sender = (await loadMailSettings().catch(() => null))?.fromName.trim() || company?.name || "";
   const month = f.name.match(/\d{4}-\d{2}/)?.[0] ?? "";
   try {
     await sendMail({
-      to, subject: `Buchhaltungsunterlagen ${month} – ${company?.name ?? ""}`,
-      text: `Guten Tag,\n\nanbei die Unterlagen für ${month}: DATEV-Buchungsstapel, Debitoren/Kreditoren, Ausgangsrechnungen, Belege der Ausgaben und eine Monatsübersicht.\n\nMit freundlichen Grüßen\n${company?.name ?? ""}`,
+      to, subject: `Buchhaltungsunterlagen ${month} – ${sender}`,
+      text: `Guten Tag,\n\nanbei die Unterlagen für ${month}: DATEV-Buchungsstapel, Debitoren/Kreditoren, Ausgangsrechnungen, Belege der Ausgaben und eine Monatsübersicht.\n\nMit freundlichen Grüßen\n${sender}`,
       attachments: [{ filename: f.name, content: Buffer.from(f.data) }],
     });
     if (company && company.advisorEmail !== to) await db.update(schema.companySettings).set({ advisorEmail: to }).where(eq(schema.companySettings.id, company.id));

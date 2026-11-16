@@ -839,6 +839,10 @@ const de = {
     },
   },
   mailSet: {
+    docTextsTitle: "Text der E-Mail zu Rechnung und Angebot",
+    docTextsHint: "Steht über der Signatur, wenn du eine Rechnung oder ein Angebot per E-Mail schickst. Die blauen Knöpfe setzen Felder ein, die das System selbst ausfüllt.",
+    invoiceText: "E-Mail zur Rechnung", offerText: "E-Mail zum Angebot", docTextReset: "Standardtext",
+    docKeys: { doc: "Belegart (Rechnung/Storno)", number: "Nummer", due: "Zahlbar bis …", valid: "Gültig bis (Datum)", sender: "Absendername" },
     signatureHtml: "Signatur mit Logo (HTML)",
     signatureHtmlHint: "Aus dem Hostinger-Webmail: Einstellungen → Unterschrift → Quellcode kopieren und hier einfügen. Steht unter jeder E-Mail aus dem System (auch Rechnungen und Angebote). Leer = nur die Text-Signatur oben.",
     signaturePreview: "Vorschau",

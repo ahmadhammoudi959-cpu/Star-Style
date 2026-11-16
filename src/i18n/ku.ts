@@ -1772,6 +1772,10 @@ const ku: Dict = {
     },
   },
   mailSet: {
+    docTextsTitle: "Nivîsa e-nameyê bi fatûre û pêşniyarê re",
+    docTextsHint: "Dema tu fatûreyek an pêşniyarekê bi e-nameyê dişînî, li ser îmzeyê xuya dike. Bişkokên şîn qadan dixin ku sîstem bi xwe tije dike.",
+    invoiceText: "E-nameya fatûreyê", offerText: "E-nameya pêşniyarê", docTextReset: "Nivîsa standard",
+    docKeys: { doc: "Cureyê belgeyê (fatûre/betalkirin)", number: "Hejmar", due: "Dawiya dayînê", valid: "Derbasdar heta (dîrok)", sender: "Navê şandiyar" },
     signatureHtml: "Îmze bi logo (HTML)",
     signatureHtmlHint: "Ji Hostinger Webmail: Mîheng → Îmze → koda çavkaniyê kopî bike û li vir bixe. Di binê her e-nameyekê ya sîstemê de ye (fatûre û pêşniyar jî). Vala = tenê îmzeya nivîsê ya jorîn.",
     signaturePreview: "Pêşdîtin",
