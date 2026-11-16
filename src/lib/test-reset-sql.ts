@@ -54,7 +54,8 @@ export const PREVIEW_SQL = `
     (select coalesce(json_agg(s.name order by s.name), '[]'::json) from suppliers s where s.id in (select id from ds)) as suppliers,
     (select coalesce(json_agg(n order by n), '[]'::json) from (
        select number as n from invoices where number is not null union all select number from offers
-       union all select number from payments union all select number from goods_receipts union all select number from write_offs) d) as numbers,
+       union all select number from payments union all select number from goods_receipts union all select number from write_offs
+       union all select number from returns) d) as numbers,
     md5(concat_ws('#',
       's:' || coalesce((select string_agg(id, ',' order by id) from ds), ''),
       'c:' || coalesce((select string_agg(id, ',' order by id) from customers), ''),
@@ -64,6 +65,7 @@ export const PREVIEW_SQL = `
       'g:' || coalesce((select string_agg(id, ',' order by id) from goods_receipts), ''),
       'w:' || coalesce((select string_agg(id, ',' order by id) from write_offs), ''),
       'e:' || coalesce((select string_agg(id, ',' order by id) from expenses), ''),
+      'r:' || coalesce((select string_agg(id, ',' order by id) from returns), ''),
       'x:' || coalesce((select string_agg(id, ',' order by id) from advisor_exports), ''),
       'v:' || coalesce((select string_agg(id || ':' || stock_qty::text, ',' order by id) from variants where stock_qty <> 0), ''),
       'n:' || coalesce((select string_agg(kind::text || '-' || year::text || ':' || next::text, ',' order by kind, year) from number_sequences), '')
@@ -85,6 +87,7 @@ export const RESET_STATEMENTS: string[] = [
      union select label_file_id from shipments where label_file_id is not null`,
   // kein Shop läuft (geprüft); beim Einschalten gleicht der Abgleich ohnehin alle Bestände ab
   `delete from stock_dirty`,
+  `delete from returns`, // Retouren (+ Positionen) verweisen auf Rechnungen und Kunden
   `delete from payments`,
   `delete from shipments`, // Sendungen mit Sendungsnummern gehören zu den Rechnungen
   `delete from invoices`, // + Positionen, Raten, Mahnungen (Kaskade)

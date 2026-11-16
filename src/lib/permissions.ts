@@ -12,8 +12,10 @@ export const PERMISSION_GROUPS = {
   stock: ["stock.receive", "stock.count", "stock.writeoff"],
   sales: [
     "customers", "customers.reseller", "customers.credit", "customers.export", "sales.view", "sales.offers", "sales.invoices", "sales.discount",
-    "sales.correct", "sales.delivery", "sales.shipping", "sales.email",
+    "sales.correct", "sales.delivery", "sales.shipping", "sales.email", "sales.returns",
   ],
+  // Kommunikation (Wunsch Inhaber 16.11.2026): Postfach info@ und WhatsApp im System
+  contact: ["mail", "whatsapp"],
   money: ["payments.record", "payments.cancel", "payments.plans", "receivables", "customers.statement", "expenses.view", "expenses.edit"],
   accounting: ["reports.view", "reports.export", "reports.lock"],
   system: ["shops.view", "shops.manage", "design", "settings"],
@@ -34,7 +36,7 @@ export const IMPLIES: Partial<Record<Perm, Perm[]>> = {
   "customers.reseller": ["customers"], "customers.credit": ["customers"], "customers.statement": ["customers"], "customers.export": ["customers"],
   "sales.offers": ["sales.view", "customers", "products.view"], "sales.invoices": ["sales.view", "customers", "products.view"],
   "sales.discount": ["sales.view"], "sales.correct": ["sales.view"], "sales.delivery": ["sales.view"],
-  "sales.shipping": ["sales.view"], "sales.email": ["sales.view"],
+  "sales.shipping": ["sales.view"], "sales.email": ["sales.view"], "sales.returns": ["sales.view"],
   "payments.record": ["sales.view"], "payments.cancel": ["sales.view"], "payments.plans": ["sales.view"], receivables: ["sales.view"],
   "expenses.edit": ["expenses.view"],
   "reports.export": ["reports.view"], "reports.lock": ["reports.export"],
@@ -55,11 +57,12 @@ export const normalizePerms = (raw: unknown): Perm[] => { const s = effectivePer
 
 /** Vorlagen zum schnellen Vorbelegen (danach frei änderbar) – Vorschlag aus der Besprechung 12.11.2026 */
 export const PRESETS: Record<"sales" | "warehouse" | "teamLead" | "accountant", Perm[]> = {
-  sales: ["products.view", "customers", "customers.statement", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "sales.email"],
-  warehouse: ["products.view", "stock.count", "stock.writeoff", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "insights"],
+  sales: ["products.view", "customers", "customers.statement", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "sales.email", "sales.returns", "whatsapp"],
+  warehouse: ["products.view", "stock.count", "stock.writeoff", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "sales.returns", "insights"],
   teamLead: [
     "products.view", "products.edit", "suppliers", "stock.receive", "stock.count", "stock.writeoff", "customers", "customers.reseller", "customers.statement",
-    "sales.offers", "sales.invoices", "sales.discount", "sales.correct", "sales.delivery", "sales.shipping", "sales.email", "insights", "shops.view",
+    "sales.offers", "sales.invoices", "sales.discount", "sales.correct", "sales.delivery", "sales.shipping", "sales.email", "sales.returns", "insights", "shops.view",
+    "mail", "whatsapp",
   ],
   accountant: ["reports.view", "reports.export"],
 };
@@ -96,6 +99,8 @@ export const ROUTES: [RegExp, Need][] = [
   [R("/sales/invoices/new"), { any: ["sales.invoices"] }],
   [R("/sales/offers/new"), { any: ["sales.offers"] }],
   [R("/sales"), { any: ["sales.view"] }],
+  [R("/returns/new"), { any: ["sales.returns"] }],
+  [R("/returns"), { any: ["sales.view"] }],
   [R("/receivables"), { any: ["receivables"] }],
   [R("/expenses/new"), { any: ["expenses.edit"] }],
   [R("/expenses"), { any: ["expenses.view"] }],
@@ -106,6 +111,11 @@ export const ROUTES: [RegExp, Need][] = [
   [R("/shops/[^/]+/mapping"), { any: ["shops.manage"] }],
   [R("/shops"), { any: ["shops.view"] }],
   [R("/design"), { any: ["design"] }],
+  [R("/mail"), { any: ["mail"] }],
+  [R("/api/mail"), { any: ["mail"] }],
+  [R("/whatsapp"), { any: ["whatsapp"] }],
+  // /api/whatsapp/webhook (Meta) läuft an der Middleware vorbei und prüft selbst die Signatur
+  [R("/api/whatsapp"), { any: ["whatsapp"] }],
   // Kundenliste als Excel (alle E-Mails auf einmal) – eigenes Recht, nicht schon mit „Kunden“
   [R("/api/customers/export"), { any: ["customers.export"] }],
   [R("/api/pdf/design-preview"), { any: ["design"] }],

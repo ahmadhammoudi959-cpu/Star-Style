@@ -147,12 +147,20 @@ export async function receiveGoodsTx(tx: Tx, input: ReceiptInput, userId?: strin
 
 type WriteOffReason = (typeof schema.writeOffReason.enumValues)[number];
 
-export async function bookWriteOff(input: {
+export type WriteOffInput = {
   date: string; reason: WriteOffReason; note?: string; photoFileId?: string | null;
   lines: { variantId: string; qty: number; batchId?: string | null }[];
-}, userId?: string) {
+};
+
+export async function bookWriteOff(input: WriteOffInput, userId?: string) {
   if (!input.lines.length) throw new StockError("INVALID", "lines");
-  return db.transaction(async (tx) => {
+  return db.transaction((tx) => bookWriteOffTx(tx, input, userId));
+}
+
+/** Verlust in einer laufenden Transaktion (z. B. beschädigte Ware aus einer Retoure) */
+export async function bookWriteOffTx(tx: Tx, input: WriteOffInput, userId?: string) {
+  if (!input.lines.length) throw new StockError("INVALID", "lines");
+  {
     const number = await nextNumber(tx, "WRITE_OFF", Number(input.date.slice(0, 4)));
     const [wo] = await tx.insert(schema.writeOffs).values({
       number, date: input.date, reason: input.reason, note: input.note ?? "", photoFileId: input.photoFileId ?? null,
@@ -170,7 +178,7 @@ export async function bookWriteOff(input: {
     }
     await audit(tx, { entity: "write_off", entityId: wo.id, action: "create", after: input, userId });
     return wo;
-  });
+  }
 }
 
 /** Inventur: setzt den Bestand auf die gezählte Menge. */

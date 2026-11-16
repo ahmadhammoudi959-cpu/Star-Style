@@ -79,11 +79,15 @@ export async function collectMonth(month: string) {
       street: inv.custStreet, zip: inv.custZip, city: inv.custCity, country: inv.custCountry, email: inv.customer.email, phone: inv.customer.phone,
     });
     const acc = moneyAccount(m, p.method);
+    // Erstattung (Retoure) = Zahlung mit negativem Betrag → Geld geht raus: Haben auf dem Geldkonto (Storno davon: Soll)
+    const refund = p.amountCents < 0;
+    const amt = Math.abs(p.amountCents);
+    if (amt === 0) continue;
     if (p.date >= from && p.date <= to)
-      bookings.push({ amountCents: p.amountCents, side: "S", account: acc, contra: deb, date: p.date, ref1: inv.number ?? "", ref2: p.number, text: `Zahlung ${inv.custName}` });
+      bookings.push({ amountCents: amt, side: refund ? "H" : "S", account: acc, contra: deb, date: p.date, ref1: inv.number ?? "", ref2: p.number, text: `${refund ? "Erstattung" : "Zahlung"} ${inv.custName}` });
     const cd = p.cancelledAt ? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(p.cancelledAt) : null;
     if (cd && cd >= from && cd <= to)
-      bookings.push({ amountCents: p.amountCents, side: "H", account: acc, contra: deb, date: cd, ref1: inv.number ?? "", ref2: p.number, text: `Storno Zahlung ${inv.custName}` });
+      bookings.push({ amountCents: amt, side: refund ? "S" : "H", account: acc, contra: deb, date: cd, ref1: inv.number ?? "", ref2: p.number, text: `Storno ${refund ? "Erstattung" : "Zahlung"} ${inv.custName}` });
   }
 
   // 3) Ausgaben (Rechnung an Kreditor, Zahlung Kreditor an Geldkonto)

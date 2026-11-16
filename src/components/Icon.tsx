@@ -46,6 +46,14 @@ const PATHS = {
   phone: "M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 18h2",
   star: "M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z",
   chevronDown: "m6 9 6 6 6-6",
+  // Retoure (Ware zurück), Posteingang, Chat, Senden, Anhang, Antworten, Neu laden
+  undo: "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
+  inbox: "M22 12h-6l-2 3h-4l-2-3H2M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z",
+  chat: "M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z",
+  send: "M22 2 11 13M22 2l-7 20-4-9-9-4z",
+  clip: "M21.4 11.1 12.2 20.3a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5",
+  reply: "M9 17 4 12l5-5M20 18v-2a4 4 0 0 0-4-4H4",
+  refresh: "M21 12a9 9 0 1 1-2.6-6.4L21 8M21 3v5h-5",
 } as const;
 
 export type IconName = keyof typeof PATHS;

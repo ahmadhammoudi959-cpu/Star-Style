@@ -17,6 +17,7 @@ import { PaymentPanel } from "./PaymentPanel";
 import { ShippingPanel } from "./ShippingPanel";
 import { can, requireSession } from "@/lib/auth";
 import { canOpen, type Perm } from "@/lib/permissions";
+import { returnsOfInvoice } from "@/lib/returns";
 
 export default async function InvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ customer?: string; ship?: string }> }) {
   const { id } = await params;
@@ -41,11 +42,12 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const inv = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, id), with: { lines: true, customer: true, installments: true } });
   if (!inv) notFound();
   const lines = inv.lines.sort((a, b) => a.position - b.position);
-  const [replaces, cancels, cancelledBy, replacedBy] = await Promise.all([
+  const [replaces, cancels, cancelledBy, replacedBy, rets] = await Promise.all([
     inv.replacesInvoiceId ? db.query.invoices.findFirst({ where: eq(schema.invoices.id, inv.replacesInvoiceId) }) : null,
     inv.cancelsInvoiceId ? db.query.invoices.findFirst({ where: eq(schema.invoices.id, inv.cancelsInvoiceId) }) : null,
     db.query.invoices.findFirst({ where: eq(schema.invoices.cancelsInvoiceId, id) }),
     db.query.invoices.findFirst({ where: and(eq(schema.invoices.replacesInvoiceId, id), ne(schema.invoices.status, "DRAFT")) }),
+    returnsOfInvoice(id),
   ]);
   const title = inv.kind === "CANCELLATION" ? `Storno ${inv.number}` : inv.number ? `${t.sales.invoice} ${inv.number}` : `${t.sales.status.DRAFT}`;
 
@@ -122,11 +124,16 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             <p className="px-1 text-xs text-ink-soft">{t.sales.correctHint}</p>
             <InvoiceOp t={t} id={inv.id} op="cancel" label={t.sales.cancel} icon="trash" tone="btn-danger" confirmText={t.sales.cancelConfirm} />
           </>}
+          {/* Retoure: Kunde bringt Ware zurück (Shop-Bestellungen: Erstattung im Shop, der Abgleich bucht sie) */}
+          {inv.status === "ISSUED" && inv.kind === "INVOICE" && may("sales.returns") && (inv.externalOrderId
+            ? <p className="flex items-start gap-1.5 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-ink-soft ring-1 ring-black/5"><Icon name="undo" className="mt-0.5 h-3.5 w-3.5 shrink-0" />{t.ret.shopHint}</p>
+            : <Link href={`/returns/new?invoice=${inv.id}`} className="btn-ghost group w-full justify-start"><Icon name="undo" className="h-4 w-4" />{t.ret.new}</Link>)}
           <div className="space-y-1 pt-2 text-sm">
             {replaces && <Ref label={t.sales.replaces} id={replaces.id} n={replaces.number} />}
             {cancels && <Ref label={t.sales.cancellationOf} id={cancels.id} n={cancels.number} />}
             {cancelledBy && <Ref label="Storno" id={cancelledBy.id} n={cancelledBy.number} />}
             {replacedBy && <Ref label={t.sales.replacedBy} id={replacedBy.id} n={replacedBy.number} />}
+            {rets.map((r) => <Ref key={r.id} label={t.ret.one} id={r.id} n={r.number} href={`/returns/${r.id}`} />)}
             {canOpen(session, `/customers/${inv.customerId}`) && <Ref label={t.sales.customer} id={inv.customerId} n={inv.custName} href={`/customers/${inv.customerId}`} />}
           </div>
         </aside>

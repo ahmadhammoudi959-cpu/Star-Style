@@ -43,6 +43,38 @@ export async function recordPayment(p: Parameters<typeof recordPaymentTx>[1]) {
   return db.transaction((tx) => recordPaymentTx(tx, p));
 }
 
+/** Guthaben des Kunden auf einer Rechnung: bezahlt − Rechnungsbetrag (ganz stornierte Rechnung: alles Bezahlte) */
+export function creditOf(inv: { status: string; grossCents: number; payments: { amountCents: number; cancelledAt?: Date | string | null }[] }) {
+  const paid = inv.payments.filter((x) => !x.cancelledAt).reduce((s, x) => s + x.amountCents, 0);
+  return Math.max(paid - (inv.status === "CANCELLED" ? 0 : inv.grossCents), 0);
+}
+
+/**
+ * Erstattung an den Kunden (Retoure, Überzahlung; Wunsch Inhaber 16.11.2026): eine Zahlung mit NEGATIVEM Betrag.
+ * So stimmen Zahlungsstand, Kundenkonto, offene Posten und DATEV (Haben auf dem Geldkonto) ohne Sonderfälle.
+ * Höchstens das Guthaben des Kunden auf dieser Rechnung. Eigene Nummer aus dem Zahlungskreis (QU-), nie löschen, nur stornieren.
+ */
+export async function recordRefundTx(tx: Tx, p: { invoiceId: string; date: string; amountCents: number; method: Method; note?: string; userId?: string }) {
+  if (!Number.isInteger(p.amountCents) || p.amountCents <= 0) throw new PaymentError("amountInvalid");
+  await tx.execute(sql`select id from invoices where id = ${p.invoiceId} for update`);
+  const inv = await tx.query.invoices.findFirst({ where: eq(schema.invoices.id, p.invoiceId), with: { payments: true } });
+  if (!inv) throw new PaymentError("notFound");
+  if (inv.kind !== "INVOICE" || inv.status === "DRAFT") throw new PaymentError("notPayable");
+  try { await assertOpen(tx, p.date); } catch { throw new PaymentError("periodLocked"); }
+  const credit = creditOf(inv);
+  if (p.amountCents > credit) throw new PaymentError("refundTooHigh", String(credit));
+  const number = await nextNumber(tx, "PAYMENT", Number(p.date.slice(0, 4)));
+  const [row] = await tx.insert(schema.payments).values({
+    number, invoiceId: p.invoiceId, date: p.date, amountCents: -p.amountCents, method: p.method, note: p.note?.trim() || "Erstattung",
+  }).returning();
+  await audit(tx, { entity: "payment", entityId: row.id, action: "refund", after: row, userId: p.userId });
+  return row;
+}
+
+export async function recordRefund(p: Parameters<typeof recordRefundTx>[1]) {
+  return db.transaction((tx) => recordRefundTx(tx, p));
+}
+
 export async function cancelPayment(paymentId: string, reason: string, userId?: string) {
   if (reason.trim().length < 2) throw new PaymentError("reason");
   await db.transaction(async (tx) => {

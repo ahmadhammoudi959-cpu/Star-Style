@@ -5,7 +5,7 @@ import { formatCents } from "@/lib/money";
 import { formatDate, todayIso } from "@/lib/dates";
 import { paymentState, trafficLight } from "@/lib/payment-status";
 import type { Dict } from "@/i18n/de";
-import { AddPayment, CancelPayment, DunningButton, PlanForm } from "./PaymentForms";
+import { AddPayment, CancelPayment, DunningButton, PlanForm, RefundForm } from "./PaymentForms";
 import { can, getAuth } from "@/lib/auth";
 import type { Perm } from "@/lib/permissions";
 
@@ -75,12 +75,13 @@ export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: stri
                     <div className="flex items-center gap-3">
                       <span className="num font-bold" dir="ltr">{p.number}</span>
                       <span className="text-ink-soft">{formatDate(p.date, intl)} · {t.pay.methods[p.method]}</span>
+                      {p.amountCents < 0 && <span className="badge bg-violet-100 text-violet-800">{t.pay.refund}</span>}
                       {p.movedFromInvoiceId && <span className="badge bg-slate-100 text-slate-600">{t.pay.sinceMoved}</span>}
                       {p.cancelledAt && <span className="badge bg-red-100 text-red-700">{t.pay.cancelled}</span>}
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={`num font-bold ${p.cancelledAt ? "line-through" : ""}`}>{formatCents(p.amountCents, intl)}</span>
-                      <a href={`/api/pdf/receipt/${p.id}`} target="_blank" className="text-xs font-semibold text-brand-700 hover:underline">{t.pay.receipt}</a>
+                      <a href={`/api/pdf/receipt/${p.id}`} target="_blank" className="text-xs font-semibold text-brand-700 hover:underline">{p.amountCents < 0 ? t.pay.refundReceipt : t.pay.receipt}</a>
                       {!p.cancelledAt && may("payments.cancel") && <CancelPayment t={t} invoiceId={inv.id} paymentId={p.id} />}
                     </div>
                   </div>
@@ -108,8 +109,25 @@ export async function PaymentPanel({ t, intl, invoiceId }: { t: Dict; intl: stri
         )}
       </div>
 
+      {/* Guthaben (Überzahlung, Retoure „als Guthaben“) – auch bei einer ganz stornierten Rechnung */}
+      {cancelled && st.openCents < 0 && may("payments.record") && (
+        <aside className="h-fit space-y-4">
+          <div className="card animate-rise space-y-2 p-5">
+            <h3 className="font-bold">{t.pay.refundTitle}</h3>
+            <p className="text-xs text-ink-soft">{t.pay.refundHint.replace("{amount}", formatCents(-st.openCents, intl))}</p>
+            <RefundForm t={t} invoiceId={inv.id} creditCents={-st.openCents} today={today} />
+          </div>
+        </aside>
+      )}
       {!cancelled && (
         <aside className="h-fit space-y-4">
+          {st.openCents < 0 && may("payments.record") && (
+            <div className="card animate-rise space-y-2 p-5">
+              <h3 className="font-bold">{t.pay.refundTitle}</h3>
+              <p className="text-xs text-ink-soft">{t.pay.refundHint.replace("{amount}", formatCents(-st.openCents, intl))}</p>
+              <RefundForm t={t} invoiceId={inv.id} creditCents={-st.openCents} today={today} />
+            </div>
+          )}
           {st.openCents > 0 && may("payments.record") && (
             <div className="card animate-rise space-y-2 p-5">
               <h3 className="font-bold">{t.pay.add}</h3>

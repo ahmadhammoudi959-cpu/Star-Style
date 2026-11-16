@@ -1,6 +1,6 @@
 "use client";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { addPaymentAction, cancelPaymentAction, dunningAction, savePlanAction } from "../../pay-actions";
+import { addPaymentAction, cancelPaymentAction, dunningAction, refundAction, savePlanAction } from "../../pay-actions";
 import { PlanEditor, fromPlanRows, planProblem, toPlanRows, type PlanPaid } from "../../PlanEditor";
 import { Icon } from "@/components/Icon";
 import { formatCents } from "@/lib/money";
@@ -9,7 +9,7 @@ import type { Dict } from "@/i18n/de";
 function Msg({ t, state }: { t: Dict; state: { error?: string; detail?: string; ok?: boolean } | undefined }) {
   if (!state?.error) return null;
   const m = (t.pay as Record<string, unknown>)[state.error] as string | undefined;
-  return <p className="text-xs font-semibold text-red-600">{m ?? t.common.error}{state.error === "overpay" && state.detail ? ` (${formatCents(Number(state.detail))})` : ""}</p>;
+  return <p className="text-xs font-semibold text-red-600">{m ?? t.common.error}{(state.error === "overpay" || state.error === "refundTooHigh") && state.detail ? ` (${formatCents(Number(state.detail))})` : ""}</p>;
 }
 
 const toInput = (c: number) => (c / 100).toFixed(2).replace(".", ",");
@@ -32,6 +32,28 @@ export function AddPayment({ t, invoiceId, suggestCents, today }: { t: Dict; inv
       </select>
       <input name="note" placeholder={t.common.note} className="input" />
       <button disabled={pending} className="btn-primary group w-full">{pending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name="euro" className="h-4 w-4" />}{t.pay.add}</button>
+      <Msg t={t} state={state} />
+    </form>
+  );
+}
+
+/** Guthaben auszahlen: bar, Überweisung oder Karte (negativer Betrag, Beleg „Erstattung“) */
+export function RefundForm({ t, invoiceId, creditCents, today }: { t: Dict; invoiceId: string; creditCents: number; today: string }) {
+  const [state, action, pending] = useActionState(refundAction, undefined);
+  const [amount, setAmount] = useState(toInput(creditCents));
+  useEffect(() => { setAmount(toInput(creditCents)); }, [creditCents]);
+  return (
+    <form action={action} className="space-y-2 rounded-xl bg-violet-50/70 p-3 ring-1 ring-violet-100">
+      <input type="hidden" name="invoiceId" value={invoiceId} />
+      <div className="grid grid-cols-2 gap-2">
+        <input name="amount" inputMode="decimal" dir="ltr" value={amount} onChange={(e) => setAmount(e.target.value)} className="input num" aria-label={t.pay.amount} required />
+        <input name="date" type="date" defaultValue={today} max={today} className="input" aria-label={t.common.date} required />
+      </div>
+      <select name="method" defaultValue="CASH" className="input" aria-label={t.pay.method}>
+        {(["CASH", "BANK", "CARD"] as const).map((m) => <option key={m} value={m}>{t.pay.methods[m]}</option>)}
+      </select>
+      <input name="note" placeholder={t.common.note} className="input" />
+      <button disabled={pending} className="btn group w-full bg-violet-600 text-white shadow-card hover:bg-violet-700">{pending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name="undo" className="h-4 w-4" />}{t.pay.refundDo}</button>
       <Msg t={t} state={state} />
     </form>
   );

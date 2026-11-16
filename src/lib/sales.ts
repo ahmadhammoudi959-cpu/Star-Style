@@ -198,7 +198,8 @@ export type InvoiceDraftInput = {
   externalOrderId?: string | null;
 };
 
-async function createDraft(tx: Tx, input: InvoiceDraftInput) {
+/** Rechnungsentwurf in einer laufenden Transaktion anlegen bzw. ändern (auch für Retouren: Korrektur mit Restmengen) */
+export async function createDraft(tx: Tx, input: InvoiceDraftInput) {
   validateLines(input.lines);
   const customer = await tx.query.customers.findFirst({ where: eq(schema.customers.id, input.customerId) });
   if (!customer) throw new SalesError("noCustomer");
@@ -263,8 +264,19 @@ export async function deleteDraft(id: string, userId?: string) {
  * Rechnung ausstellen: Nummer vergeben, Kundendaten einfrieren, Steuer neu bestimmen, Ware ausbuchen.
  * Ersetzt sie eine alte Rechnung, wird diese im selben Schritt storniert.
  */
-export async function issueInvoice(id: string, userId?: string, opts: { allowNegativeStock?: boolean } = {}) {
-  return db.transaction(async (tx) => {
+export async function issueInvoice(id: string, userId?: string, opts: IssueOpts = {}) {
+  return db.transaction((tx) => issueInvoiceTx(tx, id, userId, opts));
+}
+
+type IssueOpts = {
+  allowNegativeStock?: boolean;
+  /** zusätzlicher Text an den Lagerbewegungen des Stornos der ersetzten Rechnung (z. B. „Retoure RT-…“) */
+  cancelNote?: string;
+};
+
+/** Ausstellen innerhalb einer laufenden Transaktion (Retoure: Storno + neue Rechnung + Verlust + Erstattung in einem Schritt) */
+export async function issueInvoiceTx(tx: Tx, id: string, userId?: string, opts: IssueOpts = {}) {
+  {
     const locked = await tx.execute(sql`select id from invoices where id = ${id} for update`);
     if (!locked.rows.length) throw new SalesError("notFound");
     const inv = await tx.query.invoices.findFirst({ where: eq(schema.invoices.id, id), with: { lines: true, customer: true } });
@@ -276,7 +288,7 @@ export async function issueInvoice(id: string, userId?: string, opts: { allowNeg
 
     // Alte Rechnung zuerst stornieren (Ware kommt zurück), damit die neue sie wieder ausbuchen kann
     let cancellationId: string | null = null;
-    if (inv.replacesInvoiceId) cancellationId = await cancelInTx(tx, inv.replacesInvoiceId, userId, id);
+    if (inv.replacesInvoiceId) cancellationId = await cancelInTx(tx, inv.replacesInvoiceId, userId, id, { note: opts.cancelNote });
 
     // Steuer mit dem aktuellen Kundenstatus neu rechnen (z. B. USt-IdNr. inzwischen gültig)
     const lines = inv.lines.sort((a, b) => a.position - b.position);
@@ -338,11 +350,14 @@ export async function issueInvoice(id: string, userId?: string, opts: { allowNeg
     }
     await audit(tx, { entity: "invoice", entityId: id, action: "issue", after: { number, cancellationId }, userId });
     return { number, cancellationId };
-  });
+  }
 }
 
-/** Storno: Gegenbeleg mit negativen Beträgen, Ware zurück ins Lager zum ursprünglichen EK. */
-async function cancelInTx(tx: Tx, invoiceId: string, userId?: string, replacedById?: string) {
+/**
+ * Storno: Gegenbeleg mit negativen Beträgen, Ware zurück ins Lager zum ursprünglichen EK – mit Charge und MHD der
+ * verkauften Ware (seit 16.11.2026; vorher ohne MHD, dann fehlte zurückgenommene Ware bei „Läuft bald ab“/„Abgelaufen“).
+ */
+export async function cancelInTx(tx: Tx, invoiceId: string, userId?: string, replacedById?: string, opts: { note?: string } = {}) {
   await tx.execute(sql`select id from invoices where id = ${invoiceId} for update`);
   const inv = await tx.query.invoices.findFirst({ where: eq(schema.invoices.id, invoiceId), with: { lines: true } });
   if (!inv) throw new SalesError("notFound");
@@ -367,7 +382,11 @@ async function cancelInTx(tx: Tx, invoiceId: string, userId?: string, replacedBy
   const sold = await tx.select().from(schema.stockMovements)
     .where(and(eq(schema.stockMovements.refType, "invoice"), eq(schema.stockMovements.refId, inv.id), eq(schema.stockMovements.type, "SALE")));
   for (const m of sold) {
-    await addStock(tx, { variantId: m.variantId, qty: -m.qty, unitCostCents: m.unitCostCents, type: "CANCEL", refType: "invoice", refId: st.id, note: number, userId });
+    const b = m.batchId ? await tx.query.batches.findFirst({ where: eq(schema.batches.id, m.batchId), columns: { batchNo: true, expiryDate: true } }) : null;
+    await addStock(tx, {
+      variantId: m.variantId, qty: -m.qty, unitCostCents: m.unitCostCents, batchNo: b?.batchNo ?? "", expiryDate: b?.expiryDate ?? null,
+      type: "CANCEL", refType: "invoice", refId: st.id, note: opts.note ? `${number} · ${opts.note}` : number, userId,
+    });
   }
   await tx.update(schema.invoices).set({ status: "CANCELLED" }).where(eq(schema.invoices.id, inv.id));
   await audit(tx, { entity: "invoice", entityId: inv.id, action: "cancel", after: { cancellationId: st.id, replacedById }, userId });

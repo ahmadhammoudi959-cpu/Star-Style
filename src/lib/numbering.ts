@@ -8,6 +8,7 @@ const PREFIX = {
   RECEIPT: "WE",
   WRITE_OFF: "AB",
   PAYMENT: "QU",
+  RETURN: "RT", // Retoure (Warenrücknahme)
 } as const;
 export type DocKind = keyof typeof PREFIX;
 

@@ -12,7 +12,9 @@ const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull(
 const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
 
 // ───────────────────────── Enums ─────────────────────────
-export const docKind = pgEnum("doc_kind", ["OFFER", "INVOICE", "CANCELLATION", "RECEIPT", "WRITE_OFF", "PAYMENT"]);
+export const docKind = pgEnum("doc_kind", ["OFFER", "INVOICE", "CANCELLATION", "RECEIPT", "WRITE_OFF", "PAYMENT", "RETURN"]);
+/** Retoure je Position: zurück ins Lager (verkaufbar) oder beschädigt (→ Verlust) */
+export const returnCondition = pgEnum("return_condition", ["RESTOCK", "DAMAGED"]);
 export const customerType = pgEnum("customer_type", ["COMPANY", "PERSON"]);
 export const priceGroup = pgEnum("price_group", ["WHOLESALE", "RETAIL"]);
 export const vatIdStatus = pgEnum("vat_id_status", ["NONE", "PENDING", "VALID", "INVALID"]);
@@ -474,6 +476,42 @@ export const payments = pgTable("payments", {
   createdAt: createdAt(),
 });
 
+/**
+ * Retouren (Wunsch Inhaber 16.11.2026: „تسجيل المرتجعات“): Kunde gibt Ware einer ausgestellten Rechnung zurück.
+ * GoBD: die Rechnung bleibt unverändert – gebucht wird Storno (ST-) und bei einer Teilretoure eine neue Rechnung mit den
+ * behaltenen Mengen (wie „Bearbeiten“). Ware zurück ins Lager mit Charge/MHD wie verkauft; beschädigt → Verlust (AB-).
+ * Erstattung = Zahlung mit negativem Betrag auf der neuen (bzw. stornierten) Rechnung. Logik: src/lib/returns.ts.
+ */
+export const returns = pgTable("returns", {
+  id: id(),
+  number: text("number").notNull().unique(), // RT-2026-0001
+  date: date("date", { mode: "string" }).notNull(),
+  invoiceId: text("invoice_id").notNull().references(() => invoices.id), // zurückgegebene Rechnung (danach storniert)
+  cancellationId: text("cancellation_id").references(() => invoices.id), // Storno ST-
+  correctionId: text("correction_id").references(() => invoices.id), // neue Rechnung mit den behaltenen Mengen (Teilretoure)
+  customerId: text("customer_id").notNull().references(() => customers.id),
+  reason: text("reason").notNull().default("other"), // wrong | damaged | unwanted | quality | other
+  note: text("note").notNull().default(""),
+  creditCents: integer("credit_cents").notNull().default(0), // Gutschrift brutto: um so viel wird die Rechnung kleiner
+  refundCents: integer("refund_cents").notNull().default(0), // davon ausgezahlt
+  refundMethod: paymentMethod("refund_method"),
+  refundPaymentId: text("refund_payment_id"),
+  writeOffId: text("write_off_id"),
+  createdBy: text("created_by"),
+  createdAt: createdAt(),
+}, (t) => [index("return_invoice").on(t.invoiceId), index("return_customer").on(t.customerId), index("return_date").on(t.date)]);
+
+export const returnLines = pgTable("return_lines", {
+  id: id(),
+  returnId: text("return_id").notNull().references(() => returns.id, { onDelete: "cascade" }),
+  position: integer("position").notNull(),
+  invoiceLineId: text("invoice_line_id").notNull(), // Position der zurückgegebenen Rechnung
+  variantId: text("variant_id").references(() => variants.id),
+  description: text("description").notNull(),
+  qty: integer("qty").notNull(),
+  condition: returnCondition("condition").notNull().default("RESTOCK"),
+});
+
 /** Zahlungserinnerungen und Mahnungen */
 export const dunnings = pgTable("dunnings", {
   id: id(),
@@ -765,4 +803,13 @@ export const invoiceLinesRelations = relations(invoiceLines, ({ one }) => ({
   variant: one(variants, { fields: [invoiceLines.variantId], references: [variants.id] }),
 }));
 export const paymentsRelations = relations(payments, ({ one }) => ({ invoice: one(invoices, { fields: [payments.invoiceId], references: [invoices.id] }) }));
+export const returnsRelations = relations(returns, ({ one, many }) => ({
+  invoice: one(invoices, { fields: [returns.invoiceId], references: [invoices.id], relationName: "returnInvoice" }),
+  customer: one(customers, { fields: [returns.customerId], references: [customers.id] }),
+  lines: many(returnLines),
+}));
+export const returnLinesRelations = relations(returnLines, ({ one }) => ({
+  ret: one(returns, { fields: [returnLines.returnId], references: [returns.id] }),
+  variant: one(variants, { fields: [returnLines.variantId], references: [variants.id] }),
+}));
 export const installmentsRelations = relations(installments, ({ one }) => ({ invoice: one(invoices, { fields: [installments.invoiceId], references: [invoices.id] }) }));

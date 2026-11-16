@@ -883,6 +883,24 @@ export async function receiptPdf(paymentId: string) {
   const inv = p.invoice;
   const before = inv.payments.filter((x) => !x.cancelledAt && x.id !== p.id && (x.date < p.date || (x.date === p.date && x.number < p.number))).reduce((s, x) => s + x.amountCents, 0);
   const rest = inv.grossCents - before - p.amountCents;
+  if (p.amountCents < 0) {
+    // Erstattung an den Kunden (Retoure): Auszahlungsbeleg, bei Barauszahlung mit Unterschrift des Kunden.
+    // Ganz zurückgegeben (Rechnung storniert) → zu zahlen ist 0, alles Bezahlte war Guthaben.
+    const amt = formatCents(-p.amountCents);
+    const due = inv.status === "CANCELLED" ? 0 : inv.grossCents;
+    const left = due - before - p.amountCents;
+    return renderLetter({
+      title: p.cancelledAt ? `Erstattung ${p.number} – STORNIERT` : `Erstattung ${p.number}`,
+      head: { label: p.cancelledAt ? "Erstattung – storniert" : "Erstattung", number: p.number, date: formatDate(p.date) },
+      buyer: invBuyer(inv),
+      info: [["Beleg-Nr.", p.number], ["Datum", formatDate(p.date)], ["Zu Rechnung", inv.number ?? ""], ["Kundennr.", String(inv.customer.number)]],
+      paragraphs: [`Wir haben Ihnen am ${formatDate(p.date)} ${amt} (${METHOD_DE[p.method] ?? p.method}) erstattet – zur Rechnung ${inv.number} vom ${formatDate(inv.issueDate)}.`,
+        ...(p.note ? [p.note] : []), ...(p.cancelledAt ? [`Diese Erstattung wurde am ${formatDate(p.cancelledAt.toISOString().slice(0, 10))} storniert. Grund: ${p.cancelReason}`] : [])],
+      table: { head: ["", "Betrag"], widths: [120, 50], rows: [[inv.status === "CANCELLED" ? "Rechnungsbetrag (storniert)" : "Rechnungsbetrag", formatCents(due)], ["Vorher bezahlt", formatCents(before)], ["Erstattet", amt]] },
+      total: [left > 0 ? "Noch offen" : left < 0 ? "Restguthaben" : "Ausgeglichen", formatCents(Math.abs(left))],
+      signature: p.method === "CASH",
+    });
+  }
   return renderLetter({
     title: p.cancelledAt ? `Quittung ${p.number} – STORNIERT` : `Quittung ${p.number}`,
     head: { label: p.cancelledAt ? "Quittung – storniert" : "Quittung", number: p.number, date: formatDate(p.date) },

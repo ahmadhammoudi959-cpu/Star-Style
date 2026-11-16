@@ -44,7 +44,7 @@ export async function customerOpenBalances(): Promise<Map<string, number>> {
   return new Map(r.rows.map((x) => [String(x.customer_id), Number(x.open)]));
 }
 
-export type StatementRow = { date: string; kind: "invoice" | "cancellation" | "payment" | "payment_cancelled"; ref: string; refId: string; text: string; amountCents: number; balanceCents: number };
+export type StatementRow = { date: string; kind: "invoice" | "cancellation" | "payment" | "payment_cancelled" | "refund" | "refund_cancelled"; ref: string; refId: string; text: string; amountCents: number; balanceCents: number };
 
 /** Kontoauszug: Rechnungen (+), Stornos (−), Zahlungen (−), stornierte Zahlungen (+), mit laufendem Saldo. */
 export async function customerStatement(customerId: string): Promise<StatementRow[]> {
@@ -56,11 +56,13 @@ export async function customerStatement(customerId: string): Promise<StatementRo
   for (const i of invs) {
     events.push({ date: i.issueDate!, kind: i.kind === "CANCELLATION" ? "cancellation" : "invoice", ref: i.number!, refId: i.id, text: "", amountCents: i.grossCents });
     for (const p of i.payments) {
-      events.push({ date: p.date, kind: "payment", ref: p.number, refId: i.id, text: i.number!, amountCents: -p.amountCents });
-      if (p.cancelledAt) events.push({ date: p.cancelledAt.toISOString().slice(0, 10), kind: "payment_cancelled", ref: p.number, refId: i.id, text: p.cancelReason, amountCents: p.amountCents });
+      // Erstattung (negativer Betrag) belastet das Kundenkonto wieder (Guthaben ausgezahlt)
+      const refund = p.amountCents < 0;
+      events.push({ date: p.date, kind: refund ? "refund" : "payment", ref: p.number, refId: i.id, text: refund ? p.note || i.number! : i.number!, amountCents: -p.amountCents });
+      if (p.cancelledAt) events.push({ date: p.cancelledAt.toISOString().slice(0, 10), kind: refund ? "refund_cancelled" : "payment_cancelled", ref: p.number, refId: i.id, text: p.cancelReason, amountCents: p.amountCents });
     }
   }
-  const order = { invoice: 0, cancellation: 1, payment: 2, payment_cancelled: 3 };
+  const order = { invoice: 0, cancellation: 1, payment: 2, payment_cancelled: 3, refund: 4, refund_cancelled: 5 };
   events.sort((a, b) => a.date.localeCompare(b.date) || order[a.kind] - order[b.kind] || a.ref.localeCompare(b.ref));
   let bal = 0;
   return events.map((e) => ({ ...e, balanceCents: (bal += e.amountCents) }));

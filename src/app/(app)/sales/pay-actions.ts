@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requirePerm } from "@/lib/auth";
-import { cancelPayment, createDunning, PaymentError, recordPayment, setInstallments } from "@/lib/payments";
+import { cancelPayment, createDunning, PaymentError, recordPayment, recordRefund, setInstallments } from "@/lib/payments";
 import { parseMoney } from "@/lib/money";
 
 export type PayState = { error?: string; detail?: string; ok?: boolean } | undefined;
@@ -26,6 +26,18 @@ export async function addPaymentAction(_: PayState, fd: FormData): Promise<PaySt
   const amountCents = parseMoney(p.data.amount);
   if (amountCents == null || amountCents <= 0) return { error: "amountInvalid" };
   try { await recordPayment({ ...p.data, amountCents, userId: s.uid }); } catch (e) { return fail(e); }
+  return done(p.data.invoiceId);
+}
+
+/** Guthaben auszahlen (Überzahlung, Retoure „als Guthaben stehen lassen“) – Zahlung mit negativem Betrag */
+export async function refundAction(_: PayState, fd: FormData): Promise<PayState> {
+  const s = await requirePerm("payments.record");
+  const p = z.object({ invoiceId: z.string().min(1), date, amount: z.string(), method: z.enum(["CASH", "BANK", "CARD"]), note: z.string().max(500).default("") })
+    .safeParse(Object.fromEntries(fd));
+  if (!p.success) return { error: "required" };
+  const amountCents = parseMoney(p.data.amount);
+  if (amountCents == null || amountCents <= 0) return { error: "amountInvalid" };
+  try { await recordRefund({ ...p.data, note: p.data.note.trim() || "Erstattung Guthaben", amountCents, userId: s.uid }); } catch (e) { return fail(e); }
   return done(p.data.invoiceId);
 }
 
