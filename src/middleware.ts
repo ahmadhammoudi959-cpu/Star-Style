@@ -27,7 +27,8 @@ function contentSecurityPolicy(nonce: string) {
     "media-src 'self' blob:",
     "worker-src 'self' blob:",
     "manifest-src 'self'",
-    "frame-src 'self'",
+    // WhatsApp Web im Rahmen der Seite „WhatsApp“ (mit der Erweiterung, src/lib/wa-extension.ts)
+    "frame-src 'self' https://web.whatsapp.com",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

@@ -15,6 +15,15 @@ export type NavItem = {
 export function NavBadge({ src, className }: { src: string; className: string }) {
   const [n, setN] = useState(0);
   useEffect(() => {
+    // „event:<Name>“: Zahl kommt als Fenster-Ereignis (z. B. WhatsApp Web im Rahmen, WaDock) statt vom Server
+    if (src.startsWith("event:")) {
+      const name = src.slice(6);
+      const g = window as unknown as { __ssWaUnread?: number };
+      if (typeof g.__ssWaUnread === "number") setN(g.__ssWaUnread);
+      const on = (e: Event) => { const d = (e as CustomEvent).detail; if (typeof d === "number") setN(d); };
+      window.addEventListener(name, on);
+      return () => window.removeEventListener(name, on);
+    }
     let stop = false;
     const load = () => fetch(src, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => { if (!stop && j && typeof j.count === "number") setN(j.count); }).catch(() => {});
     load();

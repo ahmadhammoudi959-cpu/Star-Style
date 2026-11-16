@@ -6,7 +6,8 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" }, // keine Einbettung in fremde Seiten (Clickjacking)
   { key: "Referrer-Policy", value: "same-origin" },
-  { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), browsing-topics=()" },
+  // Kamera: Scanner; WhatsApp Web im Rahmen darf Mikrofon (Sprachnachricht), Kamera, Zwischenablage, Vollbild
+  { key: "Permissions-Policy", value: 'camera=(self "https://web.whatsapp.com"), microphone=(self "https://web.whatsapp.com"), clipboard-read=(self "https://web.whatsapp.com"), clipboard-write=(self "https://web.whatsapp.com"), fullscreen=(self "https://web.whatsapp.com"), autoplay=(self "https://web.whatsapp.com"), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), browsing-topics=()' },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
   { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }, // internes System: nicht in Suchmaschinen
 ];

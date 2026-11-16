@@ -58,7 +58,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     { href: "/scan", label: t.home.scan, hint: t.home.scanHint, icon: "scan", tone: "from-teal-500 to-emerald-700" },
     { href: "/sales/invoices/new", label: t.home.sell, hint: t.home.sellHint, icon: "cart", tone: "from-brand-500 to-brand-700" },
     // Kommunikation (Wunsch Inhaber 16.11.2026): Zahl der ungelesenen lädt der Browser nach (blockiert die Startseite nicht)
-    { href: "/whatsapp", label: t.home.whatsapp, hint: t.home.whatsappHint, icon: "chat", tone: "from-emerald-500 to-green-700", badge: "/api/whatsapp/unread" },
+    { href: "/whatsapp", label: t.home.whatsapp, hint: t.home.whatsappHint, icon: "chat", tone: "from-emerald-500 to-green-700", badge: "event:ss:wa-unread" },
     { href: "/mail", label: t.home.mail, hint: t.home.mailHint, icon: "inbox", tone: "from-indigo-500 to-blue-700", badge: "/api/mail/unread" },
     { href: "/receive", label: t.home.receive, hint: t.home.receiveHint, icon: "truck", tone: "from-sky-500 to-sky-700" },
     { href: "/expenses/new", label: t.home.expense, hint: t.home.expenseHint, icon: "receipt", tone: "from-rose-500 to-pink-700" },

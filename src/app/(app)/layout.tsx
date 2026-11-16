@@ -11,6 +11,7 @@ import { NavProgress } from "@/components/NavProgress";
 import { liveStatus } from "@/lib/test-reset";
 import { formatDate } from "@/lib/dates";
 import { canOpen } from "@/lib/permissions";
+import { WaDock } from "@/components/WaDock";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/returns", label: t.nav.returns, icon: "undo" },
     { href: "/receivables", label: t.nav.receivables, icon: "euro" },
     { href: "/customers", label: t.nav.customers, icon: "users" },
-    { href: "/whatsapp", label: t.nav.whatsapp, icon: "chat", badge: "/api/whatsapp/unread" },
+    { href: "/whatsapp", label: t.nav.whatsapp, icon: "chat", badge: "event:ss:wa-unread" }, // Zahl aus WhatsApp Web (WaDock)
     { href: "/mail", label: t.nav.mail, icon: "inbox", badge: "/api/mail/unread" },
     { href: "/products", label: t.nav.products, icon: "box" },
     { href: "/categories", label: t.nav.categories, icon: "tag" },
@@ -110,7 +111,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </header>
         {/* alle Seiten breit (Wunsch Inhaber 04.11.2026: große Bildschirme nutzen); Belege/Drucke begrenzen sich selbst (max-w-3xl) */}
-        <main className="mx-auto max-w-[96rem] px-4 pb-28 pt-6 lg:px-8 lg:pb-12">{children}</main>
+        <main className="mx-auto max-w-[96rem] px-4 pb-28 pt-6 lg:px-8 lg:pb-12">
+          {children}
+          {/* WhatsApp Web bleibt beim Seitenwechsel offen, sichtbar nur auf /whatsapp (Wunsch Inhaber 16.11.2026) */}
+          {canOpen(session, "/whatsapp") && <Suspense fallback={null}><WaDock t={t.waWeb} /></Suspense>}
+        </main>
       </div>
       <BottomNav items={mobile} all={items.map((it) => (it.href === "/scan" ? { ...it, highlight: true } : it))} menuLabel={t.nav.menu} closeLabel={t.common.close} footer={menuFooter} />
     </div>
