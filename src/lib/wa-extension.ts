@@ -4,14 +4,15 @@
  *
  * Was sie tut – und nur das:
  *  1. rules.json: Bei Rahmen (sub_frame) von web.whatsapp.com, die UNSERE Seite (oder WhatsApp im Rahmen selbst, z. B. beim
- *     Neuladen nach dem Abmelden) öffnet, entfernt sie die Kopfzeilen X-Frame-Options und Content-Security-Policy.
+ *     Neuladen nach dem Abmelden) öffnet, entfernt sie die Kopfzeilen X-Frame-Options und Content-Security-Policy und fragt
+ *     das Dokument mit Sec-Fetch-Dest „document“ / Sec-Fetch-Site „none“ an (sonst liefert WhatsApp eine Fehlerseite).
  *     Jede andere Seite kann WhatsApp weiterhin nicht einbetten (Initiator ≠ unsere Adresse → Regel greift nicht).
  *  2. system.js (nur auf unserer Adresse, oberstes Fenster): meldet „Erweiterung da“ (Version) per postMessage – liest nichts.
  *  3. whatsapp.js (nur in WhatsApp-Rahmen, nicht im normalen WhatsApp-Tab): liest die Zahl ungelesener Chats aus dem
  *     Fenstertitel „(3) WhatsApp“ und schickt nur diese Zahl an unsere Adresse (postMessage mit festem Ziel).
  * Nachrichten, Kontakte, Sitzung: bleiben in WhatsApp Web im Chrome des Laptops, nichts geht an unseren Server.
  */
-export const WA_EXT_VERSION = "1.0.0";
+export const WA_EXT_VERSION = "1.0.1";
 export const WA_EXT_FOLDER = "star-style-whatsapp";
 
 /** Nur ein schlichter Hostname (keine Muster, kein Port, kein Pfad) – sonst Fehler */
@@ -58,6 +59,12 @@ export function waExtensionFiles(rawHost: string, withIcons = false): Record<str
       responseHeaders: [
         { header: "x-frame-options", operation: "remove" },
         { header: "content-security-policy", operation: "remove" },
+      ],
+      // WhatsApp antwortet auf Rahmen-Anfragen (Sec-Fetch-Dest: iframe) mit „Sorry, something went wrong“ (16.11.2026 live)
+      // → das Dokument im Rahmen wie ein normales Öffnen anfragen
+      requestHeaders: [
+        { header: "sec-fetch-dest", operation: "set", value: "document" },
+        { header: "sec-fetch-site", operation: "set", value: "none" },
       ],
     },
     condition: {

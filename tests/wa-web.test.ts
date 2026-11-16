@@ -59,6 +59,10 @@ describe("Chrome-Erweiterung – nur für unsere Adresse", () => {
     });
     expect(rules[0].action.responseHeaders.map((h: { header: string; operation: string }) => `${h.operation}:${h.header}`))
       .toEqual(["remove:x-frame-options", "remove:content-security-policy"]);
+    expect(rules[0].action.requestHeaders).toEqual([
+      { header: "sec-fetch-dest", operation: "set", value: "document" },
+      { header: "sec-fetch-site", operation: "set", value: "none" },
+    ]);
     // das Skript im WhatsApp-Rahmen schickt nur an unsere Adresse und nur im Rahmen
     expect(f["whatsapp.js"]).toContain('const target = "https://star-style.onrender.com";');
     expect(f["whatsapp.js"]).toContain("if (window.top === window) return;");
