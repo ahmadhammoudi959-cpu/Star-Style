@@ -116,7 +116,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         </div>
         <aside className="card h-fit space-y-2 p-5 animate-rise">
           <a href={`/api/pdf/invoice/${inv.id}`} target="_blank" className="btn-primary group w-full justify-start"><Icon name="receipt" className="h-4 w-4" />{t.sales.pdf}</a>
-          {mailConfigured() && may("sales.email") && <EmailForm t={t} kind="invoice" id={inv.id} defaultTo={inv.customer.email} />}
+          {(await mailConfigured()) && may("sales.email") && <EmailForm t={t} kind="invoice" id={inv.id} defaultTo={inv.customer.email} />}
           {inv.sentAt && <p className="px-1 text-xs text-ink-soft">✓ {t.sales.status.SENT}: {formatDate(inv.sentAt.toISOString(), intl)}</p>}
           {inv.kind === "INVOICE" && may("sales.delivery") && <a href={`/api/pdf/invoice/${inv.id}?type=delivery`} target="_blank" className="btn-ghost group w-full justify-start"><Icon name="truck" className="h-4 w-4" />{t.sales.deliveryNote}</a>}
           {inv.status === "ISSUED" && inv.kind === "INVOICE" && may("sales.correct") && <>

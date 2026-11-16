@@ -127,6 +127,10 @@ export const companySettings = pgTable("company_settings", {
   carriers: jsonb("carriers").$type<Record<string, unknown>>().notNull().default({}),
   // GLS-Anbindung (ShipIT, Seite „GLS“, src/lib/gls.ts): Adresse, Benutzer, Passwort (verschlüsselt), Contact-ID, Dienste; {} = nicht eingerichtet
   gls: jsonb("gls").$type<Record<string, unknown>>().notNull().default({}),
+  // Postfach info@ im System (Seite „E-Mail“, src/lib/mail-rules.ts): IMAP/SMTP, Benutzer, App-Passwort (verschlüsselt), Absendername, Signatur
+  mail: jsonb("mail").$type<Record<string, unknown>>().notNull().default({}),
+  // WhatsApp Business (Cloud API, Seite „WhatsApp“, src/lib/whatsapp-rules.ts): Nummer-ID, WABA-ID, Token + App-Geheimnis (verschlüsselt), Prüfwort für den Webhook
+  whatsapp: jsonb("whatsapp").$type<Record<string, unknown>>().notNull().default({}),
   updatedAt: updatedAt(),
 });
 
@@ -512,6 +516,43 @@ export const returnLines = pgTable("return_lines", {
   condition: returnCondition("condition").notNull().default("RESTOCK"),
 });
 
+/**
+ * WhatsApp im System (Wunsch Inhaber 16.11.2026: „الواتساب جوه الابلكيشن … المراسله تترسل من جوه السيستم“): ein Chat je
+ * Telefonnummer (wa_id = Nummer international ohne +), verknüpft mit dem Kunden (gleiche Nummer) oder von Hand.
+ * Nachrichten kommen über den Webhook (Meta Cloud API) und gehen über die Graph API raus. Logik: src/lib/whatsapp.ts.
+ */
+export const waChats = pgTable("wa_chats", {
+  id: id(),
+  waId: text("wa_id").notNull().unique(),
+  name: text("name").notNull().default(""), // Profilname bei WhatsApp
+  customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
+  lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+  lastInboundAt: timestamp("last_inbound_at", { withTimezone: true }), // 24-Stunden-Fenster für freie Antworten
+  lastText: text("last_text").notNull().default(""),
+  unread: integer("unread").notNull().default(0),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index("wa_chat_last").on(t.lastMessageAt), index("wa_chat_customer").on(t.customerId)]);
+
+export const waMessages = pgTable("wa_messages", {
+  id: id(),
+  chatId: text("chat_id").notNull().references(() => waChats.id, { onDelete: "cascade" }),
+  waMessageId: text("wa_message_id").unique(), // wamid.…
+  direction: text("direction").notNull(), // in | out
+  type: text("type").notNull(), // text | image | document | audio | video | sticker | location | template | reaction | unsupported
+  body: text("body").notNull().default(""), // Text, Bildunterschrift oder Vorlagenname
+  mediaId: text("media_id"), // Medien-ID bei Meta (eingehend: zum Herunterladen)
+  mediaFileId: text("media_file_id"), // heruntergeladen in stored_files
+  mediaMime: text("media_mime").notNull().default(""),
+  mediaName: text("media_name").notNull().default(""),
+  status: text("status").notNull().default(""), // eingehend: received; ausgehend: sent | delivered | read | failed
+  error: text("error").notNull().default(""),
+  replyTo: text("reply_to"), // wamid der zitierten Nachricht
+  sentBy: text("sent_by"),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
+}, (t) => [index("wa_msg_chat_at").on(t.chatId, t.at)]);
+
 /** Zahlungserinnerungen und Mahnungen */
 export const dunnings = pgTable("dunnings", {
   id: id(),
@@ -803,6 +844,11 @@ export const invoiceLinesRelations = relations(invoiceLines, ({ one }) => ({
   variant: one(variants, { fields: [invoiceLines.variantId], references: [variants.id] }),
 }));
 export const paymentsRelations = relations(payments, ({ one }) => ({ invoice: one(invoices, { fields: [payments.invoiceId], references: [invoices.id] }) }));
+export const waChatsRelations = relations(waChats, ({ one, many }) => ({
+  customer: one(customers, { fields: [waChats.customerId], references: [customers.id] }),
+  messages: many(waMessages),
+}));
+export const waMessagesRelations = relations(waMessages, ({ one }) => ({ chat: one(waChats, { fields: [waMessages.chatId], references: [waChats.id] }) }));
 export const returnsRelations = relations(returns, ({ one, many }) => ({
   invoice: one(invoices, { fields: [returns.invoiceId], references: [invoices.id], relationName: "returnInvoice" }),
   customer: one(customers, { fields: [returns.customerId], references: [customers.id] }),

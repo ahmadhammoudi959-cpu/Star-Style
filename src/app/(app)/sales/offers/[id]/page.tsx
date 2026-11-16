@@ -67,7 +67,7 @@ export default async function OfferPage({ params, searchParams }: { params: Prom
           <div className="font-bold">{formatDate(o.validUntil, intl)}</div>
           {o.acceptedAt && <div className="text-sm text-brand-700">{t.sales.status.ACCEPTED}: {formatDate(o.acceptedAt.toISOString(), intl)} {o.acceptedVia && `· ${o.acceptedVia}`}</div>}
           <OfferOps t={t} id={o.id} status={o.status} can={{ offers: mayOffers, invoices: mayInvoices }} />
-          {mailConfigured() && can(session, "sales.email") && <EmailForm t={t} kind="offer" id={o.id} defaultTo={o.customer.email} />}
+          {(await mailConfigured()) && can(session, "sales.email") && <EmailForm t={t} kind="offer" id={o.id} defaultTo={o.customer.email} />}
         </aside>
       </div>
     </div>

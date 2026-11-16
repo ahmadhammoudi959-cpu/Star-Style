@@ -29,7 +29,7 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
   const mayLock = can(await requireSession(), "reports.lock"); // Monat abschließen/wieder öffnen = eigenes Recht
   const monthExpenses = d.expenses.filter((e) => e.date >= d.from && e.date <= d.to);
   const missing = monthExpenses.filter((e) => !e.fileId).length;
-  const mail = mailConfigured();
+  const mail = await mailConfigured();
 
   return (
     <div className="space-y-6">

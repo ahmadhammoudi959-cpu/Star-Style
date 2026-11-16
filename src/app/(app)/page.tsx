@@ -16,6 +16,7 @@ import { setupSteps } from "@/lib/onboarding";
 import { fill } from "@/i18n";
 import { pendingSummary } from "@/lib/shopify/product-push";
 import { recentBackups } from "@/lib/backup-info";
+import { NavBadge } from "@/components/Nav";
 import { newShopCustomersCount } from "@/lib/shopify/customers";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
@@ -53,9 +54,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const backupHint = backupToday
     ? fill(t.home.backupLast, { d: new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit" }).format(new Date(backupToday)) })
     : t.home.backupNone;
-  const allActions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean; warn?: boolean }[] = [
+  const allActions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean; warn?: boolean; badge?: string }[] = [
     { href: "/scan", label: t.home.scan, hint: t.home.scanHint, icon: "scan", tone: "from-teal-500 to-emerald-700" },
     { href: "/sales/invoices/new", label: t.home.sell, hint: t.home.sellHint, icon: "cart", tone: "from-brand-500 to-brand-700" },
+    // Kommunikation (Wunsch Inhaber 16.11.2026): Zahl der ungelesenen lädt der Browser nach (blockiert die Startseite nicht)
+    { href: "/mail", label: t.home.mail, hint: t.home.mailHint, icon: "inbox", tone: "from-indigo-500 to-blue-700", badge: "/api/mail/unread" },
     { href: "/receive", label: t.home.receive, hint: t.home.receiveHint, icon: "truck", tone: "from-sky-500 to-sky-700" },
     { href: "/expenses/new", label: t.home.expense, hint: t.home.expenseHint, icon: "receipt", tone: "from-rose-500 to-pink-700" },
     { href: "/write-offs", label: t.home.loss, hint: t.home.lossHint, icon: "alert", tone: "from-amber-500 to-orange-600" },
@@ -174,18 +177,19 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
       )}
 
       {/* Handy: Kacheln nebeneinander zum Wischen (Wunsch Inhaber 04.11.2026), ab Tablet als Raster */}
-      <div className={`stagger swipe-row -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 ${actions.length > 6 ? "sm:grid-cols-4 xl:grid-cols-7" : "sm:grid-cols-3 lg:grid-cols-6"}`}>
+      <div className={`stagger swipe-row -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 ${actions.length > 8 ? "sm:grid-cols-3 lg:grid-cols-5" : actions.length === 8 ? "sm:grid-cols-4 2xl:grid-cols-8" : actions.length === 7 ? "sm:grid-cols-4 xl:grid-cols-7" : "sm:grid-cols-3 lg:grid-cols-6"}`}>
         {actions.map((a) => {
           const inner = (
             <>
               <div className={`mb-3 grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br ${a.tone} text-white shadow-lift sm:mb-4 sm:h-14 sm:w-14`}>
                 <Icon name={a.icon} className="h-6 w-6 sm:h-7 sm:w-7" />
               </div>
+              {a.badge && <NavBadge src={a.badge} className="absolute end-3 top-3 min-w-[1.5rem] rounded-full bg-accent-500 px-1.5 text-center text-xs font-bold leading-6 text-white shadow-card" />}
               <div className="font-bold sm:text-lg">{a.label}</div>
               <div className={`text-xs sm:text-sm ${a.warn ? "font-semibold text-amber-700" : "text-ink-soft"}`}>{a.soon ? t.home.comingSoon : a.hint}</div>
             </>
           );
-          const box = `card group w-[38%] shrink-0 snap-start p-4 sm:w-auto sm:p-5${a.warn ? " ring-2 ring-amber-300" : ""}`;
+          const box = `card group relative w-[38%] shrink-0 snap-start p-4 sm:w-auto sm:p-5${a.warn ? " ring-2 ring-amber-300" : ""}`;
           return a.soon ? (
             <div key={a.href} className={`${box} opacity-60`}>{inner}</div>
           ) : (

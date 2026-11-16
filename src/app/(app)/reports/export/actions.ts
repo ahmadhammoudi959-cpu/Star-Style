@@ -31,7 +31,7 @@ export async function createPackageAction(_: ExportState, fd: FormData): Promise
 
 export async function sendPackageAction(_: { error?: string; ok?: boolean } | undefined, fd: FormData) {
   await requirePerm("reports.export");
-  if (!mailConfigured()) return { error: "mail" };
+  if (!(await mailConfigured())) return { error: "mail" };
   const to = String(fd.get("to") ?? "").trim();
   const fileId = String(fd.get("fileId"));
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return { error: "email" };

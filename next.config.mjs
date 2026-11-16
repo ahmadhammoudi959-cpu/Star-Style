@@ -15,9 +15,10 @@ const nextConfig = {
   poweredByHeader: false,
   // Schriften für die PDF-Erzeugung mit ausliefern
   outputFileTracingIncludes: { "/**/*": ["./assets/**/*"] },
-  experimental: { serverActions: { bodySizeLimit: "10mb" } },
+  experimental: { serverActions: { bodySizeLimit: "25mb" } }, // E-Mail-Anhänge bis 20 MB (Hostinger: 25 MB)
   // Vorschau im Belegdesign: PDF → Bild auf dem Server (pdf.js + Canvas-Bibliothek mit eigener Binärdatei) – nicht bündeln
-  serverExternalPackages: ["pdfjs-dist", "@napi-rs/canvas"],
+  // Postfach (IMAP lesen, E-Mails zerlegen): Node-Pakete mit Logger/Worker – ebenfalls nicht bündeln
+  serverExternalPackages: ["pdfjs-dist", "@napi-rs/canvas", "imapflow", "mailparser"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

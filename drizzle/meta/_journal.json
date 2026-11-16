@@ -204,6 +204,20 @@
       "when": 1794832915339,
       "tag": "0028_returns",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794834307067,
+      "tag": "0029_mailbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794835275380,
+      "tag": "0030_whatsapp",
+      "breakpoints": true
     }
   ]
 }

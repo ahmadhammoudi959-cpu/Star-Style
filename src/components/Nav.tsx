@@ -5,7 +5,25 @@ import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "./Icon";
 
-export type NavItem = { href: string; label: string; icon: IconName; soon?: boolean; step?: { n: number; next: boolean }; highlight?: boolean };
+export type NavItem = {
+  href: string; label: string; icon: IconName; soon?: boolean; step?: { n: number; next: boolean }; highlight?: boolean;
+  /** Zahl am Menüpunkt (z. B. ungelesene E-Mails): API liefert { count } – im Browser geladen, blockiert die Seite nicht */
+  badge?: string;
+};
+
+/** Zahl am Menüpunkt: lädt nach dem Anzeigen und jede Minute neu (nur wenn die Seite sichtbar ist) */
+export function NavBadge({ src, className }: { src: string; className: string }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let stop = false;
+    const load = () => fetch(src, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => { if (!stop && j && typeof j.count === "number") setN(j.count); }).catch(() => {});
+    load();
+    const id = setInterval(() => { if (document.visibilityState === "visible") load(); }, 60_000);
+    return () => { stop = true; clearInterval(id); };
+  }, [src]);
+  if (!n) return null;
+  return <span className={className}>{n > 99 ? "99+" : n}</span>;
+}
 
 /** Aktiv ist der längste passende Eintrag (/settings/users statt /settings) */
 function activeHref(items: NavItem[], path: string): string | null {
@@ -34,6 +52,7 @@ export function SideNav({ items, soonLabel }: { items: NavItem[]; soonLabel: str
           <Link key={it.href} href={it.href}
             className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition short:py-1.5 tiny:py-1 ${active ? "border-s-4 border-accent-500 bg-white text-brand-700 shadow-card" : "text-white/80 hover:bg-white/10 hover:text-white"}`}>
             <Icon name={it.icon} />{it.label}
+            {it.badge && <NavBadge src={it.badge} className="ms-auto min-w-[1.375rem] rounded-full bg-accent-500 px-1.5 text-center text-[0.6875rem] font-bold leading-[1.375rem] text-white" />}
             {it.step && (
               <span title={String(it.step.n)} className={`ms-auto grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${it.step.next ? "bg-accent-500 text-white animate-pulse" : active ? "bg-brand-100 text-brand-700" : "bg-white/15 text-white"}`}>{it.step.n}</span>
             )}
@@ -127,6 +146,7 @@ function MenuSheet({ items, title, closeLabel, footer, onClose }: { items: NavIt
                   <Icon name={it.icon} className="h-5 w-5" />
                 </span>
                 <span className="[overflow-wrap:anywhere]">{it.label}</span>
+                {it.badge && <NavBadge src={it.badge} className="absolute end-1.5 top-1.5 min-w-[1.25rem] rounded-full bg-accent-500 px-1 text-center text-[0.625rem] font-bold leading-5 text-white" />}
                 {it.step && (
                   <span className={`absolute end-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full text-[0.625rem] font-bold ${it.step.next ? "animate-pulse bg-accent-500 text-white" : "bg-white text-brand-700 ring-1 ring-brand-100"}`}>{it.step.n}</span>
                 )}
