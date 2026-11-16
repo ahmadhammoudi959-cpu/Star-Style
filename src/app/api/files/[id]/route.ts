@@ -3,7 +3,8 @@ import { db, schema } from "@/db";
 import { getAuth } from "@/lib/auth";
 import { fileNeed } from "@/lib/file-access";
 
-const INLINE = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+// Sprachnachrichten/Videos aus WhatsApp spielen im Browser (Audio/Video führt keine Skripte aus)
+const INLINE = ["image/jpeg", "image/png", "image/webp", "application/pdf", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/aac", "audio/amr", "video/mp4", "video/3gpp"];
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const a = await getAuth();

@@ -9,6 +9,7 @@ import { canOpen } from "@/lib/permissions";
 import { listMessages, MailboxError, mailboxConfigured, readMessage, type MailAddress, type MailFolder, type MailMessage } from "@/lib/mailbox";
 import { humanSize, inlineSafe } from "@/lib/mail-rules";
 import { MailTools } from "./MailTools";
+import { BadgeRefresh } from "./BadgeRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -150,6 +151,7 @@ export default async function MailPage({ searchParams }: { searchParams: Promise
               <div className="card grid h-full min-h-[16rem] place-items-center p-8 text-center text-sm text-ink-soft"><div><Icon name="inbox" className="mx-auto mb-2 h-8 w-8 text-brand-300" />{M.pick}</div></div>
             ) : (
               <article className="card animate-rise min-w-0 overflow-hidden">
+                <BadgeRefresh k={`${f}#${msg.uid}`} />
                 <div className="space-y-3 border-b border-black/5 p-5">
                   <Link href={href({})} className="btn-ghost group px-3 py-1.5 text-xs lg:hidden"><Icon name="arrowLeft" className="h-4 w-4 rtl:rotate-180" />{M.back}</Link>
                   <h2 className="text-lg font-bold [overflow-wrap:anywhere]" dir="auto">{msg.subject || M.noSubject}</h2>

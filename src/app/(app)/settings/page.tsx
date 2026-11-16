@@ -24,6 +24,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     { href: "/settings/carriers", icon: "truck", title: t.carriers.title, hint: t.carriers.cardHint },
     { href: "/settings/gls", icon: "box", title: t.gls.title, hint: t.gls.cardHint },
     { href: "/settings/mail", icon: "inbox", title: t.mailSet.title, hint: t.mailSet.cardHint },
+    { href: "/settings/whatsapp", icon: "chat", title: t.waSet.title, hint: t.waSet.cardHint },
     { href: "/account", icon: "shield", title: t.account.cardTitle, hint: t.account.cardHint },
   ];
   // 4 Karten in einer Reihe, sonst 3 je Reihe (Admin: 6 Karten = 3 + 3)

@@ -19,7 +19,10 @@ export function NavBadge({ src, className }: { src: string; className: string })
     const load = () => fetch(src, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => { if (!stop && j && typeof j.count === "number") setN(j.count); }).catch(() => {});
     load();
     const id = setInterval(() => { if (document.visibilityState === "visible") load(); }, 60_000);
-    return () => { stop = true; clearInterval(id); };
+    // gleich neu laden, wenn eine Seite etwas als gelesen markiert hat
+    const now = () => window.setTimeout(load, 300);
+    window.addEventListener("ss:badges", now);
+    return () => { stop = true; clearInterval(id); window.removeEventListener("ss:badges", now); };
   }, [src]);
   if (!n) return null;
   return <span className={className}>{n > 99 ? "99+" : n}</span>;

@@ -218,6 +218,13 @@
       "when": 1794835275380,
       "tag": "0030_whatsapp",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794837530394,
+      "tag": "0031_wa_seq",
+      "breakpoints": true
     }
   ]
 }

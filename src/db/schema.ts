@@ -3,7 +3,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   pgTable, pgEnum, text, integer, boolean, timestamp, jsonb, customType,
-  uniqueIndex, index, serial, date,
+  uniqueIndex, index, serial, bigserial, date,
 } from "drizzle-orm/pg-core";
 
 const id = () => text("id").primaryKey().$defaultFn(() => crypto.randomUUID());
@@ -550,6 +550,7 @@ export const waMessages = pgTable("wa_messages", {
   replyTo: text("reply_to"), // wamid der zitierten Nachricht
   sentBy: text("sent_by"),
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  seq: bigserial("seq", { mode: "number" }).notNull(), // Reihenfolge bei gleicher Sekunde (Meta liefert nur Sekunden)
   createdAt: createdAt(),
 }, (t) => [index("wa_msg_chat_at").on(t.chatId, t.at)]);
 

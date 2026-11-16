@@ -1,0 +1,1 @@
+ALTER TABLE "wa_messages" ADD COLUMN "seq" bigserial NOT NULL;
