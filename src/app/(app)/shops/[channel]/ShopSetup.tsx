@@ -67,7 +67,8 @@ export function ShopControls({ t, s }: { t: Dict; s: ShopData }) {
   );
   const ready = Boolean(s.domain && s.hasSecret);
   return (
-    <div className="card animate-rise space-y-3 p-5">
+    // Assistent: Abgleich ein/aus, Standort, Preise/Gewichte senden macht der Inhaber selbst (wirkt sofort im Shop)
+    <div className="card animate-rise space-y-3 p-5" data-ai-block>
       <Btn icon="check" label={t.shop.test} disabled={!ready} onClick={() => run(() => testShopAction(s.channel), (r) => t.shop.testOk.replace("{name}", r.ok ?? ""))} />
       {(locations.length > 0 || s.locationId) && (
         <Field label={t.shop.location} hint={t.shop.locationHint}>

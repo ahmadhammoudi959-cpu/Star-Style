@@ -137,7 +137,7 @@ export function MailForm({ t, initial, ready }: { t: Dict; initial: Initial; rea
           )}
           {ready && <a href="/mail" className="btn-ghost group"><Icon name="inbox" className="h-4 w-4" />{M.open}</a>}
           {ready && (
-            <button type="button" disabled={Boolean(busy)} onClick={() => { if (window.confirm(M.disconnectConfirm)) run("off"); }} className="btn-ghost group ms-auto text-red-700">
+            <button type="button" data-ai-block disabled={Boolean(busy)} onClick={() => { if (window.confirm(M.disconnectConfirm)) run("off"); }} className="btn-ghost group ms-auto text-red-700">
               <Icon name="x" className="h-4 w-4" />{M.disconnect}
             </button>
           )}

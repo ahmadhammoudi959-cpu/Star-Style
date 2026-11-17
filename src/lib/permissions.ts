@@ -7,7 +7,8 @@
  */
 
 export const PERMISSION_GROUPS = {
-  overview: ["dashboard.money", "insights", "ask"],
+  // „assistant“ = Assistent „Star Style“ bedient das System sichtbar für die Person (mit ihren eigenen Rechten), Wunsch Inhaber 17.11.2026
+  overview: ["dashboard.money", "insights", "ask", "assistant"],
   products: ["products.view", "products.edit", "products.prices", "products.cost", "suppliers"],
   stock: ["stock.receive", "stock.count", "stock.writeoff"],
   sales: [
@@ -121,6 +122,7 @@ export const ROUTES: [RegExp, Need][] = [
   [R("/api/whatsapp"), { any: ["whatsapp"] }],
   // Kundenliste als Excel (alle E-Mails auf einmal) – eigenes Recht, nicht schon mit „Kunden“
   [R("/api/customers/export"), { any: ["customers.export"] }],
+  [R("/api/assistant"), { any: ["assistant"] }],
   [R("/api/pdf/design-preview"), { any: ["design"] }],
   [R("/api/pdf/goods-receipt"), { any: ["stock.receive"] }],
   [R("/api/pdf/dunning"), { any: ["receivables"] }],

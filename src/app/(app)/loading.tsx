@@ -4,7 +4,7 @@ import { getI18n } from "@/i18n";
 export default async function Loading() {
   const { t } = await getI18n();
   return (
-    <div role="status" aria-live="polite" className="flex min-h-[60vh] flex-col items-center justify-center gap-6">
+    <div role="status" aria-live="polite" data-ai-loading className="flex min-h-[60vh] flex-col items-center justify-center gap-6">
       <div className="relative">
         <div className="ss-glow absolute -inset-8 rounded-full bg-gradient-to-r from-brand-500/25 via-white/0 to-accent-500/25 blur-2xl" />
         {/* eslint-disable-next-line @next/next/no-img-element */}

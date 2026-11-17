@@ -14,7 +14,7 @@ export function CreatePackage({ t, month, canLock, mail, advisorEmail }: { t: Di
         <input type="hidden" name="month" value={month} />
         {canLock && (
           <label className="flex cursor-pointer items-start gap-2 text-sm font-semibold">
-            <input type="checkbox" name="lock" className="mt-0.5 h-5 w-5 accent-brand-600" />{t.rep.lockAfter}
+            <input type="checkbox" name="lock" data-ai-block className="mt-0.5 h-5 w-5 accent-brand-600" />{t.rep.lockAfter}
           </label>
         )}
         <ErrorBox message={msg} />
@@ -47,7 +47,7 @@ export function SendForm({ t, fileId, advisorEmail }: { t: Dict; fileId: string;
 
 export function UnlockButton({ t, month }: { t: Dict; month: string }) {
   return (
-    <form action={unlockAction} onSubmit={(e) => { if (!confirm(t.rep.unlockConfirm)) e.preventDefault(); }}>
+    <form action={unlockAction} data-ai-block onSubmit={(e) => { if (!confirm(t.rep.unlockConfirm)) e.preventDefault(); }}>
       <input type="hidden" name="month" value={month} />
       <button className="btn-ghost group text-sm"><Icon name="lock" className="h-4 w-4" />{t.rep.unlock}</button>
     </form>

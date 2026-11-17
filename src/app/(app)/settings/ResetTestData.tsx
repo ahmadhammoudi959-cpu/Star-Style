@@ -42,7 +42,7 @@ export function ResetTestData({ t, p, fingerprint, syncOn, syncShops, empty }: {
   ].filter((x) => x.n > 0);
 
   return (
-    <section id="reset" className="card mt-5 scroll-mt-6 animate-rise p-5 ring-1 ring-red-100">
+    <section id="reset" data-ai-block className="card mt-5 scroll-mt-6 animate-rise p-5 ring-1 ring-red-100">
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-50 text-red-600"><Icon name="history" className="icon-pop h-5 w-5" /></span>
         <div className="min-w-0">
@@ -149,7 +149,7 @@ export function LiveCard({ t, since, undo }: {
   const made = undo && (undo.invoices || undo.payments || undo.expenses || undo.exports)
     ? fill(r.undoSince, { i: undo.invoices, p: undo.payments, e: undo.expenses, x: undo.exports }) : null;
   return (
-    <section id="live" className="card mt-5 scroll-mt-6 animate-rise p-5 ring-1 ring-emerald-100">
+    <section id="live" data-ai-block className="card mt-5 scroll-mt-6 animate-rise p-5 ring-1 ring-emerald-100">
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Icon name="check" className="icon-pop h-5 w-5" /></span>
         <div className="min-w-0">

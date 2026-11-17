@@ -10,7 +10,7 @@ export function DeleteProduct({ t, id }: { t: Dict; id: string }) {
   const [state, action] = useActionState(deleteProductAction, undefined);
   const err = state?.error ? ((t.product as Record<string, unknown>)[state.error] as string | undefined) ?? t.common.error : undefined;
   return (
-    <form action={action} onSubmit={(e) => { if (!confirm(t.product.deleteConfirm)) e.preventDefault(); }}
+    <form action={action} data-ai-block onSubmit={(e) => { if (!confirm(t.product.deleteConfirm)) e.preventDefault(); }}
       className="card mt-6 flex animate-rise flex-wrap items-center justify-between gap-3 p-5">
       <input type="hidden" name="id" value={id} />
       <p className="min-w-0 flex-1 text-sm text-ink-soft">{t.product.deleteHint}</p>

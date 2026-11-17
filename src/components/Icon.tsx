@@ -60,6 +60,11 @@ const PATHS = {
   shrink: "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5",
   chevronLeft: "M15 18l-6-6 6-6",
   chevronRight: "M9 18l6-6-6-6",
+  mic: "M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zM19 11a7 7 0 0 1-14 0M12 18v3",
+  volume: "M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13",
+  volumeOff: "M11 5 6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6",
+  minus: "M5 12h14",
+  stop: "M7 7h10v10H7z",
 } as const;
 
 export type IconName = keyof typeof PATHS;

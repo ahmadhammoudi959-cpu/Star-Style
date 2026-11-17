@@ -18,7 +18,7 @@ export function LanguageSwitcher({ current, compact = false }: { current: Lang; 
     try { await setLocale(l); } finally { window.location.reload(); }
   };
   return (
-    <label className={`group flex items-center gap-2 rounded-xl ${compact ? "" : "bg-white px-3 py-2 shadow-card ring-1 ring-black/5"}`}>
+    <label data-ai-block className={`group flex items-center gap-2 rounded-xl ${compact ? "" : "bg-white px-3 py-2 shadow-card ring-1 ring-black/5"}`}>
       <Icon name="globe" className="h-4 w-4 text-brand-600" />
       <select
         aria-label="Language"

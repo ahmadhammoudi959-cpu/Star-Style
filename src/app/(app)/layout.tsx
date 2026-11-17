@@ -14,6 +14,8 @@ import { canOpen } from "@/lib/permissions";
 import { WaDock } from "@/components/WaDock";
 import { can } from "@/lib/auth";
 import { WA_EXT_READONLY_VERSION } from "@/lib/wa-extension";
+import { AgentDock } from "@/components/agent/AgentDock";
+import { aiConfigured } from "@/lib/ai/client";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +69,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="min-w-0 truncate text-sm font-semibold text-ink-soft" dir="auto">{session.name}</div>
       <div className="flex items-center gap-2">
         <LanguageSwitcher current={locale} />
-        <form action={logout}><button className="btn-ghost group gap-2 px-3"><Icon name="logout" className="h-4 w-4" />{t.common.logout}</button></form>
+        <form action={logout} data-ai-block><button className="btn-ghost group gap-2 px-3"><Icon name="logout" className="h-4 w-4" />{t.common.logout}</button></form>
       </div>
     </div>
   );
@@ -91,7 +93,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-white/10 px-1 pt-3">
           <div className="min-w-0 truncate text-xs text-white/70" dir="auto">{session.name}</div>
-          <form action={logout} className="shrink-0">
+          <form action={logout} className="shrink-0" data-ai-block>
             <button className="group flex items-center gap-2 whitespace-nowrap rounded-xl px-2 py-1.5 text-sm text-white/85 hover:bg-white/10"><Icon name="logout" />{t.common.logout}</button>
           </form>
         </div>
@@ -109,7 +111,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="hidden lg:block" />
           <div className="flex items-center gap-2">
             <LanguageSwitcher current={locale} />
-            <form action={logout} className="lg:hidden"><button aria-label={t.common.logout} className="btn-ghost px-3"><Icon name="logout" /></button></form>
+            <form action={logout} className="lg:hidden" data-ai-block><button aria-label={t.common.logout} className="btn-ghost px-3"><Icon name="logout" /></button></form>
           </div>
         </header>
         {/* alle Seiten breit (Wunsch Inhaber 04.11.2026: große Bildschirme nutzen); Belege/Drucke begrenzen sich selbst (max-w-3xl) */}
@@ -118,6 +120,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {/* WhatsApp Web bleibt beim Seitenwechsel offen, sichtbar nur auf /whatsapp (Wunsch Inhaber 16.11.2026) */}
           {canOpen(session, "/whatsapp") && <Suspense fallback={null}><WaDock t={t.waWeb} canSend={can(session, "whatsapp.send")} minReadOnlyVersion={WA_EXT_READONLY_VERSION} /></Suspense>}
         </main>
+        {/* Assistent „Star Style“ (Wunsch Inhaber 17.11.2026): bedient das System sichtbar für den Nutzer, mit seinen Rechten */}
+        {aiConfigured() && can(session, "assistant") && <AgentDock t={t.agent} locale={locale} />}
       </div>
       <BottomNav items={mobile} all={items.map((it) => (it.href === "/scan" ? { ...it, highlight: true } : it))} menuLabel={t.nav.menu} closeLabel={t.common.close} footer={menuFooter} />
     </div>
