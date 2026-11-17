@@ -6,6 +6,8 @@ import { z } from "zod";
 import { db, schema } from "@/db";
 import { requirePerm, can } from "@/lib/auth";
 import { audit } from "@/lib/stock";
+import { deleteSupplier, RecordDeleteError } from "@/lib/record-delete";
+import type { DeleteState } from "@/components/DeleteRecord";
 
 export type SupplierState = { error?: string } | undefined;
 
@@ -46,4 +48,23 @@ export async function saveSupplier(_: SupplierState, fd: FormData): Promise<Supp
   revalidatePath("/suppliers");
   revalidatePath("/expenses/vendors");
   redirect(v.kind === "EXPENSE" ? "/expenses/vendors" : "/suppliers");
+}
+
+/** Aus Versehen angelegten Lieferanten bzw. Firma aus Ausgaben löschen – nur ohne Wareneingänge, Ausgaben und Artikel (Wunsch Inhaber 17.11.2026) */
+export async function deleteSupplierAction(_: DeleteState, fd: FormData): Promise<DeleteState> {
+  const session = await requirePerm("suppliers", "expenses.edit");
+  const id = String(fd.get("id") ?? "");
+  const s = await db.query.suppliers.findFirst({ where: eq(schema.suppliers.id, id), columns: { kind: true, number: true } });
+  if (!s) return { error: "notFound" };
+  // wie beim Speichern: Warenlieferant = Recht „Lieferanten“, Firma aus Ausgaben = „Ausgaben bearbeiten“
+  if (!can(session, s.kind === "EXPENSE" ? "expenses.edit" : "suppliers")) redirect("/?denied=1");
+  try {
+    await deleteSupplier(id, session.uid);
+  } catch (e) {
+    if (e instanceof RecordDeleteError) return { error: e.code };
+    console.error(e);
+    return { error: "error" };
+  }
+  revalidatePath("/", "layout"); // Listen, Auswahlfelder, „Erste Schritte“
+  redirect(`${s.kind === "EXPENSE" ? "/expenses/vendors" : "/suppliers"}?deleted=${s.number}`);
 }

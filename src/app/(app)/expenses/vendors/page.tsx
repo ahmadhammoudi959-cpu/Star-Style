@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { DoneNotice, deletedNumber } from "@/components/DoneNotice";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { getI18n } from "@/i18n";
+import { fill, getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { OpenButton } from "@/components/OpenButton";
@@ -15,8 +16,9 @@ export const dynamic = "force-dynamic";
  * Ausgaben → Firmen: Firmen, von denen es nur Ausgaben gibt (kind EXPENSE, z. B. Baumarkt, Steuerbüro).
  * Sie stehen bewusst nicht bei den Lieferanten/im Wareneingang (Wunsch Inhaber 12.11.2026); Buchhaltung unverändert.
  */
-export default async function ExpenseVendorsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q = "" } = await searchParams;
+export default async function ExpenseVendorsPage({ searchParams }: { searchParams: Promise<{ q?: string; deleted?: string }> }) {
+  const { q = "", deleted: del } = await searchParams;
+  const deleted = deletedNumber(del);
   const { t, intl } = await getI18n();
   const all = (await db.execute<Record<string, unknown>>(sql`
     select s.id, s.name, s.country, s.vat_id, count(e.id)::int as n, coalesce(sum(e.gross_cents), 0)::bigint as gross, max(e.date) as last
@@ -33,6 +35,7 @@ export default async function ExpenseVendorsPage({ searchParams }: { searchParam
   return (
     <div>
       <PageHeader title={t.exp.vendorsTitle} subtitle={t.exp.vendorsHint} back="/expenses" />
+      {deleted != null && <DoneNotice text={fill(t.remove.deletedVendor, { n: deleted })} />}
       {all.length > 0 && (
         <form className="card relative z-10 mb-4 grid grid-cols-2 gap-2 p-3 animate-rise md:flex md:flex-row md:flex-wrap md:items-end md:gap-3 md:p-4">
           <div className="col-span-2 md:w-80">

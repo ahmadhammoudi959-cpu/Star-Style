@@ -9,6 +9,10 @@ import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { SupplierForm } from "../../../suppliers/SupplierForm";
 import { can, requireSession } from "@/lib/auth";
+import { deleteSupplierAction } from "../../../suppliers/actions";
+import { DeleteRecord } from "@/components/DeleteRecord";
+import { supplierUsage } from "@/lib/record-delete";
+import { supplierBlocks, supplierHasDocs } from "@/lib/record-delete-view";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +26,7 @@ export default async function ExpenseVendorPage({ params }: { params: Promise<{ 
   if (s.kind === "GOODS") redirect(`/suppliers/${s.id}`);
   const rows = await db.query.expenses.findMany({ where: eq(schema.expenses.supplierId, id), orderBy: [desc(schema.expenses.date), desc(schema.expenses.createdAt)], limit: 200 });
   const total = rows.reduce((sum, r) => sum + r.grossCents, 0);
+  const usage = edit ? await supplierUsage(s.id) : null;
 
   return (
     <div className="space-y-6">
@@ -73,6 +78,8 @@ export default async function ExpenseVendorPage({ params }: { params: Promise<{ 
           </>
         )}
       </section>
+      {usage && <DeleteRecord texts={t.remove} cancel={t.common.cancel} label={t.remove.vendor} name={s.name} id={s.id} action={deleteSupplierAction}
+        blocked={supplierBlocks(t, usage)} docs={supplierHasDocs(usage)} />}
     </div>
   );
 }

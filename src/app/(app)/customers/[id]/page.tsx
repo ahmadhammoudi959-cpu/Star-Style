@@ -18,6 +18,10 @@ import { getShop, type ShopChannel } from "@/lib/shopify/client";
 import { shopAdminUrl } from "@/lib/shopify/admin";
 import { ResellerRetry } from "../ResellerRetry";
 import { can, requireSession } from "@/lib/auth";
+import { deleteCustomerAction } from "../actions";
+import { DeleteRecord } from "@/components/DeleteRecord";
+import { customerUsage } from "@/lib/record-delete";
+import { customerBlocks, customerHasDocs } from "@/lib/record-delete-view";
 
 export default async function CustomerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const { id } = await params;
@@ -39,7 +43,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
       select 'invoice', id, coalesce(number, '—'), status::text, coalesce(issue_date, created_at::date), gross_cents from invoices where customer_id = ${id}
       order by d desc limit 30`),
   ]);
-  const [items, links, shops, accounts] = await Promise.all([openItems(id), shopCompaniesOf(id), Promise.all(RESELLER_CHANNELS.map((ch) => getShop(ch))), shopAccountsOf(id)]);
+  const [items, links, shops, accounts, usage] = await Promise.all([openItems(id), shopCompaniesOf(id), Promise.all(RESELLER_CHANNELS.map((ch) => getShop(ch))), shopAccountsOf(id), customerUsage(id)]);
   // Großhandelspreise: Stand je Shop (ein Häkchen gilt für beide Shops)
   const resellerShops = links.map(({ channel, link }, i) => ({
     channel, link,
@@ -128,6 +132,8 @@ export default async function CustomerPage({ params, searchParams }: { params: P
           )}
         </aside>
       </div>
+      <DeleteRecord texts={t.remove} cancel={t.common.cancel} label={t.remove.customer} name={c.name} id={c.id} action={deleteCustomerAction}
+        blocked={customerBlocks(t, usage, t.customer.shopReseller)} docs={customerHasDocs(usage)} />
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { Icon } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
 import { speechLang, voiceApproval, type ApprovalMode, type Instruction, type Plan, type ActionResult } from "@/lib/agent/protocol";
 import { buildSnapshot, hideLayer, removeLayer, runActions, settle } from "./runtime";
-import { canListen, listen, speak, stopSpeaking } from "./voice";
+import { canListen, listen, LISTEN, speak, stopSpeaking, type ListenCtrl } from "./voice";
 
 type T = Dict["agent"];
 type Phase = "idle" | "thinking" | "plan" | "stepConfirm" | "commitConfirm" | "ask" | "running" | "done" | "error";
@@ -82,7 +82,8 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
   const pendingAct = useRef<Act | null>(null);
   const aborted = useRef(false);
   const commitResolve = useRef<((ok: boolean) => void) | null>(null);
-  const stopListening = useRef<(() => void) | null>(null);
+  const stopListening = useRef<ListenCtrl | null>(null);
+  const [pausing, setPausing] = useState(false);
   const phaseRef = useRef<Phase>("idle");
   phaseRef.current = phase;
   const voiceRef = useRef(true);
@@ -314,7 +315,7 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
   };
   const answerCommit = (ok: boolean) => { const r = commitResolve.current; commitResolve.current = null; setPhase("running"); setOpen(false); r?.(ok); };
   const stop = useCallback(() => {
-    aborted.current = true; stopSpeaking(); stopListening.current?.(); setListening(false); hideLayer();
+    aborted.current = true; stopSpeaking(); stopListening.current?.cancel(); setListening(false); hideLayer();
     commitResolve.current?.(false); commitResolve.current = null;
     if (runId.current) void fetch("/api/assistant", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "cancel", runId: runId.current }) }).catch(() => {});
     resetRun(); setPhase("idle"); setStatus(""); add("sys", t.stopped);
@@ -322,7 +323,7 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
   }, [add, t]);
 
   const mic = useCallback(async () => {
-    if (listeningRef.current) { stopListening.current?.(); return; }
+    if (listeningRef.current) { stopListening.current?.finish(); return; } // nochmal Knopf/F2 = fertig, jetzt abschicken
     const p = phaseRef.current;
     if (p === "thinking" || p === "running") return; // währenddessen nur „Stopp“
     if (!lang || !canListen()) { setOpen(true); add("sys", t.errors.mic); return; }
@@ -331,11 +332,18 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
     // „أيوه، قول لي أعمل لك إيه؟“ nur bei einer neuen Bitte
     if (voiceRef.current && (p === "idle" || p === "done" || p === "error")) await speak(t.greet, lang);
     setListening(true);
+    setPausing(false);
+    // Freigabe-Antworten („إي“ / „لا“) sind kurz → kürzere Pause; Bitten und Änderungen: bis zu 3 s Pause zum Nachdenken
+    const short = p === "stepConfirm" || p === "commitConfirm";
     stopListening.current = listen(lang, {
       partial: (txt) => setInput(txt),
-      done: (txt) => { stopListening.current = null; setListening(false); if (txt) submit(txt); },
-      error: () => { stopListening.current = null; setListening(false); add("sys", t.errors.mic); },
-    });
+      pause: (q) => setPausing(q),
+      done: (txt, cancelled) => {
+        stopListening.current = null; setListening(false); setPausing(false);
+        if (txt) submit(txt); else if (!cancelled) add("sys", t.heardNothing);
+      },
+      error: (code) => { stopListening.current = null; setListening(false); setPausing(false); add("sys", code === "not-allowed" || code === "service-not-allowed" ? t.errors.mic : t.errors.micStopped); },
+    }, short ? { ...LISTEN, silenceMs: 1800 } : LISTEN);
   }, [add, lang, submit, t]);
 
   // F2 = sprechen (öffnet das Fenster); Ctrl+K = Fenster zum Tippen
@@ -531,6 +539,15 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
                     </li>
                   ))}
                 </ul>
+              )}
+              {listening && (
+                <div className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800 ring-1 ring-red-200" data-agent-listening={pausing ? "pause" : "on"} aria-live="polite">
+                  <span className="relative flex h-2.5 w-2.5 shrink-0"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" /></span>
+                  <span className="min-w-0 flex-1" dir="auto">{pausing ? t.listenPause : t.listenHint}</span>
+                  <button type="button" onClick={() => stopListening.current?.finish()} className="btn-primary shrink-0 px-3 py-1.5 text-xs" data-agent-listen-done>
+                    <Icon name="check" className="h-3.5 w-3.5" />{t.listenDone}
+                  </button>
+                </div>
               )}
               <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); submit(input); }}>
                 <input ref={fileInput} type="file" multiple hidden accept=".xlsx,.xlsm,.csv,.pdf,image/*" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} data-agent-file-input />

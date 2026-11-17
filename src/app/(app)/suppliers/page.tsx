@@ -4,8 +4,10 @@ import { db, schema } from "@/db";
 import { fill, getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
+import { DoneNotice, deletedNumber } from "@/components/DoneNotice";
 
-export default async function SuppliersPage() {
+export default async function SuppliersPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+  const deleted = deletedNumber((await searchParams).deleted);
   const { t } = await getI18n();
   // nur Warenlieferanten; Firmen aus Ausgaben (Baumarkt, Steuerbüro …) stehen unter Ausgaben → Firmen (Wunsch Inhaber 12.11.2026)
   const [rows, [other]] = await Promise.all([
@@ -15,6 +17,7 @@ export default async function SuppliersPage() {
   return (
     <div>
       <PageHeader title={t.supplier.title} actions={<Link href="/suppliers/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.supplier.new}</Link>} />
+      {deleted != null && <DoneNotice text={fill(t.remove.deletedSupplier, { n: deleted })} />}
       <div className="stagger grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3">
         {rows.length === 0 && <div className="card col-span-2 p-10 text-center text-ink-soft lg:col-span-3">{t.supplier.empty}</div>}
         {rows.map((s) => (

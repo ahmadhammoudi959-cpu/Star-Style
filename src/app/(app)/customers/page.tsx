@@ -3,13 +3,14 @@ import { getI18n, fill } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { OpenButton } from "@/components/OpenButton";
+import { DoneNotice, deletedNumber } from "@/components/DoneNotice";
 import { FilterSelect } from "@/components/FilterSelect";
 import { SearchPick } from "@/components/SearchPick";
 import { can, requireSession } from "@/lib/auth";
 import { loadCustomerRows } from "@/lib/customer-list";
 import { ORIGIN_FILTERS, filterCustomerRows, filterQuery, nameIsEmail, readFilter, splitByOrigin, type CustomerRow, type PriceGroup } from "@/lib/customer-filter";
 
-type Sp = { q?: string; city?: string; tax?: string; group?: string; src?: string };
+type Sp = { q?: string; city?: string; tax?: string; group?: string; src?: string; deleted?: string };
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const sp = await searchParams;
@@ -71,6 +72,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
         )}
         <Link href="/customers/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.customer.new}</Link>
       </>} />
+      {deletedNumber(sp.deleted) != null && <DoneNotice text={fill(t.remove.deletedCustomer, { n: deletedNumber(sp.deleted)! })} />}
       {/* Auswählen statt tippen: Stadt, Steuer, oder Kunde direkt aus der Liste */}
       <form className="card relative z-10 mb-4 grid grid-cols-2 gap-2 p-3 animate-rise md:flex md:flex-row md:flex-wrap md:items-end md:gap-3 md:p-4">
         <div className="col-span-2 md:w-80">

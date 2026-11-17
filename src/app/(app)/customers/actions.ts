@@ -12,6 +12,8 @@ import { splitVatId } from "@/lib/vat-check";
 import { validEmail } from "@/lib/shopify/b2b-map";
 import { RESELLER_CHANNELS, setResellerWanted, syncShopCompanyNow } from "@/lib/shopify/b2b";
 import type { ShopChannel } from "@/lib/shopify/client";
+import { deleteCustomer, RecordDeleteError } from "@/lib/record-delete";
+import type { DeleteState } from "@/components/DeleteRecord";
 
 /** values: bei einem Fehler die getippten Eingaben zurück (React 19 setzt das Formular nach jeder Action zurück) */
 export type CustomerState = { error?: string; values?: Record<string, string> } | undefined;
@@ -111,4 +113,19 @@ export async function runVatCheck(_: CheckState, fd: FormData): Promise<CheckSta
   revalidatePath(`/customers/${c.id}`);
   if (!v.status) return { error: v.ownVatMissing ? "ownVatMissing" : "unavailable" };
   return { ok: true };
+}
+
+/** Aus Versehen angelegten Kunden löschen – nur ohne Angebote, Rechnungen, Retouren, Shop-Konto und Shop-Großhandelspreise (Wunsch Inhaber 17.11.2026) */
+export async function deleteCustomerAction(_: DeleteState, fd: FormData): Promise<DeleteState> {
+  const session = await requirePerm("customers");
+  let number: number;
+  try {
+    number = (await deleteCustomer(String(fd.get("id") ?? ""), session.uid)).number;
+  } catch (e) {
+    if (e instanceof RecordDeleteError) return { error: e.code };
+    console.error(e);
+    return { error: "error" };
+  }
+  revalidatePath("/", "layout"); // Kundenliste, Auswahlfelder, Startseite, „Erste Schritte“
+  redirect(`/customers?deleted=${number}`);
 }

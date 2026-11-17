@@ -4,6 +4,10 @@ import { db, schema } from "@/db";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { SupplierForm } from "../SupplierForm";
+import { deleteSupplierAction } from "../actions";
+import { DeleteRecord } from "@/components/DeleteRecord";
+import { supplierUsage } from "@/lib/record-delete";
+import { supplierBlocks, supplierHasDocs } from "@/lib/record-delete-view";
 
 export default async function SupplierPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,5 +18,13 @@ export default async function SupplierPage({ params }: { params: Promise<{ id: s
   if (!s) notFound();
   // Firmen aus Ausgaben haben ihre Seite unter Ausgaben → Firmen
   if (s.kind === "EXPENSE") redirect(`/expenses/vendors/${s.id}`);
-  return <div><PageHeader title={s.name} back="/suppliers" /><SupplierForm t={t} initial={s} /></div>;
+  const usage = await supplierUsage(s.id);
+  return (
+    <div>
+      <PageHeader title={s.name} back="/suppliers" />
+      <SupplierForm t={t} initial={s} />
+      <DeleteRecord texts={t.remove} cancel={t.common.cancel} label={t.remove.supplier} name={s.name} id={s.id} action={deleteSupplierAction}
+        blocked={supplierBlocks(t, usage)} docs={supplierHasDocs(usage)} />
+    </div>
+  );
 }
