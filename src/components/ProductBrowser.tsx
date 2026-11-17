@@ -2,16 +2,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
-import { Thumb } from "./Thumb";
+import { ZoomThumb } from "./ZoomThumb";
+import { ProductShowcase, type ShowcaseGroup } from "./ProductShowcase";
 import type { PickerOption } from "./VariantPicker";
 import { categoryCounts, searchOptions } from "@/lib/product-search";
 import { CategorySelect } from "./CategorySelect";
 
 export type BrowserLabels = {
   title: string; search: string; searchLabel: string; category: string; all: string; add: string; inDoc: string; done: string; empty: string; available: string; lines: string;
+  viewList: string; viewCatalog: string; hint: string; showcase: string; prev: string; next: string; close: string;
+  fullscreen: string; exitFullscreen: string; inStock: string; outOfStock: string; photoN: string;
 };
 
-type Group<T> = { key: string; name: string; nameNl: string; sku: string; category: string; imageId: string | null; variants: T[] };
+type Group<T> = ShowcaseGroup<T> & { nameNl: string };
+type View = "list" | "catalog";
+const VIEW_KEY = "ss-picker-view"; // Liste oder Katalog – je Gerät gemerkt
 
 /** Alle Artikel als Liste zum Durchsehen und Antippen (Fenster über der Seite): Suche, Kategorien, je Artikel seine Größen/Farben.
  *  Bleibt offen, damit man mehrere Positionen nacheinander hinzufügen kann. */
@@ -24,7 +29,11 @@ export function ProductBrowser<T extends PickerOption>({ options, onPick, onClos
   const [q, setQ] = useState("");
   const [cat, setCat] = useState(initialCategory);
   const [flash, setFlash] = useState<string | null>(null);
+  const [view, setView] = useState<View>("list");
+  const [show, setShow] = useState<number | null>(null); // Kundenansicht: Index in `groups`
   const searchRef = useRef<HTMLInputElement>(null);
+  const showRef = useRef(show);
+  showRef.current = show;
 
   const categories = useMemo(() => categoryCounts(options), [options]);
 
@@ -34,7 +43,7 @@ export function ProductBrowser<T extends PickerOption>({ options, onPick, onClos
     const m = new Map<string, Group<T>>();
     for (const o of hits) {
       const key = o.productId ?? o.id;
-      if (!m.has(key)) m.set(key, { key, name: o.nameDe, nameNl: o.nameNl, sku: o.sku, category: o.category ?? "", imageId: o.imageId ?? null, variants: [] });
+      if (!m.has(key)) m.set(key, { key, productId: o.productId ?? null, name: o.nameDe, nameNl: o.nameNl, sku: o.sku, category: o.category ?? "", imageId: o.imageId ?? null, variants: [] });
       m.get(key)!.variants.push(o);
     }
     // Varianten im Artikel in Formular-Reihenfolge (wie geladen), nicht nach Treffer-Reihenfolge
@@ -49,15 +58,25 @@ export function ProductBrowser<T extends PickerOption>({ options, onPick, onClos
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
+    // Esc bei offener Kundenansicht schließt nur diese (sie fängt die Taste selbst ab)
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && showRef.current == null) closeRef.current(); };
     document.addEventListener("keydown", esc);
     if (window.matchMedia("(pointer: fine)").matches) searchRef.current?.focus({ preventScroll: true });
+    try { if (localStorage.getItem(VIEW_KEY) === "catalog") setView("catalog"); } catch { /* ohne Speicher: Liste */ }
     return () => { document.body.style.overflow = prev; document.removeEventListener("keydown", esc); };
   }, []);
+  const pickView = (v: View) => { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* egal */ } };
+
+  // Filter geändert, während die Kundenansicht offen ist: im Bereich bleiben bzw. schließen
+  useEffect(() => {
+    if (show == null) return;
+    if (!groups.length) setShow(null);
+    else if (show >= groups.length) setShow(groups.length - 1);
+  }, [groups, show]);
 
   const add = (o: T) => {
     onPick(o);
-    if (closeOnPick) { onClose(); return; }
+    if (closeOnPick) { setShow(null); onClose(); return; }
     setFlash(o.id); window.setTimeout(() => setFlash((f) => (f === o.id ? null : f)), 900);
   };
 
@@ -69,8 +88,22 @@ export function ProductBrowser<T extends PickerOption>({ options, onPick, onClos
         {/* Kopf: Titel, Suche, Kategorien */}
         <div className="space-y-3 border-b border-black/5 bg-white p-4">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="flex items-center gap-2 text-lg font-bold"><Icon name="grid" className="h-5 w-5 text-brand-600" />{labels.title}</h2>
-            <button type="button" onClick={onClose} aria-label={labels.done} className="btn-ghost group h-10 w-10 p-0"><Icon name="x" className="h-5 w-5" /></button>
+            <div className="min-w-0">
+              <h2 className="flex items-center gap-2 text-lg font-bold"><Icon name="grid" className="h-5 w-5 text-brand-600" />{labels.title}</h2>
+              <p className="hidden text-xs text-ink-soft sm:block">{labels.hint}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex rounded-xl bg-slate-100 p-1 ring-1 ring-black/5" role="group" aria-label={`${labels.viewList} / ${labels.viewCatalog}`}>
+                {(["list", "catalog"] as const).map((v) => (
+                  <button key={v} type="button" onClick={() => pickView(v)} aria-pressed={view === v} title={v === "list" ? labels.viewList : labels.viewCatalog}
+                    className={`group flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold transition ${view === v ? "bg-white text-brand-700 shadow-card" : "text-ink-soft hover:text-ink"}`} data-view={v}>
+                    <Icon name={v === "list" ? "list" : "grid"} className="h-4 w-4" />
+                    <span className="hidden sm:inline">{v === "list" ? labels.viewList : labels.viewCatalog}</span>
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={onClose} aria-label={labels.done} className="btn-ghost group h-10 w-10 p-0"><Icon name="x" className="h-5 w-5" /></button>
+            </div>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             {categories.length > 0 && (
@@ -91,29 +124,53 @@ export function ProductBrowser<T extends PickerOption>({ options, onPick, onClos
           {groups.length === 0 ? (
             <p className="py-16 text-center text-sm text-ink-soft">{labels.empty}</p>
           ) : (
-            <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {groups.map((g) => {
+            <div className={`grid items-start gap-3 ${view === "catalog" ? "grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "md:grid-cols-2 xl:grid-cols-3"}`} data-browser-view={view}>
+              {groups.map((g, i) => {
                 const single = g.variants.length === 1 ? g.variants[0] : null;
+                const compact = view === "catalog";
+                const buttons = single ? (
+                  <VariantButton o={single} label={labels.add} flash={flash === single.id} price={priceOf?.(single) ?? ""} inDoc={qtyInDoc?.(single.id) ?? 0}
+                    labels={labels} compact={compact} onClick={() => add(single)} />
+                ) : (
+                  <div className="grid gap-1.5">
+                    {g.variants.map((o) => (
+                      <VariantButton key={o.id} o={o} label={[o.size, o.color].filter(Boolean).join(" · ") || labels.add} flash={flash === o.id}
+                        price={priceOf?.(o) ?? ""} inDoc={qtyInDoc?.(o.id) ?? 0} labels={labels} compact={compact} onClick={() => add(o)} />
+                    ))}
+                  </div>
+                );
+                const title = (
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold leading-snug [overflow-wrap:anywhere]">{g.name}</div>
+                    <div className="text-xs text-ink-soft"><bdi dir="ltr">{g.sku}</bdi>{g.category ? ` · ${g.category}` : ""}</div>
+                  </div>
+                );
+                if (view === "catalog") return (
+                  // Katalog: großes Foto oben, Klick = Kundenansicht
+                  <div key={g.key} className="card card-hover flex flex-col overflow-hidden p-0" data-catalog-card>
+                    <button type="button" onClick={() => setShow(i)} title={labels.showcase} aria-label={`${labels.showcase}: ${g.name}`}
+                      className="group/img relative block aspect-square w-full cursor-zoom-in overflow-hidden bg-white outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400">
+                      {g.imageId ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={`/api/files/${g.imageId}`} alt={g.name} loading="lazy" className="h-full w-full object-contain p-3 transition duration-300 motion-safe:group-hover/img:scale-105" />
+                      ) : (
+                        <span className="grid h-full place-items-center bg-brand-50/50 text-brand-200"><Icon name="box" className="h-14 w-14" /></span>
+                      )}
+                      <span className="absolute end-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-white/95 text-brand-700 opacity-0 shadow-card ring-1 ring-black/10 transition group-hover/img:opacity-100 group-focus-visible/img:opacity-100">
+                        <Icon name="zoom" className="h-4 w-4" />
+                      </span>
+                    </button>
+                    <div className="flex flex-1 flex-col gap-2 border-t border-black/5 p-3">{title}{buttons}</div>
+                  </div>
+                );
                 return (
                   <div key={g.key} className="card card-hover flex flex-col gap-2 p-3">
                     <div className="flex items-start gap-3">
-                      <Thumb id={g.imageId} size={56} />
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold leading-snug [overflow-wrap:anywhere]">{g.name}</div>
-                        <div className="text-xs text-ink-soft"><bdi dir="ltr">{g.sku}</bdi>{g.category ? ` · ${g.category}` : ""}</div>
-                      </div>
+                      <ZoomThumb id={g.imageId} size={56} onOpen={() => setShow(i)} openLabel={labels.showcase}
+                        info={{ title: g.name, sub: g.category, price: single ? priceOf?.(single) : undefined }} />
+                      {title}
                     </div>
-                    {single ? (
-                      <VariantButton o={single} label={labels.add} flash={flash === single.id} price={priceOf?.(single) ?? ""} inDoc={qtyInDoc?.(single.id) ?? 0}
-                        labels={labels} onClick={() => add(single)} />
-                    ) : (
-                      <div className="grid gap-1.5">
-                        {g.variants.map((o) => (
-                          <VariantButton key={o.id} o={o} label={[o.size, o.color].filter(Boolean).join(" · ") || labels.add} flash={flash === o.id}
-                            price={priceOf?.(o) ?? ""} inDoc={qtyInDoc?.(o.id) ?? 0} labels={labels} onClick={() => add(o)} />
-                        ))}
-                      </div>
-                    )}
+                    {buttons}
                   </div>
                 );
               })}
@@ -127,15 +184,37 @@ export function ProductBrowser<T extends PickerOption>({ options, onPick, onClos
           <button type="button" onClick={onClose} className="btn-primary px-8"><Icon name="check" className="h-4 w-4" />{labels.done}</button>
         </div>
       </div>
+      {show != null && groups.length > 0 && (
+        <ProductShowcase groups={groups} index={Math.min(show, groups.length - 1)} onIndex={setShow} onClose={() => setShow(null)} onAdd={add}
+          priceOf={priceOf} qtyInDoc={qtyInDoc} flash={flash} labels={labels} />
+      )}
     </div>,
     document.body,
   );
 }
 
-function VariantButton({ o, label, price, inDoc, flash, labels, onClick }: {
+function VariantButton({ o, label, price, inDoc, flash, labels, onClick, compact = false }: {
   o: PickerOption; label: string; price: string; inDoc: number; flash: boolean; labels: BrowserLabels; onClick: () => void;
+  /** Katalog (schmale Karten): ohne Barcode, Preis und Bestand unter dem Namen */
+  compact?: boolean;
 }) {
   const none = o.stockQty <= 0;
+  if (compact) return (
+    <button type="button" onClick={onClick}
+      className={`group flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-start text-sm ring-1 transition active:scale-[0.99] ${flash ? "bg-emerald-50 ring-emerald-300" : "bg-white ring-black/10 hover:bg-brand-50 hover:ring-brand-200"}`}>
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-600 text-white">
+        <Icon name={flash ? "check" : "plus"} className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold leading-snug [overflow-wrap:anywhere]">{label}</span>
+        <span className="flex flex-wrap items-baseline gap-x-2 text-[0.6875rem] text-ink-soft">
+          {price && <span className="num text-sm font-semibold text-ink">{price}</span>}
+          <span className={none ? "font-semibold text-red-600" : ""}>{labels.available}: {o.stockQty}</span>
+        </span>
+        {inDoc > 0 && <span className="badge mt-1 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">{labels.inDoc.replace("{n}", String(inDoc))}</span>}
+      </span>
+    </button>
+  );
   return (
     <button type="button" onClick={onClick}
       className={`group flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-sm ring-1 transition active:scale-[0.99] ${flash ? "bg-emerald-50 ring-emerald-300" : "bg-white ring-black/10 hover:bg-brand-50 hover:ring-brand-200"}`}>

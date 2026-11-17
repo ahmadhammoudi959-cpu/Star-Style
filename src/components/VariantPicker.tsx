@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./Icon";
-import { Thumb } from "./Thumb";
+import { ZoomThumb } from "./ZoomThumb";
 import { searchOptions } from "@/lib/product-search";
 
 export type PickerOption = {
@@ -57,7 +57,7 @@ export function VariantPicker({ options, placeholder, onPick, stockLabel, catego
             <li key={o.id}>
               <button type="button" onMouseEnter={() => setHi(i)} onClick={() => pick(o)}
                 className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-start text-sm ${i === hi ? "bg-brand-50" : ""}`}>
-                <Thumb id={o.imageId} size={40} />
+                <ZoomThumb id={o.imageId} size={40} info={{ title: optionLabel(o), sub: o.category }} />
                 <span className="me-auto">
                   <span className="font-semibold">{optionLabel(o)}</span>
                   <span className="block text-xs text-ink-soft" dir="ltr">{o.sku}{o.barcode && o.barcode !== o.sku ? ` · ${o.barcode}` : ""}</span>

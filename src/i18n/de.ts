@@ -251,6 +251,10 @@ const de = {
     allCustomers: "Alle Kunden", status: "Status", allStatuses: "Alle", pickExpense: "Ausgabe wählen oder suchen", openInvoice: "Rechnung öffnen", shipping: "Versand", allShipping: "Alle",
   },
   picker: {
+    viewList: "Liste", viewCatalog: "Katalog", showcase: "Groß zeigen (für den Kunden)",
+    hint: "Maus auf ein Foto = groß. Foto anklicken = Kundenansicht mit allen Fotos.",
+    prev: "Voriger Artikel", next: "Nächster Artikel", close: "Schließen", fullscreen: "Vollbild", exitFullscreen: "Vollbild beenden",
+    inStock: "Auf Lager", outOfStock: "Zurzeit nicht auf Lager", photoN: "Foto {n} von {m}",
     category: "Kategorie wählen", searchLabel: "oder Artikel suchen", all: "Alle Kategorien", browseAll: "Alle Artikel", title: "Artikel auswählen", search: "Suchen nach Name, Art.-Nr., Barcode oder Kategorie …",
     add: "Hinzufügen", inDoc: "Ausgewählt: {n}", done: "Fertig", empty: "Keine Artikel gefunden.", lines: "Positionen",
   },

@@ -252,6 +252,10 @@ const en: Dict = {
     allCustomers: "All customers", status: "Status", allStatuses: "All statuses", pickExpense: "Choose or search an expense", openInvoice: "Open invoice", shipping: "Shipping", allShipping: "All",
   },
   picker: {
+    viewList: "List", viewCatalog: "Catalog", showcase: "Show large (for the customer)",
+    hint: "Point at a photo to enlarge it. Click it for the customer view with all photos.",
+    prev: "Previous product", next: "Next product", close: "Close", fullscreen: "Full screen", exitFullscreen: "Exit full screen",
+    inStock: "In stock", outOfStock: "Currently out of stock", photoN: "Photo {n} of {m}",
     category: "Choose a category", searchLabel: "or search for a product", all: "All categories", browseAll: "All products", title: "Choose products", search: "Search by name, item no., barcode or category …",
     add: "Add", inDoc: "Added: {n}", done: "Done", empty: "No products found.", lines: "Lines",
   },

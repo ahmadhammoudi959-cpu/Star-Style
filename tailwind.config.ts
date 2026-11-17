@@ -19,8 +19,10 @@ export default {
       keyframes: {
         rise: { "0%": { opacity: "0", transform: "translateY(8px)" }, "100%": { opacity: "1", transform: "none" } },
         wiggle: { "0%,100%": { transform: "rotate(0)" }, "30%": { transform: "rotate(-8deg)" }, "60%": { transform: "rotate(6deg)" } },
+        // große Artikelfotos (Vorschau beim Zeigen, Kundenansicht)
+        zoom: { "0%": { opacity: "0", transform: "scale(.94)" }, "100%": { opacity: "1", transform: "none" } },
       },
-      animation: { rise: "rise .35s ease-out both", wiggle: "wiggle .5s ease-in-out" },
+      animation: { rise: "rise .35s ease-out both", wiggle: "wiggle .5s ease-in-out", zoom: "zoom .18s ease-out both" },
     },
   },
   plugins: [

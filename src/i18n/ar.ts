@@ -252,6 +252,10 @@ const ar: Dict = {
     allCustomers: "كل الزبائن", status: "الحالة", allStatuses: "كل الحالات", pickExpense: "اختار المصروف أو دوّر عليه", openInvoice: "عرض الفاتورة", shipping: "الشحن", allShipping: "الكل",
   },
   picker: {
+    viewList: "قائمة", viewCatalog: "كتالوج", showcase: "اعرضها كبيرة للزبون",
+    hint: "حط الماوس على الصورة بتكبر، واضغط عليها لعرض كبير للزبون مع كل الصور.",
+    prev: "المنتج السابق", next: "المنتج التالي", close: "إغلاق", fullscreen: "ملء الشاشة", exitFullscreen: "خروج من ملء الشاشة",
+    inStock: "متوفر", outOfStock: "غير متوفر حالياً", photoN: "صورة {n} من {m}",
     category: "اختار التصنيف", searchLabel: "أو دوّر على منتج", all: "كل التصنيفات", browseAll: "كل المنتجات", title: "اختار المنتجات", search: "دوّر بالاسم أو رقم المنتج أو الباركود أو التصنيف …",
     add: "ضيف", inDoc: "مضاف: {n}", done: "تم", empty: "ما في منتجات هون.", lines: "البنود",
   },

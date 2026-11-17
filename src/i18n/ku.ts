@@ -620,6 +620,10 @@ const ku: Dict = {
     openInvoice: "Fatûreyê veke", shipping: "Şandin", allShipping: "Hemû",
   },
   picker: {
+    viewList: "Lîste", viewCatalog: "Katalog", showcase: "Mezin nîşan bide (ji bo mişterî)",
+    hint: "Mişkê bibe ser wêneyekî – mezin dibe. Lê bitikîne – ji bo mişterî bi hemû wêneyan mezin nîşan dide.",
+    prev: "Berhema berê", next: "Berhema din", close: "Bigire", fullscreen: "Ekrana tijî", exitFullscreen: "Ji ekrana tijî derkeve",
+    inStock: "Li embarê heye", outOfStock: "Niha li embarê tune", photoN: "Wêne {n} ji {m}",
     category: "Kategoriyekê hilbijêre",
     searchLabel: "an li berhemekê bigere",
     all: "Hemû kategorî",

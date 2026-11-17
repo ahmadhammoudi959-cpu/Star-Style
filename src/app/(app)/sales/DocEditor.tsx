@@ -3,7 +3,7 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import { saveInvoiceAction, saveOfferAction } from "./actions";
 import { ErrorBox, Field } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
-import { Thumb } from "@/components/Thumb";
+import { ZoomThumb } from "@/components/ZoomThumb";
 import { optionLabel, type PickerOption } from "@/components/VariantPicker";
 import { ProductPickerBar } from "@/components/ProductPickerBar";
 import { bpToPercent, formatCents, parseMoney, parsePercentToBp } from "@/lib/money";
@@ -199,7 +199,10 @@ export function DocEditor({ t, kind, customers, options, initial, intl, rights =
                   <button type="button" disabled={i === lines.length - 1} onClick={() => move(i, 1)} className="text-ink-soft hover:text-brand-700 disabled:opacity-20" aria-label="down">▼</button>
                 </div>
                 <div className="col-span-6 flex items-start gap-2 md:col-span-1">
-                  {l.variantId && <Thumb id={optById.get(l.variantId)?.imageId} size={44} />}
+                  {l.variantId && (() => {
+                    const o = optById.get(l.variantId);
+                    return <ZoomThumb id={o?.imageId} size={44} info={{ title: o?.nameDe ?? l.description, sub: [o?.size, o?.color].filter(Boolean).join(" · ") }} />;
+                  })()}
                   <div className="min-w-0 flex-1">
                   <input value={l.description} onChange={(e) => upd(l.key, { description: e.target.value })} className="input" placeholder={t.sales.freeText} aria-label={t.product.nameDe} />
                   {l.available != null && <span className={`mt-1 inline-block text-xs ${short ? "font-semibold text-red-600" : "text-ink-soft"}`}>{short ? t.sales.notEnough + " · " : ""}{t.sales.available}: {l.available}</span>}

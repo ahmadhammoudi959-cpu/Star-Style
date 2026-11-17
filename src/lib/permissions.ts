@@ -125,6 +125,8 @@ export const ROUTES: [RegExp, Need][] = [
   [R("/api/pdf/goods-receipt"), { any: ["stock.receive"] }],
   [R("/api/pdf/dunning"), { any: ["receivables"] }],
   [R("/api/pdf/(?:invoice|offer|receipt)"), { any: ["sales.view"] }],
+  // Fotos eines Artikels (Kundenansicht im Artikel-Fenster) – Produktfotos sehen alle Angemeldeten
+  [R("/api/products/[^/]+/photos"), "all"],
   // Dateien: die Route prüft selbst, wozu die Datei gehört (Beleg einer Ausgabe, Monatsmappe …)
   [R("/api/(?:files|zxing|health)"), "all"],
   [R("/_next"), "all"],
