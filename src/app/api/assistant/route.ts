@@ -20,10 +20,12 @@ const el = z.object({
 });
 const snapshot = z.object({ url: z.string().max(500), title: z.string().max(300), dialog: z.string().max(300).optional(), elements: z.array(el).max(LIMITS.elements + 200), text: z.string().max(12_000) });
 const runId = z.string().uuid();
+/** im Chat abgelegte Dateien (IDs aus /api/temp-files – der Server liest nur Dateien dieser Person) */
+const files = z.array(z.string().uuid()).max(10).optional();
 const body = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("start"), goal: z.string().trim().min(1).max(2000), snapshot }),
+  z.object({ kind: z.literal("start"), goal: z.string().trim().min(1).max(2000), snapshot, files }),
   z.object({ kind: z.literal("continue"), runId, results: z.array(z.object({ i: z.number().int(), ok: z.boolean(), note: z.string().max(500).optional() })).max(30), note: z.string().max(2000).optional(), snapshot }),
-  z.object({ kind: z.literal("answer"), runId, answer: z.string().max(2000), approve: z.enum(["auto", "step", "no"]).optional(), snapshot }),
+  z.object({ kind: z.literal("answer"), runId, answer: z.string().max(2000), approve: z.enum(["auto", "step", "no"]).optional(), snapshot, files }),
   z.object({ kind: z.literal("cancel"), runId }),
 ]);
 
@@ -41,7 +43,7 @@ export async function POST(req: Request) {
   try {
     const out = await agentStep(parsed as AgentRequest, { access: a, userId: a.uid, userName: a.name, locale, company });
     // nachvollziehbar: wer hat was beauftragt / freigegeben (die Änderungen selbst protokollieren die Seiten wie immer)
-    if (parsed.kind === "start") await db.insert(schema.auditLog).values({ entity: "assistant", entityId: out.runId, action: "start", userId: a.uid, after: { goal: parsed.goal } });
+    if (parsed.kind === "start") await db.insert(schema.auditLog).values({ entity: "assistant", entityId: out.runId, action: "start", userId: a.uid, after: { goal: parsed.goal, files: parsed.files?.length ?? 0 } });
     if (parsed.kind === "answer" && parsed.approve && parsed.approve !== "no") await db.insert(schema.auditLog).values({ entity: "assistant", entityId: out.runId, action: "approve", userId: a.uid, after: { mode: parsed.approve } });
     return Response.json(out, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {

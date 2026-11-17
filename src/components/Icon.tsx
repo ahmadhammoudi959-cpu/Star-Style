@@ -65,6 +65,7 @@ const PATHS = {
   volumeOff: "M11 5 6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6",
   minus: "M5 12h14",
   stop: "M7 7h10v10H7z",
+  sheet: "M4 4h16v16H4zM4 9h16M4 14h16M10 4v16",
 } as const;
 
 export type IconName = keyof typeof PATHS;

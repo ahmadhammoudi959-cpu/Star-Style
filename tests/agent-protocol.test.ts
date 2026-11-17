@@ -3,6 +3,7 @@ import {
   isCommitText, matchScore, norm, parseActions, parseInstruction, parsePlan, safePath, snapshotToText, speechLang, voiceApproval, LIMITS,
 } from "../src/lib/agent/protocol";
 import { pageMapText } from "../src/lib/agent/pages";
+import { pickVoice } from "../src/components/agent/voice";
 import type { Access, Perm } from "../src/lib/permissions";
 
 describe("Assistent: Text vergleichen", () => {
@@ -138,13 +139,14 @@ describe("Assistent: Seite als Text", () => {
 describe("Assistent: Stimme", () => {
   it("Erkennungssprache", () => {
     expect(speechLang("ar", ["de-DE", "ar-SY"])).toBe("ar-SY");
-    expect(speechLang("ar", ["de-DE"])).toBe("ar-EG");
+    expect(speechLang("ar", ["de-DE"])).toBe("ar-SY"); // syrisch (Wunsch Inhaber 17.11.2026)
     expect(speechLang("de")).toBe("de-DE");
     expect(speechLang("en")).toBe("en-US");
     expect(speechLang("ku")).toBeNull(); // Chrome kann kein Kurmancî – nur Tippen
   });
   it("kurze Antworten auf den Plan: alles / Schritt für Schritt / nein", () => {
     const cases: [string, ReturnType<typeof voiceApproval>][] = [
+      ["إي", "auto"], ["إي يلا نفّذ", "auto"], ["تمام منيح", "auto"], ["مو هيك", "no"], ["استنى", "no"], ["وحدة وحدة", "step"],
       ["كله", "auto"], ["ايوه كمل", "auto"], ["أيوه يا ستار ستايل", "auto"], ["تمام يلا", "auto"], ["نفذ", "auto"], ["ok", "auto"], ["Ja, mach", "auto"], ["yes go ahead", "auto"], ["Erê", "auto"],
       ["خطوة خطوة", "step"], ["أكّد كل خطوة", "step"], ["اسألني", "step"], ["Schritt für Schritt", "step"], ["step by step", "step"], ["gav bi gav", "step"],
       ["لا", "no"], ["لأ خلاص", "no"], ["nein", "no"], ["stop", "no"], ["no thanks", "no"],
@@ -154,5 +156,17 @@ describe("Assistent: Stimme", () => {
   it("Änderungen und andere Sätze sind keine Freigabe (gehen als Text an die KI)", () => {
     for (const s of ["لا، خلي الكمية 5", "ايوه بس خلي الزبون احمد", "Ja, aber Kunde Jahn", "nimm Jahn", "اهلا", "احمد", "okay but change the price to 20", "", "   "])
       expect([s, voiceApproval(s)]).toEqual([s, null]);
+  });
+});
+
+describe("Assistent: Stimme zum Vorlesen", () => {
+  const v = (lang: string, name: string) => ({ lang, name });
+  it("Arabisch: syrisch/levantinisch vor ägyptisch und saudisch, natürliche Stimme zuerst", () => {
+    const voices = [v("ar-EG", "Microsoft Salma Online (Natural) - Arabic (Egypt)"), v("ar-SA", "Microsoft Hamed - Arabic (Saudi)"), v("ar-SY", "Microsoft Laith Online (Natural) - Arabic (Syria)"), v("de-DE", "Google Deutsch")];
+    expect(pickVoice(voices, "ar-SY")?.name).toContain("Laith");
+    expect(pickVoice([v("ar-LB", "Microsoft Layla Online (Natural)"), v("ar-EG", "Microsoft Hoda")], "ar-SY")?.lang).toBe("ar-LB");
+    expect(pickVoice([v("ar-EG", "Microsoft Hoda"), v("ar-SA", "Microsoft Naayf")], "ar-SY")?.lang).toMatch(/^ar-/); // irgendeine arabische
+    expect(pickVoice([v("de-DE", "Anna"), v("en-US", "Samantha")], "ar-SY")).toBeUndefined(); // keine → still
+    expect(pickVoice([v("de_DE", "Anna"), v("de-DE", "Microsoft Katja Online (Natural)")], "de-DE")?.name).toContain("Katja");
   });
 });

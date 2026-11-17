@@ -7,12 +7,13 @@ import "server-only";
  */
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { callClaude, type ContentBlock, type Message, type Tool } from "./client";
+import { AiError, callClaude, type ContentBlock, type Message, type Tool } from "./client";
 import { LANG, TOOLS as ASK_TOOLS, runTool as runAskTool } from "./ask";
 import { todayIso } from "../dates";
 import { allowed, type Access, type Perm } from "../permissions";
 import { pageMapText } from "../agent/pages";
-import { parseInstruction, snapshotToText, type ActionResult, type ApprovalMode, type Instruction, type Plan, type Snapshot } from "../agent/protocol";
+import { fileBlocks, readFileTool } from "./agent-files";
+import { parseInstruction, snapshotToText, wellFormed, type ActionResult, type ApprovalMode, type Instruction, type Plan, type Snapshot } from "../agent/protocol";
 
 type Run = {
   id: string; userId: string; locale: string; messages: Message[];
@@ -47,7 +48,7 @@ const CLIENT_TOOLS: Tool[] = [
       step: { type: "integer", description: "number of the plan step you are working on (1-based); omit for read-only tasks" },
       say: { type: "string", description: "very short status for the user, e.g. 'choosing the customer' (user's language)" },
       actions: { type: "array", maxItems: 10, items: { type: "object", properties: {
-        do: { type: "string", enum: ["navigate", "click", "type", "select", "check", "key", "wait", "wait_for"] },
+        do: { type: "string", enum: ["navigate", "click", "type", "select", "check", "key", "wait", "wait_for", "attach"] },
         path: { type: "string", description: "navigate: app path like /sales/invoices/new" },
         target: { type: "object", properties: { id: { type: "string", description: "e.g. e12" }, text: { type: "string", description: "visible text/label of the element" }, role: { type: "string", enum: ["button", "link", "input", "select", "checkbox", "option", "any"] }, nth: { type: "integer" } } },
         text: { type: "string", description: "type: text to type; wait_for: text to wait for" },
@@ -55,6 +56,7 @@ const CLIENT_TOOLS: Tool[] = [
         clear: { type: "boolean", description: "type: clear the field first (default true)" },
         option: { type: "string", description: "select: visible option text" },
         checked: { type: "boolean" },
+        file: { type: "string", description: "attach: file id of a file the user attached (target = the file field)" },
         key: { type: "string", enum: ["Enter", "Escape", "Tab", "ArrowDown", "ArrowUp", "Backspace"] },
         ms: { type: "integer" }, timeoutMs: { type: "integer" },
         commit: { type: "boolean" },
@@ -74,6 +76,8 @@ const LOOKUP_TOOLS: (Tool & { need: Perm[] })[] = [
     input_schema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer" } }, required: ["query"] } },
   { name: "find_suppliers", need: ["suppliers", "stock.receive", "expenses.view"], description: "Find goods suppliers and expense companies by name.",
     input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
+  { name: "read_file", need: ["assistant"], description: "Read more rows of a spreadsheet the user attached (rows are numbered like in Excel). Use it when the file has more rows than were shown.",
+    input_schema: { type: "object", properties: { file: { type: "string", description: "file id" }, sheet: { type: "string" }, from: { type: "integer" }, to: { type: "integer" } }, required: ["file"] } },
   { name: "find_documents", need: ["sales.view"], description: "Find invoices and offers by number (e.g. RE-2026-0004) or customer name. Returns kind, number, status, date, gross amount and the app path.",
     input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
 ];
@@ -82,9 +86,10 @@ type Row = Record<string, unknown>;
 const like = (q: unknown) => `%${String(q ?? "").trim().toLowerCase()}%`;
 const eur = (c: unknown) => (c == null ? null : Math.round(Number(c)) / 100);
 
-async function runLookup(name: string, i: Record<string, unknown>, access: Access): Promise<unknown> {
+async function runLookup(name: string, i: Record<string, unknown>, access: Access, uid: string): Promise<unknown> {
   const raw = String(i.query ?? "").trim().slice(0, 100);
   switch (name) {
+    case "read_file": return readFileTool(uid, i);
     case "find_customers": {
       const r = await db.execute<Row>(sql`select id, number, name, contact, city, email, price_group from customers
         where lower(name) like ${like(raw)} or lower(coalesce(email,'')) like ${like(raw)} or lower(coalesce(contact,'')) like ${like(raw)}
@@ -131,6 +136,15 @@ async function runLookup(name: string, i: Record<string, unknown>, access: Acces
   }
 }
 
+/**
+ * Sprache des Assistenten – wird auch vorgelesen. Arabisch = syrischer Dialekt (Wunsch Inhaber 17.11.2026: „يتكلم باللهجة
+ * السورية الصح … مش المصرية ولا الفصحى، عشان بينطقها غلط“).
+ */
+export const AGENT_LANG: Record<string, string> = {
+  ...LANG,
+  ar: "Syrian Arabic as spoken in Damascus (Shami colloquial) – never Egyptian dialect and never Modern Standard Arabic. Use Syrian words and grammar: شو، ليش، وين، هلق، هيك، هاد/هي/هدول، كتير، منيح، لسا، بدّي/بدّك، رح + verb for the future (رح إفتح الصفحة), عم + verb for now (عم دوّر عالزبون), في/ما في، مو (not مش), إي/لا، تمام. Do not use Egyptian words (عايز، دلوقتي، كده، إيه، أوي، بتاع، ازاي، فين) or formal words (سوف، لقد، إنّ، هذا، الذي، يرجى). Your texts are read aloud: short spoken sentences, like a Syrian colleague sitting next to the user. Keep product and customer names, numbers and the German money/date format unchanged.",
+};
+
 function systemPrompt(o: { locale: string; company: string; userName: string; pages: string; mode: ApprovalMode | null; plan: Plan | null }) {
   const state = !o.plan ? "No plan approved yet."
     : `Approved plan: ${o.plan.title} | steps: ${o.plan.steps.map((s, i) => `${i + 1}. ${s.text}${s.commit ? " [commit]" : ""}`).join(" ; ")}. Mode: ${o.mode === "step" ? "the app asks the user before each step (just continue normally)" : "run all steps without asking"}.`;
@@ -158,21 +172,31 @@ NEVER
 APP PAGES (only these are available to this user)
 ${o.pages}
 
+FILES THE USER ATTACHES
+- Attached files appear in the user's message: spreadsheets as rows "R<row>: cell | cell" (row numbers like in Excel, "[photo]" = a picture in that row), PDFs and photos directly. read_file shows more rows of a big spreadsheet.
+- To put an attached file into a file field of the page: act {do:"attach", target:<file field>, file:<file id>}. File fields are listed with kind "file" (often hidden behind a button – still use their id).
+- Where files belong:
+  • A list of products (Excel/CSV, usually with barcodes, prices, maybe photos) → navigate to /products/import?file=<file id> (separately attached product photos: add &photos=<id>,<id>). That page reads the file itself, matches the columns, checks every row (barcode already in the system, missing data) and shows the photos. Look at the result, fix wrong column choices with its select boxes if needed, tell the user what will be created, then press its import button in a commit step. Never type many products one by one.
+  • A receipt or bill for costs (PDF/photo) → /expenses/new: attach it to the receipt field, press the button that reads the receipt (it fills the form), check the fields, then save in a commit step.
+  • A supplier's delivery note or invoice for goods → /receive: add each item with the product search, quantity and purchase price from the file, then save in a commit step.
+  • A photo for one product → open that product, attach it to its photo field, save.
+  • Otherwise: tell the user briefly what is in the file and ask what to do with it.
+
 WIDGETS
 - Product search fields: type the name/barcode, then click the result (target.text = product name) or press Enter for the first hit. The "all products" button opens a window with categories, search and "+" buttons per size/color.
 - Customer/document search fields show suggestions while typing; click the right suggestion.
 - Select boxes: use select with the visible option text. Checkboxes: use check.
 
 LANGUAGE
-- Write everything the user sees (plan, say, ask, finish) in ${LANG[o.locale] ?? "German"}. Keep product and customer names unchanged. Money in German format (1.234,56 €), dates like 18.11.2026. Be short.`;
+- Write everything the user sees (plan, say, ask, finish) in ${AGENT_LANG[o.locale] ?? "German"}. Keep product and customer names unchanged. Money in German format (1.234,56 €), dates like 18.11.2026. Be short.`;
 }
 
 const textOf = (content: ContentBlock[]) => content.filter((c): c is Extract<ContentBlock, { type: "text" }> => c.type === "text").map((c) => c.text).join("\n").trim();
 
 export type AgentRequest =
-  | { kind: "start"; goal: string; snapshot: Snapshot }
+  | { kind: "start"; goal: string; snapshot: Snapshot; files?: string[] }
   | { kind: "continue"; runId: string; results: ActionResult[]; note?: string; snapshot: Snapshot }
-  | { kind: "answer"; runId: string; answer: string; approve?: ApprovalMode | "no"; snapshot: Snapshot }
+  | { kind: "answer"; runId: string; answer: string; approve?: ApprovalMode | "no"; snapshot: Snapshot; files?: string[] }
   | { kind: "cancel"; runId: string };
 
 export type AgentReply = { runId: string; instruction: Instruction };
@@ -189,7 +213,7 @@ export async function agentStep(req: AgentRequest, who: { access: Access; userId
     for (const [k, r] of RUNS) if (r.userId === who.userId) RUNS.delete(k); // ein Lauf je Person
     run = { id: crypto.randomUUID(), userId: who.userId, locale: who.locale, messages: [], pending: null, held: [], snapAt: null, proposed: null, plan: null, mode: null, turns: 0, calls: 0, created: Date.now(), touched: Date.now() };
     RUNS.set(run.id, run);
-    run.messages.push({ role: "user", content: [{ type: "text", text: `USER REQUEST: ${req.goal.slice(0, 2000)}${PAGE_MARK}${snapshotToText(req.snapshot)}` }] });
+    run.messages.push({ role: "user", content: [{ type: "text", text: `USER REQUEST: ${wellFormed(req.goal.slice(0, 2000))}${PAGE_MARK}${snapshotToText(req.snapshot)}` }, ...(await fileBlocks(who.userId, req.files ?? []))] });
     run.snapAt = { msg: 0, block: 0 };
   } else {
     const r = RUNS.get(req.runId);
@@ -219,12 +243,13 @@ export async function agentStep(req: AgentRequest, who: { access: Access; userId
         body = `NOT EXECUTED – the user stopped before these actions and says: ${req.answer.slice(0, 1000)}`;
       } else body = `USER ANSWER: ${req.answer.slice(0, 1000)}`;
     }
-    const text = `${body}${PAGE_MARK}${snapshotToText(req.snapshot)}`;
+    const text = `${wellFormed(body)}${PAGE_MARK}${snapshotToText(req.snapshot)}`;
+    const files = req.kind === "answer" && req.files?.length ? await fileBlocks(who.userId, req.files) : [];
     if (run.pending) {
-      run.messages.push({ role: "user", content: [...run.held, { type: "tool_result", tool_use_id: run.pending.toolId, content: text }] });
+      run.messages.push({ role: "user", content: [...run.held, { type: "tool_result", tool_use_id: run.pending.toolId, content: text }, ...files] });
       run.snapAt = { msg: run.messages.length - 1, block: run.held.length };
     } else {
-      run.messages.push({ role: "user", content: [{ type: "text", text }] });
+      run.messages.push({ role: "user", content: [{ type: "text", text }, ...files] });
       run.snapAt = { msg: run.messages.length - 1, block: 0 };
     }
     run.pending = null; run.held = [];
@@ -239,7 +264,14 @@ export async function agentStep(req: AgentRequest, who: { access: Access; userId
     if (++run.calls > MAX_CALLS) { RUNS.delete(run.id); return { runId: run.id, instruction: { type: "error", code: "tooLong" } }; }
     let res: Awaited<ReturnType<typeof callClaude>>;
     try {
-      res = await callClaude({ system, messages: run.messages, tools }, { timeoutMs: 90_000, fetchImpl: opts.fetchImpl });
+      try {
+        res = await callClaude({ system, messages: run.messages, tools }, { timeoutMs: 90_000, fetchImpl: opts.fetchImpl });
+      } catch (e) {
+        // Sicherheitsnetz: lehnt die KI einen Denk-Block ab (gebunden an den früheren Gesprächsstand), ohne alle Denk-Blöcke noch einmal
+        if (!(e instanceof AiError && e.code === "badRequest" && /thinking|signature/i.test(e.message))) throw e;
+        stripThinking(run, -1);
+        res = await callClaude({ system, messages: run.messages, tools }, { timeoutMs: 90_000, fetchImpl: opts.fetchImpl });
+      }
     } catch (e) {
       if (undo) undo(); else RUNS.delete(run.id); // neue Bitte: ganz weg, der Browser fängt sie neu an
       throw e;
@@ -269,7 +301,8 @@ export async function agentStep(req: AgentRequest, who: { access: Access; userId
       const need = LOOKUP_TOOLS.find((t) => t.name === u.name)?.need ?? (tool ? (["ask"] as Perm[]) : null);
       if (!tool || !need || !allowed(who.access, { any: need })) { results.push({ type: "tool_result", tool_use_id: u.id, content: "Unknown or not allowed tool.", is_error: true }); continue; }
       try {
-        const out = JSON.stringify(await runLookup(u.name, (u.input ?? {}) as Record<string, unknown>, who.access));
+        const val = await runLookup(u.name, (u.input ?? {}) as Record<string, unknown>, who.access, who.userId);
+        const out = typeof val === "string" ? val : JSON.stringify(val);
         results.push({ type: "tool_result", tool_use_id: u.id, content: out.length > 30_000 ? out.slice(0, 30_000) : out });
       } catch (e) {
         results.push({ type: "tool_result", tool_use_id: u.id, content: `Error: ${(e as Error).message}`, is_error: true });
@@ -288,15 +321,31 @@ export async function agentStep(req: AgentRequest, who: { access: Access; userId
   return { runId: run.id, instruction: { type: "error", code: "noAnswer" } };
 }
 
-/** Den vorigen Seiten-Snapshot durch einen kurzen Hinweis ersetzen (die KI braucht nur den neuesten) */
+/**
+ * Den vorigen Seiten-Snapshot durch einen kurzen Hinweis ersetzen (die KI braucht nur den neuesten – spart Tokens).
+ * Achtung (live 17.11.2026, „الذكاء الاصطناعي رفض الطلب“ ab dem 2. Schritt): Denk-Blöcke sind an den GANZEN Gesprächsstand
+ * davor gebunden – ändert sich etwas davor, lehnt die API sie ab („Invalid signature in thinking block … Content before this
+ * block differs“). Darum nach jeder Kürzung alle Denk-Blöcke dahinter entfernen (erlaubt, die KI denkt neu).
+ */
 function dropOldSnapshot(run: Run) {
   const at = run.snapAt;
   if (!at) return;
   const m = run.messages[at.msg];
   if (!m || typeof m.content === "string") return;
   const b = m.content[at.block];
-  if (b?.type === "text" && b.text.includes(PAGE_MARK)) b.text = b.text.slice(0, b.text.indexOf(PAGE_MARK)) + "\n\n(older page view removed)";
-  else if (b?.type === "tool_result" && b.content.includes(PAGE_MARK)) b.content = b.content.slice(0, b.content.indexOf(PAGE_MARK)) + "\n\n(older page view removed)";
+  let changed = false;
+  if (b?.type === "text" && b.text.includes(PAGE_MARK)) { b.text = b.text.slice(0, b.text.indexOf(PAGE_MARK)) + "\n\n(older page view removed)"; changed = true; }
+  else if (b?.type === "tool_result" && b.content.includes(PAGE_MARK)) { b.content = b.content.slice(0, b.content.indexOf(PAGE_MARK)) + "\n\n(older page view removed)"; changed = true; }
+  if (changed) stripThinking(run, at.msg);
+}
+
+/** Denk-Blöcke aller KI-Nachrichten nach Index `after` entfernen (-1 = alle). Bleibt eine Nachricht leer, steht dort ein Platzhalter. */
+export function stripThinking(run: { messages: Message[] }, after: number) {
+  run.messages.forEach((m, i) => {
+    if (i <= after || m.role !== "assistant" || typeof m.content === "string") return;
+    const kept = m.content.filter((c) => { const t = (c as { type: string }).type; return t !== "thinking" && t !== "redacted_thinking"; });
+    if (kept.length !== m.content.length) m.content = kept.length ? kept : [{ type: "text", text: "(no answer)" }];
+  });
 }
 
 export const agentRunsForTest = RUNS;

@@ -92,7 +92,7 @@ export const ROUTES: [RegExp, Need][] = [
   [R("/backup"), "admin"],
   [R("/api/backup"), "admin"], // /api/backup/upload läuft an der Middleware vorbei (Datei in Stücken) und prüft selbst
   [R("/settings"), { any: ["settings"] }],
-  [R("/products/new"), { any: ["products.edit"] }],
+  [R("/products/(?:new|import)"), { any: ["products.edit"] }],
   [R("/(?:products|categories|stock)"), { any: ["products.view"] }],
   [R("/receive"), { any: ["stock.receive"] }],
   [R("/write-offs"), { any: ["stock.writeoff"] }],
@@ -123,6 +123,8 @@ export const ROUTES: [RegExp, Need][] = [
   // Kundenliste als Excel (alle E-Mails auf einmal) – eigenes Recht, nicht schon mit „Kunden“
   [R("/api/customers/export"), { any: ["customers.export"] }],
   [R("/api/assistant"), { any: ["assistant"] }],
+  // abgelegte Dateien (Assistent, Artikel-Import): läuft an der Middleware vorbei (größere Bodys) und prüft selbst
+  [R("/api/temp-files"), { any: ["assistant", "products.edit"] }],
   [R("/api/pdf/design-preview"), { any: ["design"] }],
   [R("/api/pdf/goods-receipt"), { any: ["stock.receive"] }],
   [R("/api/pdf/dunning"), { any: ["receivables"] }],

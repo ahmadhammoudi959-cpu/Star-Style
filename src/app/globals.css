@@ -110,3 +110,25 @@ body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smooth
 [dir="rtl"] .ss-slide { animation-direction: reverse; }
 .ss-breathe { animation: ss-breathe 1.8s ease-in-out infinite; }
 .ss-glow { animation: ss-glow 1.8s ease-in-out infinite; }
+
+/* Assistent „Star Style“ arbeitet: Licht läuft in den Logo-Farben um den Bildschirm (Wunsch Inhaber 17.11.2026).
+   Unter dem Assistenten-Fenster (z 66), über der Seite und ihren Fenstern; Zeiger/Rahmen des Assistenten liegen noch darüber.
+   Kante = scharfe Linie, ::after = weicher Schein nach innen. Wartet er auf eine Antwort → schwächer (Tempo per JS, ohne Sprung). */
+@property --ai-angle { syntax: "<angle>"; initial-value: 0deg; inherits: true; }
+.ai-glow { position: fixed; inset: 0; z-index: 65; pointer-events: none; opacity: 1; transition: opacity .6s ease;
+  animation: ai-spin 4s linear infinite, ai-in .5s ease-out; }
+.ai-glow::before, .ai-glow::after { content: ""; position: absolute; inset: 0;
+  background: conic-gradient(from var(--ai-angle), #1752d6 0turn, #5b8cff .14turn, #e3191c .3turn, #ff6b70 .38turn, #1752d6 .55turn, #2f6bff .75turn, #1752d6 1turn); }
+.ai-glow::before { padding: .25rem;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; }
+.ai-glow::after { opacity: .6; animation: ai-breathe 2.6s ease-in-out infinite alternate;
+  -webkit-mask: linear-gradient(to bottom, rgba(0,0,0,.9), rgba(0,0,0,.35) .5rem, transparent 2rem), linear-gradient(to top, rgba(0,0,0,.9), rgba(0,0,0,.35) .5rem, transparent 2rem),
+    linear-gradient(to right, rgba(0,0,0,.9), rgba(0,0,0,.35) .5rem, transparent 2rem), linear-gradient(to left, rgba(0,0,0,.9), rgba(0,0,0,.35) .5rem, transparent 2rem);
+  mask: linear-gradient(to bottom, rgba(0,0,0,.9), rgba(0,0,0,.35) .5rem, transparent 2rem), linear-gradient(to top, rgba(0,0,0,.9), rgba(0,0,0,.35) .5rem, transparent 2rem),
+    linear-gradient(to right, rgba(0,0,0,.9), rgba(0,0,0,.35) .5rem, transparent 2rem), linear-gradient(to left, rgba(0,0,0,.9), rgba(0,0,0,.35) .5rem, transparent 2rem); }
+.ai-glow-wait { opacity: .5; }
+.ai-glow-out { opacity: 0; }
+@keyframes ai-spin { to { --ai-angle: 360deg; } }
+@keyframes ai-in { from { opacity: 0; } }
+@keyframes ai-breathe { from { opacity: .45; } to { opacity: .8; } }

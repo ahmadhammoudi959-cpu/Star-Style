@@ -91,7 +91,7 @@ export const config = {
   // Sicher, weil jede Server-Action selbst requireSession() prüft (gleiche Prüfung inkl. Sitzungs-Version) und der Webhook per HMAC.
   matcher: [
     {
-      source: "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|fonts/|api/shopify/webhook|api/whatsapp/webhook|api/backup/upload).*)",
+      source: "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|fonts/|api/shopify/webhook|api/whatsapp/webhook|api/backup/upload|api/temp-files).*)",
       missing: [{ type: "header", key: "next-action" }],
     },
   ],

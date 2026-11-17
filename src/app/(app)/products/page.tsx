@@ -52,7 +52,10 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title={t.product.title} actions={edit && <Link href="/products/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.product.new}</Link>} />
+      <PageHeader title={t.product.title} actions={edit && <>
+        <Link href="/products/import" className="btn-ghost group" data-products-import><Icon name="sheet" className="h-4 w-4" />{t.pimport.open}</Link>
+        <Link href="/products/new" className="btn-primary group"><Icon name="plus" className="h-4 w-4" />{t.product.new}</Link>
+      </>} />
       {pend.map((x) => (
         <Link key={x.channel} href={`/shops/${x.channel}#pending`} className="card card-hover group mb-3 flex animate-rise items-center gap-3 p-3 text-sm ring-1 ring-accent-500/20">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-50 text-accent-600"><Icon name="upload" className="icon-pop h-5 w-5" /></span>

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { agentRunsForTest, agentStep, type AgentRequest } from "../src/lib/ai/agent";
 import type { Snapshot } from "../src/lib/agent/protocol";
@@ -48,8 +49,9 @@ describe("Assistent: Ablauf mit simulierter KI", () => {
     const tr = lastUser(b1).content.find((c) => c.type === "tool_result")!;
     expect(tr.tool_use_id).toBe("p1");
     expect(tr.content).toContain("User APPROVED the plan: run all steps");
-    // Denk-Block geht unverändert zurück
-    expect(b1.messages[1].content[0]).toMatchObject({ type: "thinking", signature: "s" });
+    // die erste Seitenansicht ist gekürzt → der Denk-Block dahinter wäre ungültig (an den Stand davor gebunden) → entfernt
+    expect(b1.messages[0].content[0].text).toContain("(older page view removed)");
+    expect(b1.messages[1].content.map((c) => c.type)).toEqual(["tool_use"]);
 
     const r3 = await agentStep({ kind: "continue", runId: r1.runId, results: [{ i: 0, ok: true, note: "pressed (saves/sends)" }], snapshot: snap("/sales/invoices/x") }, who(ADMIN), fi);
     expect(r3.instruction).toEqual({ type: "finish", summary: "خلصت: مسودة اتحفظت." });
@@ -229,5 +231,72 @@ db("Assistent: Nachschlagen in der Datenbank", () => {
     expect(p2.length).toBeGreaterThan(0);
     expect(p2[0]).not.toHaveProperty("salonPriceNet");
     expect(p2[0]).not.toHaveProperty("resellerPriceNet");
+  });
+});
+
+/**
+ * Wie die echte API seit November 2026: ein Denk-Block ist an den ganzen Gesprächsstand davor gebunden (Signatur).
+ * Ändert sich davor etwas, kommt 400 „Invalid signature in thinking block … Content before this block differs“
+ * (live 17.11.2026 ab dem 2. Schritt jeder Aufgabe: „الذكاء الاصطناعي رفض الطلب“).
+ */
+const sig = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex");
+function bindingApi(script: unknown[][], opts: { failOnceWith?: string } = {}) {
+  let i = 0, failed = false;
+  return vi.fn(async (_url: string, init: { body: string }) => {
+    const b = JSON.parse(init.body) as { messages: { role: string; content: unknown }[] };
+    if (opts.failOnceWith && !failed) { failed = true; return new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: opts.failOnceWith } }), { status: 400 }); }
+    for (const [k, m] of b.messages.entries()) {
+      if (m.role !== "assistant" || typeof m.content === "string") continue;
+      const content = m.content as { type: string; signature?: string }[];
+      for (const [j, c] of content.entries()) {
+        if (c.type !== "thinking") continue;
+        if (c.signature !== sig([...b.messages.slice(0, k), { role: "assistant", content: content.slice(0, j) }]))
+          return new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: `messages.${k}.content.${j}: Invalid \`signature\` in \`thinking\` block. Content before this block differs from when it was created` } }), { status: 400 });
+      }
+    }
+    const thinking = { type: "thinking", thinking: "…", signature: sig([...b.messages, { role: "assistant", content: [] }]) };
+    return ok({ content: [thinking, ...script[i++]], stop_reason: "tool_use" });
+  });
+}
+
+describe("Assistent: Denk-Blöcke wie die echte API (an den Gesprächsstand gebunden)", () => {
+  it("viele Schritte hintereinander: gekürzte Seitenansichten machen keinen Denk-Block ungültig", async () => {
+    const f = bindingApi([
+      [use("a1", "act", { say: "1", actions: [{ do: "navigate", path: "/shops" }] })],
+      [use("a2", "act", { say: "2", actions: [{ do: "navigate", path: "/settings" }] })],
+      [use("a3", "act", { say: "3", actions: [{ do: "navigate", path: "/customers" }] })],
+      [use("f1", "finish", { summary: "خلصت" })],
+      [use("f2", "finish", { summary: "كمان وحدة" })],
+    ]);
+    const fi = { fetchImpl: f as unknown as typeof fetch };
+    const r = await agentStep({ kind: "start", goal: "شوف المزامنة", snapshot: snap("/") }, who(ADMIN), fi);
+    expect(r.instruction.type).toBe("act");
+    for (const url of ["/shops", "/settings", "/customers"]) {
+      const n = await agentStep({ kind: "continue", runId: r.runId, results: [{ i: 0, ok: true }], snapshot: snap(url) }, who(ADMIN), fi);
+      expect(n.instruction.type).not.toBe("error");
+    }
+    // neue Bitte im selben Gespräch nach „fertig“ (live: „لأ إنت تقدر تخش …“)
+    const again = await agentStep({ kind: "answer", runId: r.runId, answer: "لأ، خش عليها هلق", snapshot: snap("/customers") }, who(ADMIN), fi);
+    expect(again.instruction).toEqual({ type: "finish", summary: "كمان وحدة" });
+    expect(f).toHaveBeenCalledTimes(5); // keine 400er, kein zweiter Versuch nötig
+  });
+
+  it("Nachschlagen innerhalb eines Schritts: der gültige Denk-Block geht unverändert mit", async () => {
+    const f = bindingApi([[use("l1", "find_customers", { query: "Amal" })], [use("f1", "finish", { summary: "ok" })]]);
+    await agentStep({ kind: "start", goal: "wer ist Amal", snapshot: snap("/") }, who(acc("products.view")), { fetchImpl: f as unknown as typeof fetch });
+    const second = JSON.parse(f.mock.calls[1][1].body) as Body;
+    expect(second.messages[1].content[0]).toMatchObject({ type: "thinking" }); // Stand davor unverändert → bleibt
+  });
+
+  it("lehnt die KI trotzdem einen Denk-Block ab: ohne Denk-Blöcke noch einmal (kein Fehler für den Nutzer)", async () => {
+    const f = bindingApi([[use("a1", "act", { actions: [{ do: "wait", ms: 100 }] })], [use("f1", "finish", { summary: "ok" })]]);
+    const fi = { fetchImpl: f as unknown as typeof fetch };
+    const r = await agentStep({ kind: "start", goal: "x", snapshot: snap("/") }, who(ADMIN), fi);
+    const f2 = bindingApi([[use("f1", "finish", { summary: "ok" })]], { failOnceWith: "messages.1.content.0: Invalid `signature` in `thinking` block." });
+    const n = await agentStep({ kind: "continue", runId: r.runId, results: [{ i: 0, ok: true }], snapshot: snap("/") }, who(ADMIN), { fetchImpl: f2 as unknown as typeof fetch });
+    expect(n.instruction).toEqual({ type: "finish", summary: "ok" });
+    expect(f2).toHaveBeenCalledTimes(2);
+    const retry = JSON.parse(f2.mock.calls[1][1].body) as Body;
+    expect(JSON.stringify(retry.messages)).not.toContain('"type":"thinking"');
   });
 });

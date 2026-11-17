@@ -40,12 +40,31 @@ export function listen(lang: string, h: { partial: (t: string) => void; done: (t
   return () => { try { r.stop(); } catch { /* schon aus */ } };
 }
 
+/**
+ * Stimme wählen: Arabisch syrisch/levantinisch zuerst (Wunsch Inhaber 17.11.2026: „يتكلم باللهجة السورية الصح“ – eine
+ * ägyptische oder Hocharabisch-Stimme spricht den Dialekt falsch aus), natürliche Stimmen (Edge „… Online (Natural)“) vor einfachen.
+ */
+const PREFER: Record<string, string[]> = { ar: ["ar-sy", "ar-lb", "ar-jo", "ar-ps", "ar-iq"], de: ["de-de", "de-at"], en: ["en-us", "en-gb"] };
+export function pickVoice<V extends { lang: string; name: string }>(voices: readonly V[], lang: string): V | undefined {
+  const base = lang.slice(0, 2).toLowerCase();
+  const pref = PREFER[base] ?? [];
+  const score = (v: V) => {
+    const l = v.lang.replace("_", "-").toLowerCase();
+    if (!l.startsWith(base)) return -1;
+    const i = pref.indexOf(l);
+    return 1 + (i >= 0 ? 50 - i * 5 : 0) + (/natural|online|neural|premium|enhanced/i.test(v.name) ? 20 : 0);
+  };
+  let best: V | undefined, top = -1;
+  for (const v of voices) { const s = score(v); if (s > top) { top = s; best = v; } }
+  return top >= 0 ? best : undefined;
+}
+
 /** Vorlesen in der Sprache der Oberfläche; ohne passende Stimme still (der Text steht ja da) */
 export function speak(text: string, lang: string): Promise<void> {
   return new Promise((resolve) => {
     if (!canSpeak() || !text.trim()) return resolve();
     const synth = window.speechSynthesis;
-    const pick = () => synth.getVoices().find((v) => v.lang.toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()));
+    const pick = () => pickVoice(synth.getVoices(), lang);
     const go = () => {
       const voice = pick();
       if (!voice) return resolve();

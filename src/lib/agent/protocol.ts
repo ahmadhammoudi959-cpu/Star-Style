@@ -24,7 +24,9 @@ export type AgentAction =
   | { do: "check"; target: Target; checked: boolean }
   | { do: "key"; key: AgentKey }
   | { do: "wait"; ms: number }
-  | { do: "wait_for"; text: string; timeoutMs?: number };
+  | { do: "wait_for"; text: string; timeoutMs?: number }
+  /** eine vom Nutzer im Chat abgelegte Datei in ein Datei-Feld der Seite legen (Beleg, Foto …) */
+  | { do: "attach"; target: Target; file: string };
 
 export type PlanStep = { text: string; commit: boolean };
 export type Plan = { title: string; steps: PlanStep[]; note: string };
@@ -45,6 +47,9 @@ export type SnapEl = {
   href?: string; submit?: boolean; blocked?: boolean;
 };
 export type Snapshot = { url: string; title: string; dialog?: string; elements: SnapEl[]; text: string };
+
+/** ID einer abgelegten Datei (siehe src/lib/temp-files.ts) */
+export const FILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export const LIMITS = { actions: 10, planSteps: 12, choices: 6, text: 2000, elements: 260, snapText: 5000, name: 120, options: 40 } as const;
 
@@ -137,6 +142,12 @@ export function parseActions(raw: unknown): Parsed<AgentAction[]> {
       case "key": { if (!(AGENT_KEYS as readonly string[]).includes(String(o.key))) return bad(`key must be one of ${AGENT_KEYS.join(", ")}`); out.push({ do: "key", key: o.key as AgentKey }); break; }
       case "wait": { const ms = Math.round(Number(o.ms)); out.push({ do: "wait", ms: Number.isFinite(ms) ? Math.min(Math.max(ms, 100), 4000) : 500 }); break; }
       case "wait_for": { const text = str(o.text, 200).trim(); if (!text) return bad("text needed"); const t = Math.round(Number(o.timeoutMs)); out.push({ do: "wait_for", text, timeoutMs: Number.isFinite(t) ? Math.min(Math.max(t, 500), 10_000) : 6000 }); break; }
+      case "attach": {
+        const target = parseTarget(o.target);
+        const file = str(o.file, 64).trim();
+        if (!target || !FILE_ID.test(file)) return bad("attach needs target (the file field) and file (id of an attached file)");
+        out.push({ do: "attach", target, file }); break;
+      }
       default: return bad(`unknown action "${String(o.do)}"`);
     }
   }
@@ -180,6 +191,11 @@ export function parseInstruction(name: string, input: unknown): Parsed<Instructi
   }
 }
 
+/** Ungepaarte UTF-16-Hälften entfernen – ein beim Kürzen halbiertes Emoji würde die Anfrage an die KI ungültig machen */
+export function wellFormed(s: string): string {
+  return s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+}
+
 // ── Snapshot → Text für die KI (Elemente mit [eNN], Werte, Seiten-Text) ──
 export function snapshotToText(s: Snapshot): string {
   const q = (v: string) => JSON.stringify(v);
@@ -199,13 +215,14 @@ export function snapshotToText(s: Snapshot): string {
   }
   if (s.elements.length > LIMITS.elements) lines.push(`… ${s.elements.length - LIMITS.elements} more elements not shown`);
   lines.push("PAGE TEXT:", s.text.slice(0, LIMITS.snapText));
-  return lines.join("\n");
+  return wellFormed(lines.join("\n"));
 }
 
 /** Sprache → Erkennung im Browser (Kurdisch kann Chrome nicht: nur Tippen) */
 export function speechLang(locale: string, browserLangs: readonly string[] = []): string | null {
   if (locale === "ku") return null;
-  if (locale === "ar") return browserLangs.find((l) => /^ar-[A-Z]{2}$/i.test(l)) ?? "ar-EG";
+  // Arabisch: syrisch (Wunsch Inhaber 17.11.2026), außer der Browser nennt selbst eine arabische Region
+  if (locale === "ar") return browserLangs.find((l) => /^ar-[A-Z]{2}$/i.test(l)) ?? "ar-SY";
   if (locale === "de") return "de-DE";
   return "en-US";
 }
@@ -215,12 +232,15 @@ export function speechLang(locale: string, browserLangs: readonly string[] = [])
  * (dann geht der Text als freie Antwort an die KI, z. B. „لا، خلي الكمية 5“). Nur ganze Wörter und nur kurze Antworten,
  * damit eine Änderung („ja, aber Kunde Jahn“) nie als Freigabe gilt.
  */
-const YES = new Set(["كله", "كلو", "كلها", "نفذ", "نفذه", "نفذها", "كمل", "تمام", "ماشي", "ايوه", "ايوا", "اه", "اوكي", "موافق", "يلا", "اكيد", "طيب", "ابدا", "ابدء", "اعمل", "اعملها", "اعمله",
+/** Wortlisten so normalisiert wie die Eingabe (ى → ي, ة → ه, Hamza weg) */
+function normList(words: string[]): string[] { return words.map(norm); }
+function normSet(words: string[]): Set<string> { return new Set(normList(words)); }
+const YES = normSet(["كله", "كلو", "كلها", "نفذ", "نفذه", "نفذو", "نفذها", "كمل", "تمام", "ماشي", "ايوه", "ايوا", "اه", "اي", "ايه", "اوكي", "موافق", "يلا", "اكيد", "طيب", "منيح", "ابدا", "ابدء", "اعمل", "اعملها", "اعمله", "اعملو",
   "alles", "ja", "jawohl", "ok", "okay", "yes", "yeah", "yep", "go", "los", "mach", "machen", "weiter", "sure", "do", "it", "all",
   "ere", "bike", "temam", "bila", "her"]);
-const FILL = new Set(["و", "يا", "بس", "خلاص", "ستار", "ستايل", "star", "style", "bitte", "please", "gerne", "it", "it's", "ahead", "einfach", "kerem"]);
-const STEP = ["خطوه خطوه", "خطوه بخطوه", "كل خطوه", "خطوات", "اسالني", "step by step", "each step", "schritt fur schritt", "jeden schritt", "einzeln", "gav bi gav", "her gav"];
-const NO = new Set(["لا", "لاء", "لأ", "مش", "بلاش", "وقف", "الغي", "الغاء", "ارجع", "cancel", "stop", "no", "nope", "nein", "abbrechen", "stopp", "na", "ne", "naxer"]);
+const FILL = normSet(["و", "يا", "بس", "خلاص", "ستار", "ستايل", "star", "style", "bitte", "please", "gerne", "it", "it's", "ahead", "einfach", "kerem"]);
+const STEP = normList(["خطوه خطوه", "خطوه بخطوه", "كل خطوه", "خطوات", "اسالني", "وحده وحده", "step by step", "each step", "schritt fur schritt", "jeden schritt", "einzeln", "gav bi gav", "her gav"]);
+const NO = normSet(["لا", "لاء", "لأ", "مش", "مو", "بلاش", "بلاها", "وقف", "وقّف", "استنى", "لحظه", "الغي", "الغاء", "ارجع", "cancel", "stop", "no", "nope", "nein", "abbrechen", "stopp", "na", "ne", "naxer"]);
 export function voiceApproval(text: string): ApprovalMode | "no" | null {
   const n = norm(text).replace(/[.,!?؟،؛;:()\-–—…]/g, " ").replace(/\s+/g, " ").trim();
   if (!n) return null;

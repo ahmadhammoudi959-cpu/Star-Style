@@ -101,10 +101,50 @@ export function isCommitElement(el: HTMLElement): boolean {
   return isCommitText(nameOf(el));
 }
 
+/** Datei-Feld, das hinter einem Knopf versteckt ist (z. B. „Foto hinzufügen“): zählt, wenn sein Bereich sichtbar ist */
+const isFileInput = (el: Element): el is HTMLInputElement => el instanceof HTMLInputElement && el.type === "file";
+const hiddenFileOk = (el: Element) => isFileInput(el) && !el.closest(IGNORE) && !!el.parentElement && shown(el.parentElement);
+
 function interactive(root: HTMLElement): HTMLElement[] {
   const out: HTMLElement[] = [];
-  for (const el of root.querySelectorAll(INTERACTIVE)) if (shown(el) && !out.some((o) => o.contains(el) && o !== el && (o instanceof HTMLButtonElement || o instanceof HTMLAnchorElement))) out.push(el);
+  for (const el of root.querySelectorAll<HTMLElement>(INTERACTIVE)) {
+    if (!(shown(el) || hiddenFileOk(el))) continue;
+    if (!out.some((o) => o.contains(el) && o !== el && (o instanceof HTMLButtonElement || o instanceof HTMLAnchorElement))) out.push(el);
+  }
   return out;
+}
+
+/** Name eines Datei-Felds: Beschriftung, sonst der Knopf daneben („Foto hinzufügen“), dazu was es annimmt */
+function fileFieldName(el: HTMLInputElement): string {
+  const lab = el.labels?.[0] ?? el.closest("label");
+  let n = lab ? labelText(lab, el) : clean(el.getAttribute("aria-label") || el.getAttribute("title"));
+  if (!n) {
+    const btn = el.parentElement?.querySelector<HTMLElement>("button");
+    n = clean(btn?.getAttribute("aria-label") || btn?.getAttribute("title") || btn?.innerText);
+  }
+  if (!n) {
+    let p: HTMLElement | null = el.parentElement;
+    for (let i = 0; i < 3 && p && !n; i++, p = p.parentElement) n = clean(p.querySelector<HTMLElement>(".label, label")?.innerText);
+  }
+  const accept = el.accept ? ` [${el.accept}]` : "";
+  return `${n || el.name || "file"}${accept}`;
+}
+/** sichtbarer Stellvertreter eines versteckten Datei-Felds (für Zeiger und Markierung) */
+function visibleProxy(el: HTMLElement): HTMLElement {
+  const visible = (e: Element): boolean => shown(e); // ohne Typ-Einengung
+  if (visible(el)) return el;
+  const lab = (el as HTMLInputElement).labels?.[0] ?? el.closest("label");
+  if (lab && shown(lab)) return lab as HTMLElement;
+  const btn = el.parentElement?.querySelector<HTMLElement>("button");
+  if (btn && shown(btn)) return btn;
+  return el.parentElement ?? el;
+}
+/** Passt die Datei zum accept-Attribut? („image/*,application/pdf“, „.xlsx“) */
+function acceptOk(accept: string, file: File): boolean {
+  if (!accept.trim()) return true;
+  const type = file.type.toLowerCase(), name = file.name.toLowerCase();
+  return accept.split(",").map((a) => a.trim().toLowerCase()).some((a) =>
+    a.startsWith(".") ? name.endsWith(a) : a.endsWith("/*") ? type.startsWith(a.slice(0, -1)) : a === type);
 }
 
 /** Seiten-Text ohne Inhalte von Auswahllisten/Skripten (für die KI), Absätze als Zeilen */
@@ -137,7 +177,7 @@ export function buildSnapshot(): Snapshot {
     const id = `e${i + 1}`;
     el.setAttribute("data-ai-id", id);
     const kind = kindOf(el);
-    const e: SnapEl = { id, kind, name: nameOf(el) || `(${el.tagName.toLowerCase()})` };
+    const e: SnapEl = { id, kind, name: (isFileInput(el) ? fileFieldName(el) : nameOf(el)) || `(${el.tagName.toLowerCase()})` };
     if (el instanceof HTMLInputElement && kind !== "password" && kind !== "file") {
       if (kind === "checkbox" || kind === "radio") e.checked = el.checked; else if (el.value) e.value = el.value.slice(0, 200);
     } else if (el instanceof HTMLTextAreaElement && el.value) e.value = el.value.slice(0, 300);
@@ -174,7 +214,7 @@ export async function resolveTarget(t: Target, waitMs = 4000): Promise<{ el: HTM
   for (;;) {
     if (t.id) {
       const el = document.querySelector<HTMLElement>(`[data-ai-id="${t.id}"]`);
-      if (el && el.isConnected && shown(el)) return { el };
+      if (el && el.isConnected && (shown(el) || hiddenFileOk(el))) return { el };
     }
     if (t.text) {
       const scored = candidates(t.role).map((el) => ({ el, s: Math.max(matchScore(nameOf(el), t.text!), el instanceof HTMLInputElement ? matchScore(el.placeholder, t.text!) : 0) }))
@@ -296,6 +336,8 @@ export type ExecCtx = {
   progress?: (results: ActionResult[], next: number) => void;
   /** Speichern wurde abgelehnt, nachdem es schon angestoßen war: Seite neu laden (nichts gespeichert) */
   blockedWrite?: () => void;
+  /** vom Nutzer im Chat abgelegte Datei (für „attach“) */
+  fileById?: (id: string) => File | null;
 };
 
 /*
@@ -343,7 +385,10 @@ export async function runActions(actions: AgentAction[], ctx: ExecCtx): Promise<
   installGuard();
   const g: Guard = { ctx, allow: false, label: "", pending: 0, declined: false };
   guard = g;
-  try { return await runAll(actions, ctx, g); } finally { if (guard === g) guard = null; }
+  try { return await runAll(actions, ctx, g); } finally {
+    if (guard === g) guard = null;
+    if (ring) ring.style.opacity = "0"; // Rahmen weg (die Seite hat sich evtl. geändert); der Zeiger bleibt bis zum nächsten Schritt
+  }
 }
 async function runAll(actions: AgentAction[], ctx: ExecCtx, g: Guard): Promise<RunOutcome> {
   const results: ActionResult[] = [];
@@ -388,6 +433,26 @@ async function runAll(actions: AgentAction[], ctx: ExecCtx, g: Guard): Promise<R
       const el = r.el;
       if (el.closest(BLOCK)) return fail("this element is blocked for the assistant – the user must do it");
       if ((el as HTMLButtonElement).disabled || el.getAttribute("aria-disabled") === "true") return fail("element is disabled");
+      if (a.do === "attach") {
+        const input = isFileInput(el) ? el : (el.querySelector<HTMLInputElement>("input[type=file]") ?? (el instanceof HTMLLabelElement ? (el.control as HTMLInputElement | null) : null));
+        if (!input || !isFileInput(input)) return fail("this is not a file field – use the element listed with kind \"file\"");
+        if (input.closest(BLOCK)) return fail("this element is blocked for the assistant – the user must do it");
+        const file = ctx.fileById?.(a.file);
+        if (!file) return fail("this file is not available in the browser any more – ask the user to attach it again");
+        if (!acceptOk(input.accept, file)) return fail(`this field only takes ${input.accept}`);
+        const proxy = visibleProxy(input);
+        await pointAt(proxy);
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        ripple(proxy);
+        await settle(6000);
+        const stop = await afterStep(); if (stop) return stop;
+        results.push({ i, ok: true, note: `attached ${file.name}` });
+        continue;
+      }
       if (a.do === "click") {
         const commit = isCommitElement(el) || !!a.commit;
         g.label = nameOf(el);
@@ -396,7 +461,8 @@ async function runAll(actions: AgentAction[], ctx: ExecCtx, g: Guard): Promise<R
           const ok = await ctx.confirmCommit(g.label);
           if (!ok) { hideLayer(); return fail("user declined this click", "declined"); }
         } else await pointAt(el);
-        g.allow = commit; // schon gefragt bzw. freigegeben – der Wächter fragt nicht noch einmal
+        // schon gefragt bzw. freigegeben – oder ein nur lesender Knopf (data-ai-readonly, z. B. „Beleg lesen“): der Wächter fragt nicht
+        g.allow = commit || !!el.closest("[data-ai-readonly]");
         ripple(el);
         fireClick(el);
         await settle();

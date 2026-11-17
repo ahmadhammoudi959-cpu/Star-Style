@@ -11,6 +11,9 @@ import { canListen, listen, speak, stopSpeaking } from "./voice";
 type T = Dict["agent"];
 type Phase = "idle" | "thinking" | "plan" | "stepConfirm" | "commitConfirm" | "ask" | "running" | "done" | "error";
 type Log = { who: "user" | "ai" | "sys"; text: string };
+/** im Chat abgelegte Datei: wird sofort hochgeladen (/api/temp-files), geschickt wird nur die ID */
+type Pending = { key: string; file: File; status: "uploading" | "ready" | "error"; id?: string; error?: string };
+const MAX_FILE = 20 * 1024 * 1024;
 type Act = Extract<Instruction, { type: "act" }>;
 type Saved = { runId: string; mode: ApprovalMode | null; plan: Plan | null; step: number | null; log: Log[]; phase: Phase; at: number;
   /** Ergebnisse bis zum Neuladen (Filter/Suche lädt die Seite neu) bzw. Hinweis für die KI */
@@ -19,10 +22,32 @@ const KEY = "ss-agent"; // Stand für ein Neuladen der Seite mitten im Ablauf (n
 const VOICE_KEY = "ss-agent-voice";
 
 /**
- * Assistent „Star Style“ (Wunsch Inhaber 17.11.2026): Knopf unten (oder F2) → „أيوه، قول لي أعمل لك إيه؟“ → Bitte
+ * Assistent „Star Style“ (Wunsch Inhaber 17.11.2026): Knopf unten (oder F2) → „أهلين، قلّي شو بدّك أعملّك؟“ → Bitte
  * sprechen oder tippen → Plan zur Freigabe (alles ohne Nachfragen / jede Schritt bestätigen) → das System wird sichtbar
  * bedient (Seiten wechseln, Felder füllen sich, Knöpfe werden gedrückt). Speichern/Senden nur in freigegebenen Schritten.
  */
+/**
+ * Licht um den Bildschirm in den Logo-Farben, solange der Assistent arbeitet oder zuhört (Wunsch Inhaber 17.11.2026:
+ * „يعرف إن في ذكاء اصطناعي دلوقتي ماسك الشاشة“). Wartet er auf eine Antwort → schwächer und langsamer; danach blendet es aus.
+ */
+function AgentGlow({ state }: { state: "on" | "wait" | null }) {
+  const [shown, setShown] = useState(state);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (state) { setShown(state); return; }
+    const timer = setTimeout(() => setShown(null), 700);
+    return () => clearTimeout(timer);
+  }, [state]);
+  useEffect(() => {
+    // Tempo ändern ohne Sprung: die laufende CSS-Animation behält ihre Stelle (andere Dauer würde die Farben springen lassen)
+    for (const a of ref.current?.getAnimations() ?? []) {
+      if ((a as CSSAnimation).animationName === "ai-spin") a.updatePlaybackRate(shown === "wait" ? 0.35 : 1);
+    }
+  }, [shown]);
+  if (!shown) return null;
+  return <div ref={ref} aria-hidden data-agent-glow={state ?? "out"} className={`ai-glow ${!state ? "ai-glow-out" : state === "wait" ? "ai-glow-wait" : ""}`} />;
+}
+
 export function AgentDock({ t, locale }: { t: T; locale: string }) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -38,6 +63,13 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
   const [commitLabel, setCommitLabel] = useState("");
   const [voiceOn, setVoiceOn] = useState(true);
   const [micOk, setMicOk] = useState(false);
+  const [pending, setPending] = useState<Pending[]>([]);
+  const pendingRef = useRef<Pending[]>([]);
+  pendingRef.current = pending;
+  /** hochgeladene Dateien dieses Tabs (ID → Datei) – für „attach“ in ein Datei-Feld der Seite */
+  const filesRef = useRef(new Map<string, File>());
+  const [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   // Zuhören ist kein eigener Schritt: der Plan / die Rückfrage bleibt sichtbar und die Antwort gilt dafür
   const [listening, setListening] = useState(false);
   const listeningRef = useRef(false);
@@ -139,6 +171,7 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
         say(t.commitAsk.replace("{label}", l));
       }),
       navigate,
+      fileById: (id) => filesRef.current.get(id) ?? null,
       progress: (results, next) => saveState({ phase: "running", partial: results, next }),
       blockedWrite: () => {
         add("sys", t.declined);
@@ -184,13 +217,49 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
   }, [add, errorText, execute, say, t]);
   handleRef.current = handle;
 
+  // ── Dateien (Excel, CSV, PDF, Fotos) ──
+  const addFiles = useCallback((list: FileList | File[]) => {
+    const arr = [...list];
+    if (!arr.length) return;
+    setOpen(true);
+    const room = 10 - pendingRef.current.length;
+    if (arr.length > room) { add("sys", t.errors.tooManyFiles); arr.length = Math.max(0, room); }
+    for (const file of arr) {
+      const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const fail = (error: string) => setPending((p) => [...p, { key, file, status: "error", error }]);
+      if (file.size > MAX_FILE) { fail(t.errors.fileTooLarge); continue; }
+      if (/\.xls$/i.test(file.name)) { fail(t.errors.fileXls); continue; }
+      setPending((p) => [...p, { key, file, status: "uploading" }]);
+      void (async () => {
+        try {
+          const res = await fetch("/api/temp-files", { method: "POST", headers: { "content-type": file.type || "application/octet-stream", "x-file-name": encodeURIComponent(file.name) }, body: file });
+          const j = await res.json().catch(() => ({})) as { id?: string; error?: string };
+          if (!res.ok || !j.id) throw new Error(j.error ?? "fileUpload");
+          filesRef.current.set(j.id, file);
+          setPending((p) => p.map((x) => (x.key === key ? { ...x, status: "ready", id: j.id } : x)));
+        } catch (e) {
+          const code = e instanceof Error ? e.message : "fileUpload";
+          setPending((p) => p.map((x) => (x.key === key ? { ...x, status: "error", error: (t.errors as Record<string, string>)[code] ?? t.errors.fileUpload } : x)));
+        }
+      })();
+    }
+  }, [add, t]);
+  const dragHasFiles = (e: React.DragEvent) => [...e.dataTransfer.types].includes("Files");
+
   // ── Nutzer ──
   const resetRun = () => { runId.current = null; modeRef.current = null; planRef.current = null; confirmedStep.current = null; setPlan(null); setMode(null); setAsk(null); setStep(null); };
   const submit = useCallback((text: string) => {
-    const goal = text.trim();
-    if (!goal) return;
-    setInput(""); stopSpeaking();
     const p = phaseRef.current;
+    if (pendingRef.current.some((x) => x.status === "uploading")) return; // erst fertig hochladen
+    const ready = p === "stepConfirm" || p === "commitConfirm" ? [] : pendingRef.current.filter((x) => x.status === "ready" && x.id);
+    const named = ready.map((x) => `📎 ${x.file.name}`).join("\n");
+    let goal = text.trim();
+    if (!goal && ready.length) goal = named;
+    if (!goal) return;
+    const files = ready.length ? ready.map((x) => x.id!) : undefined;
+    const shown = text.trim() && ready.length ? `${goal}\n${named}` : goal;
+    if (ready.length) setPending([]);
+    setInput(""); stopSpeaking();
     // Antwort auf „Weiter?“ / „Jetzt speichern?“: ja/nein – eigener Text = nein + Text an die KI
     if (p === "stepConfirm") {
       const v = voiceApproval(goal);
@@ -208,19 +277,19 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
       answerCommit(v === "auto" || v === "step");
       return;
     }
-    aborted.current = false; add("user", goal);
+    aborted.current = false; add("user", shown);
     if (p === "plan" && runId.current) {
-      const v = voiceApproval(goal);
+      const v = files ? null : voiceApproval(goal);
       if (v === "auto" || v === "step") { approve(v, true); return; }
-      void call({ kind: "answer", runId: runId.current, answer: v === "no" ? "" : goal, approve: "no" }); setPlan(null); return;
+      void call({ kind: "answer", runId: runId.current, answer: v === "no" ? "" : goal, approve: "no", files }); setPlan(null); return;
     }
     if ((p === "ask" || p === "done") && runId.current) {
       setAsk(null);
       if (p === "done") { modeRef.current = null; planRef.current = null; confirmedStep.current = null; setPlan(null); setMode(null); }
-      void call({ kind: "answer", runId: runId.current, answer: goal }); return;
+      void call({ kind: "answer", runId: runId.current, answer: goal, files }); return;
     }
     resetRun();
-    void call({ kind: "start", goal });
+    void call({ kind: "start", goal, files });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [add, call]);
 
@@ -307,8 +376,11 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
   const stepLine = step && total ? t.stepOf.replace("{n}", String(step)).replace("{m}", String(total)) : "";
   const statusText = listening ? t.listening : phase === "thinking" ? t.thinking : phase === "running" ? status || t.running : phase === "plan" ? t.planWaiting : phase === "ask" || phase === "stepConfirm" || phase === "commitConfirm" ? t.waitingYou : t.ready;
 
+  const glow = busy || listening ? "on" : phase === "plan" || phase === "ask" || phase === "stepConfirm" || phase === "commitConfirm" ? "wait" : null;
+
   return createPortal(
     <div data-ai-ignore className="print:hidden">
+      <AgentGlow state={glow} />
       {/* Rückfrage vor dem Speichern: oben, damit der markierte Knopf sichtbar bleibt (das Fenster unten könnte ihn verdecken) */}
       {phase === "commitConfirm" && !open && (
         <div className="pointer-events-none fixed inset-x-3 top-3 z-[66] flex justify-center">
@@ -352,7 +424,15 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
       {/* Fenster */}
       {open && (
         <section aria-label={t.name} data-agent-panel
+          onDragOver={(e) => { if (dragHasFiles(e)) { e.preventDefault(); setDragging(true); } }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+          onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); } }}
           className="fixed bottom-24 end-3 z-[66] flex max-h-[min(44rem,calc(100dvh-7.5rem))] w-[min(27rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-3xl bg-white shadow-lift ring-1 ring-black/10 animate-rise lg:bottom-6 lg:end-6">
+          {dragging && (
+            <div className="pointer-events-none absolute inset-2 z-10 grid place-items-center rounded-2xl border-2 border-dashed border-brand-500 bg-brand-50/95 text-center text-sm font-bold text-brand-700" data-agent-drop>
+              <span className="flex flex-col items-center gap-2"><Icon name="clip" className="h-8 w-8" />{t.dropHere}</span>
+            </div>
+          )}
           <header className="flex items-center gap-3 bg-gradient-to-br from-navy-800 to-navy-900 px-4 py-3 text-white">
             <span className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-600 shadow-card ${busy || listening ? "animate-pulse" : ""}`}>
               <Icon name="spark" className="h-5 w-5" />
@@ -439,7 +519,25 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
             {busy ? (
               <button type="button" onClick={stop} className="btn-danger w-full justify-center" data-agent-stop><Icon name="stop" className="h-4 w-4" />{t.stop}</button>
             ) : (
+              <>
+              {pending.length > 0 && (
+                <ul className="flex flex-wrap gap-1.5" data-agent-files>
+                  {pending.map((x) => (
+                    <li key={x.key} className={`flex max-w-full items-center gap-1.5 rounded-full py-1 pe-1 ps-2.5 text-xs font-semibold ring-1 ${x.status === "error" ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-ink ring-black/10"}`} title={x.error ?? x.file.name} data-agent-file={x.status}>
+                      {x.status === "uploading" ? <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+                        : <Icon name={x.status === "error" ? "alert" : /\.(xlsx|xlsm|csv)$/i.test(x.file.name) ? "sheet" : /\.pdf$/i.test(x.file.name) ? "file" : "camera"} className="h-3.5 w-3.5 shrink-0" />}
+                      <span className="min-w-0 truncate" dir="auto">{x.status === "error" ? `${x.file.name}: ${x.error}` : x.file.name}</span>
+                      <button type="button" onClick={() => setPending((p) => p.filter((y) => y.key !== x.key))} aria-label={t.removeFile} title={t.removeFile} className="grid h-5 w-5 shrink-0 place-items-center rounded-full hover:bg-black/10"><Icon name="x" className="h-3 w-3" /></button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); submit(input); }}>
+                <input ref={fileInput} type="file" multiple hidden accept=".xlsx,.xlsm,.csv,.pdf,image/*" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} data-agent-file-input />
+                <button type="button" onClick={() => fileInput.current?.click()} title={t.attach} aria-label={t.attach}
+                  className="group grid h-12 w-9 shrink-0 place-items-center rounded-full text-ink-soft transition hover:bg-slate-100 hover:text-brand-700" data-agent-attach>
+                  <Icon name="clip" className="h-5 w-5" />
+                </button>
                 {micOk && (
                   <button type="button" onClick={() => void mic()} title={t.mic} aria-label={t.mic} aria-pressed={listening}
                     className={`group grid h-12 w-12 shrink-0 place-items-center rounded-full text-white shadow-card transition ${listening ? "animate-pulse bg-red-500" : "bg-brand-600 hover:bg-brand-700"}`} data-agent-mic>
@@ -447,11 +545,13 @@ export function AgentDock({ t, locale }: { t: T; locale: string }) {
                   </button>
                 )}
                 <textarea id="ss-agent-input" value={input} onChange={(e) => setInput(e.target.value)} rows={1} dir="auto" maxLength={2000}
+                  onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(input); } if (e.key === "Escape") e.stopPropagation(); }}
                   placeholder={phase === "plan" ? t.planPlaceholder : phase === "ask" || phase === "stepConfirm" || phase === "commitConfirm" ? t.answerPlaceholder : t.placeholder}
                   className="input max-h-28 min-h-[3rem] flex-1 resize-none py-3" data-agent-input />
-                <button type="submit" disabled={!input.trim()} title={t.send} aria-label={t.send} className="btn-primary h-12 w-12 shrink-0 justify-center p-0 disabled:opacity-40"><Icon name="send" className="h-5 w-5" /></button>
+                <button type="submit" disabled={(!input.trim() && !pending.some((x) => x.status === "ready")) || pending.some((x) => x.status === "uploading")} title={pending.some((x) => x.status === "uploading") ? t.uploading : t.send} aria-label={t.send} className="btn-primary h-12 w-12 shrink-0 justify-center p-0 disabled:opacity-40"><Icon name="send" className="h-5 w-5" /></button>
               </form>
+              </>
             )}
             {phase === "error" && canRetry && lastPayload.current && (runId.current || lastPayload.current.kind === "start") && (
               <button type="button" onClick={() => { aborted.current = false; void call(lastPayload.current!); }} className="btn-ghost w-full justify-center" data-agent-retry><Icon name="undo" className="h-4 w-4" />{t.retry}</button>

@@ -117,7 +117,7 @@ export function ExpenseForm({ t, intl, regions, initial, suppliers, locked: mont
               </Field>
               <div className="flex flex-wrap items-center gap-3">
                 {ai && !locked && (
-                  <button type="button" onClick={readAi} disabled={reading || !hasFile} className="btn group bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-card hover:shadow-lift disabled:opacity-50">
+                  <button type="button" onClick={readAi} disabled={reading || !hasFile} data-ai-readonly className="btn group bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-card hover:shadow-lift disabled:opacity-50">
                     {reading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name="search" className="h-4 w-4" />}{reading ? t.ai.reading : t.ai.read}
                   </button>
                 )}
