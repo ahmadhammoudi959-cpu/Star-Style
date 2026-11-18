@@ -38,6 +38,7 @@ describe("Assistent: Ablauf mit simulierter KI", () => {
     expect(b0.messages[0].content[0].text).toContain("USER REQUEST: اعمل فاتورة لصالون أمل");
     expect(b0.messages[0].content[0].text).toContain("CURRENT PAGE:\nURL: /");
     expect(b0.system).toContain("Arabic");
+    expect(b0.system).toContain("Never name or hint at the AI model"); // kein Modell-/Anbietername (Wunsch Inhaber 18.11.2026)
     expect(b0.system).toContain("No plan approved yet.");
     expect(b0.tools.map((t) => t.name)).toEqual(expect.arrayContaining(["plan", "act", "ask", "finish", "find_customers", "find_products", "find_documents"]));
 

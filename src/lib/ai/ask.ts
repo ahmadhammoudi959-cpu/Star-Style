@@ -6,6 +6,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { callClaude, type ContentBlock, type Message, type Tool } from "./client";
+import { IDENTITY_RULE } from "./identity";
 import { monthReport, yearReport } from "../reports";
 import { openItems } from "../receivables";
 import { loadInsights } from "../insights-data";
@@ -151,7 +152,8 @@ export async function runTool(name: string, i: Record<string, unknown>): Promise
 export const LANG: Record<string, string> = { de: "German", ar: "Arabic (simple, friendly Levantine Arabic as spoken in Syria/Lebanon; keep product names as they are)", en: "English", ku: "Kurmanji Kurdish (Latin script, simple everyday Kurmanji as spoken by Kurds from Syria/Turkey; keep product names as they are)" };
 
 export function systemPrompt(locale: string, company: string) {
-  return `You are the business assistant inside the inventory and invoicing system of "${company || "Start Style Friseurbedarf"}", a barber and hairdresser supply wholesaler in Datteln, Germany.
+  return `You are the business assistant inside the inventory and invoicing system of "${company || "Star Style Friseurbedarf"}", a barber and hairdresser supply wholesaler in Datteln, Germany.
+${IDENTITY_RULE}
 Today is ${todayIso()}. Sales channels: STORE (shop / direct sales), BRAND_SHOP (own brand online shop), GENERAL_SHOP (general online shop).
 Answer ONLY with data from the tools. Never invent numbers. If the tools don't contain the answer, say so briefly and say what the user can check instead.
 All amounts from tools are in EUR. Write money in German format like "1.234,56 €" and dates like "18.10.2026".

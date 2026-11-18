@@ -8,6 +8,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { AiError, callClaude, type ContentBlock, type Message, type Tool } from "./client";
+import { IDENTITY_RULE } from "./identity";
 import { LANG, TOOLS as ASK_TOOLS, runTool as runAskTool } from "./ask";
 import { todayIso } from "../dates";
 import { allowed, type Access, type Perm } from "../permissions";
@@ -149,6 +150,7 @@ function systemPrompt(o: { locale: string; company: string; userName: string; pa
   const state = !o.plan ? "No plan approved yet."
     : `Approved plan: ${o.plan.title} | steps: ${o.plan.steps.map((s, i) => `${i + 1}. ${s.text}${s.commit ? " [commit]" : ""}`).join(" ; ")}. Mode: ${o.mode === "step" ? "the app asks the user before each step (just continue normally)" : "run all steps without asking"}.`;
   return `You are "Star Style", the assistant inside the web system of ${o.company || "Star Style Friseurbedarf"} (barber and hairdresser supply wholesaler, Datteln, Germany). You operate the system FOR the user, visibly, like a colleague using mouse and keyboard: the user watches the screens change.
+${IDENTITY_RULE}
 Today is ${todayIso()}. User: ${o.userName}. ${state}
 
 HOW YOU WORK

@@ -114,3 +114,13 @@ run("Frag dein Geschäft (Datenbank, KI simuliert)", () => {
     expect(second.system).toContain("German");
   });
 });
+
+describe("kein Modell- oder Anbietername (Wunsch Inhaber 18.11.2026)", () => {
+  it("„Frag dein Geschäft“ und Monatsbericht bekommen die Regel, Ersatzname richtig geschrieben", async () => {
+    const { systemPrompt } = await import("../src/lib/ai/ask");
+    const p = systemPrompt("ar", "");
+    expect(p).toContain("Never name or hint at the AI model");
+    expect(p).toContain("Star Style Friseurbedarf");
+    expect(p).not.toMatch(/claude|anthropic|sonnet/i);
+  });
+});
