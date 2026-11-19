@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
+import { PromoCorner, PromoPrice } from "./PromoPrice";
 import { ZoomThumb } from "./ZoomThumb";
 import { ProductShowcase, type ShowcaseGroup } from "./ProductShowcase";
 import type { PickerOption } from "./VariantPicker";
@@ -20,9 +21,9 @@ const VIEW_KEY = "ss-picker-view"; // Liste oder Katalog – je Gerät gemerkt
 
 /** Alle Artikel als Liste zum Durchsehen und Antippen (Fenster über der Seite): Suche, Kategorien, je Artikel seine Größen/Farben.
  *  Bleibt offen, damit man mehrere Positionen nacheinander hinzufügen kann. */
-export function ProductBrowser<T extends PickerOption>({ options, onPick, onClose, labels, priceOf, qtyInDoc, linesCount, initialCategory = "", closeOnPick = false }: {
+export function ProductBrowser<T extends PickerOption>({ options, onPick, onClose, labels, priceOf, wasOf, qtyInDoc, linesCount, initialCategory = "", closeOnPick = false }: {
   options: T[]; onPick: (o: T) => void; onClose: () => void; labels: BrowserLabels;
-  priceOf?: (o: T) => string; qtyInDoc?: (variantId: string) => number; linesCount?: number; initialCategory?: string;
+  priceOf?: (o: T) => string; wasOf?: (o: T) => string; qtyInDoc?: (variantId: string) => number; linesCount?: number; initialCategory?: string;
   /** nur eine Auswahl (z. B. Zuordnung im Shop): nach dem Antippen schließen */
   closeOnPick?: boolean;
 }) {
@@ -129,13 +130,13 @@ export function ProductBrowser<T extends PickerOption>({ options, onPick, onClos
                 const single = g.variants.length === 1 ? g.variants[0] : null;
                 const compact = view === "catalog";
                 const buttons = single ? (
-                  <VariantButton o={single} label={labels.add} flash={flash === single.id} price={priceOf?.(single) ?? ""} inDoc={qtyInDoc?.(single.id) ?? 0}
+                  <VariantButton o={single} label={labels.add} flash={flash === single.id} price={priceOf?.(single) ?? ""} was={single.promoPct ? wasOf?.(single) : undefined} inDoc={qtyInDoc?.(single.id) ?? 0}
                     labels={labels} compact={compact} onClick={() => add(single)} />
                 ) : (
                   <div className="grid gap-1.5">
                     {g.variants.map((o) => (
                       <VariantButton key={o.id} o={o} label={[o.size, o.color].filter(Boolean).join(" · ") || labels.add} flash={flash === o.id}
-                        price={priceOf?.(o) ?? ""} inDoc={qtyInDoc?.(o.id) ?? 0} labels={labels} compact={compact} onClick={() => add(o)} />
+                        price={priceOf?.(o) ?? ""} was={o.promoPct ? wasOf?.(o) : undefined} inDoc={qtyInDoc?.(o.id) ?? 0} labels={labels} compact={compact} onClick={() => add(o)} />
                     ))}
                   </div>
                 );
@@ -156,6 +157,7 @@ export function ProductBrowser<T extends PickerOption>({ options, onPick, onClos
                       ) : (
                         <span className="grid h-full place-items-center bg-brand-50/50 text-brand-200"><Icon name="box" className="h-14 w-14" /></span>
                       )}
+                      <PromoCorner pct={Math.max(0, ...g.variants.map((v) => v.promoPct ?? 0))} />
                       <span className="absolute end-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-white/95 text-brand-700 opacity-0 shadow-card ring-1 ring-black/10 transition group-hover/img:opacity-100 group-focus-visible/img:opacity-100">
                         <Icon name="zoom" className="h-4 w-4" />
                       </span>
@@ -186,15 +188,15 @@ export function ProductBrowser<T extends PickerOption>({ options, onPick, onClos
       </div>
       {show != null && groups.length > 0 && (
         <ProductShowcase groups={groups} index={Math.min(show, groups.length - 1)} onIndex={setShow} onClose={() => setShow(null)} onAdd={add}
-          priceOf={priceOf} qtyInDoc={qtyInDoc} flash={flash} labels={labels} />
+          priceOf={priceOf} wasOf={wasOf} qtyInDoc={qtyInDoc} flash={flash} labels={labels} />
       )}
     </div>,
     document.body,
   );
 }
 
-function VariantButton({ o, label, price, inDoc, flash, labels, onClick, compact = false }: {
-  o: PickerOption; label: string; price: string; inDoc: number; flash: boolean; labels: BrowserLabels; onClick: () => void;
+function VariantButton({ o, label, price, was, inDoc, flash, labels, onClick, compact = false }: {
+  o: PickerOption; label: string; price: string; was?: string; inDoc: number; flash: boolean; labels: BrowserLabels; onClick: () => void;
   /** Katalog (schmale Karten): ohne Barcode, Preis und Bestand unter dem Namen */
   compact?: boolean;
 }) {
@@ -208,7 +210,7 @@ function VariantButton({ o, label, price, inDoc, flash, labels, onClick, compact
       <span className="min-w-0 flex-1">
         <span className="block font-semibold leading-snug [overflow-wrap:anywhere]">{label}</span>
         <span className="flex flex-wrap items-baseline gap-x-2 text-[0.6875rem] text-ink-soft">
-          {price && <span className="num text-sm font-semibold text-ink">{price}</span>}
+          {price && <PromoPrice price={price} was={was} pct={o.promoPct} className="text-sm font-semibold text-ink" />}
           <span className={none ? "font-semibold text-red-600" : ""}>{labels.available}: {o.stockQty}</span>
         </span>
         {inDoc > 0 && <span className="badge mt-1 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">{labels.inDoc.replace("{n}", String(inDoc))}</span>}
@@ -225,8 +227,8 @@ function VariantButton({ o, label, price, inDoc, flash, labels, onClick, compact
         <span className="block font-semibold [overflow-wrap:anywhere]">{label}</span>
         {o.barcode && <bdi dir="ltr" className="block text-[0.6875rem] text-ink-soft">{o.barcode}</bdi>}
       </span>
-      <span className="shrink-0 text-end">
-        {price && <span className="num block font-semibold">{price}</span>}
+      <span className={o.promoPct ? "min-w-[5.5rem] max-w-[8.5rem] text-end" : "shrink-0 text-end"}>
+        {price && <span className="block font-semibold"><PromoPrice price={price} was={was} pct={o.promoPct} /></span>}
         <span className={`block text-[0.6875rem] ${none ? "font-semibold text-red-600" : "text-ink-soft"}`}>{labels.available}: {o.stockQty}</span>
       </span>
       {inDoc > 0 && <span className="badge shrink-0 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">{labels.inDoc.replace("{n}", String(inDoc))}</span>}

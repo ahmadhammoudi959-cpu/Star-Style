@@ -66,6 +66,9 @@ const PATHS = {
   minus: "M5 12h14",
   stop: "M7 7h10v10H7z",
   sheet: "M4 4h16v16H4zM4 9h16M4 14h16M10 4v16",
+  // Aktionen: Prozentzeichen, Bild
+  percent: "M19 5 5 19M7 9.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM17 19.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
+  image: "M4 5h16v14H4zM4 16l4.5-4.5 4 4M13 14l2.5-2.5L20 16M15.5 9h.01",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -16,6 +16,8 @@ export const PERMISSION_GROUPS = {
     "sales.correct", "sales.delivery", "sales.shipping", "sales.email", "sales.returns",
     // Direktverkauf über den Bestell-Link (Wunsch Inhaber 19.11.2026): Anfragen ansehen/bearbeiten bzw. den Link verwalten
     "direct", "direct.link",
+    // Aktionen (Wunsch Inhaber 19.11.2026): Rabatt + Werbebild – ändert Preise im System und in den Shops
+    "promotions",
   ],
   // Kommunikation (Wunsch Inhaber 16.11.2026): Postfach info@ und WhatsApp im System
   // Wunsch Inhaber 16.11.2026: lesen und schreiben getrennt
@@ -41,7 +43,7 @@ export const IMPLIES: Partial<Record<Perm, Perm[]>> = {
   "sales.offers": ["sales.view", "customers", "products.view"], "sales.invoices": ["sales.view", "customers", "products.view"],
   "sales.discount": ["sales.view"], "sales.correct": ["sales.view"], "sales.delivery": ["sales.view"],
   "sales.shipping": ["sales.view"], "sales.email": ["sales.view"], "sales.returns": ["sales.view"],
-  direct: ["sales.view", "customers", "products.view"], "direct.link": ["direct"],
+  direct: ["sales.view", "customers", "products.view"], "direct.link": ["direct"], promotions: ["products.view"],
   "payments.record": ["sales.view"], "payments.cancel": ["sales.view"], "payments.plans": ["sales.view"], receivables: ["sales.view"],
   "expenses.edit": ["expenses.view"],
   "reports.export": ["reports.view"], "reports.lock": ["reports.export"],
@@ -67,7 +69,7 @@ export const PRESETS: Record<"sales" | "warehouse" | "teamLead" | "accountant", 
   warehouse: ["products.view", "stock.count", "stock.writeoff", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "sales.returns", "direct", "insights"],
   teamLead: [
     "products.view", "products.edit", "suppliers", "stock.receive", "stock.count", "stock.writeoff", "customers", "customers.reseller", "customers.statement",
-    "sales.offers", "sales.invoices", "sales.discount", "sales.correct", "sales.delivery", "sales.shipping", "sales.email", "sales.returns", "direct", "direct.link",
+    "sales.offers", "sales.invoices", "sales.discount", "sales.correct", "sales.delivery", "sales.shipping", "sales.email", "sales.returns", "direct", "direct.link", "promotions",
     "insights", "shops.view", "mail", "mail.send", "whatsapp", "whatsapp.send",
   ],
   accountant: ["reports.view", "reports.export"],
@@ -108,6 +110,8 @@ export const ROUTES: [RegExp, Need][] = [
   [R("/api/sales"), { any: ["sales.shipping"] }], // Zahl am Menüpunkt „Verkauf“ (Online-Bestellungen zu versenden/abzuholen)
   [R("/returns/new"), { any: ["sales.returns"] }],
   [R("/direct"), { any: ["direct"] }],
+  [R("/promotions"), { any: ["promotions"] }],
+  [R("/api/promotions"), { any: ["promotions"] }],
   [R("/api/direct"), { any: ["direct"] }],
   [R("/returns"), { any: ["sales.view"] }],
   [R("/receivables"), { any: ["receivables"] }],

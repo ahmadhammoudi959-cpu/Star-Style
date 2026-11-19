@@ -572,7 +572,66 @@ export const directOrderLines = pgTable("direct_order_lines", {
   qty: integer("qty").notNull(),
   unitPriceCents: integer("unit_price_cents").notNull(), // netto, wie dem Kunden gezeigt (Preis der Preisgruppe des Links)
   vatRateBp: integer("vat_rate_bp").notNull(),
+  // Rabatt einer Aktion, mit dem die Zeile gezeigt wurde (Basispunkte; unit_price_cents ist der Preis VOR dem Rabatt)
+  promoBp: integer("promo_bp").notNull().default(0),
 }, (t) => [index("direct_line_order").on(t.orderId)]);
+
+/**
+ * Aktionen (Wunsch Inhaber 19.11.2026: „قسم العروض“): Rabatt in ganzen Prozent auf ausgewählte Artikel – im System
+ * (Angebot/Rechnung, Katalog, Kundenansicht), am Bestell-Link und in den Shops (Streichpreis + „-20%“, Kollektion „Angebote“) –
+ * und ein Werbebild im Shop über oder unter dem Hero. Rabatt und Bild laufen unabhängig: je an/aus und optional von/bis
+ * (Berliner Datum, beide Tage inklusive). Regeln rein in src/lib/promo-rules.ts, DB src/lib/promotions.ts, Shops
+ * src/lib/shopify/promo-shop.ts + prices.ts.
+ */
+export const promotions = pgTable("promotions", {
+  id: id(),
+  number: serial("number").notNull().unique(),
+  title: text("title").notNull().default(""),
+  discountBp: integer("discount_bp").notNull(), // 2000 = 20 % (nur ganze Prozent)
+  // wo der Rabatt gilt: SYSTEM (Angebot/Rechnung/Katalog), DIRECT (Bestell-Link), GENERAL_SHOP, BRAND_SHOP
+  places: jsonb("places").$type<string[]>().notNull().default(["SYSTEM", "DIRECT", "GENERAL_SHOP", "BRAND_SHOP"]),
+  priceOn: boolean("price_on").notNull().default(false),
+  priceFrom: date("price_from"),
+  priceUntil: date("price_until"),
+  // zuletzt an die Shops gegebener Stand des Rabatts (aktiv ja/nein) – weicht er ab (Datum erreicht), merkt der Worker die Artikel vor
+  priceLive: boolean("price_live").notNull().default(false),
+  bannerOn: boolean("banner_on").notNull().default(false),
+  bannerFrom: date("banner_from"),
+  bannerUntil: date("banner_until"),
+  bannerShops: jsonb("banner_shops").$type<string[]>().notNull().default(["GENERAL_SHOP"]),
+  bannerPlace: text("banner_place").$type<"top" | "below">().notNull().default("top"),
+  bannerStyle: integer("banner_style").notNull().default(0),
+  // Texte im Bild je Shop-Sprache (de/en/ar/nl): Überschrift, Unterzeile, Kurznamen der Artikel
+  bannerCopy: jsonb("banner_copy").$type<Record<string, { headline: string; sub: string; names: string[] }>>().notNull().default({}),
+  // fertige Bilder: "wide-de" → stored_files.id (wide 2400×800, tall 1080×1350; de/en/ar/nl)
+  bannerFiles: jsonb("banner_files").$type<Record<string, string>>().notNull().default({}),
+  bannerVersion: integer("banner_version").notNull().default(0), // +1 je neues Bild → Shops laden neu hoch
+  bannerJob: text("banner_job").$type<"" | "running" | "failed">().notNull().default(""),
+  bannerError: text("banner_error").notNull().default(""),
+  bannerStartedAt: timestamp("banner_started_at", { withTimezone: true }), // zuletzt eingeschaltet – neuere Aktion gewinnt den Platz
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  createdBy: text("created_by"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const promotionItems = pgTable("promotion_items", {
+  promotionId: text("promotion_id").notNull().references(() => promotions.id, { onDelete: "cascade" }),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  position: integer("position").notNull().default(0),
+}, (t) => [uniqueIndex("promotion_item_unique").on(t.promotionId, t.productId), index("promotion_item_product").on(t.productId)]);
+
+/** Werbebild je Aktion und Shop: hochgeladene Dateien (Shopify Files) der Version banner_version, Fehler */
+export const promotionShops = pgTable("promotion_shops", {
+  promotionId: text("promotion_id").notNull().references(() => promotions.id, { onDelete: "cascade" }),
+  channel: channel("channel").notNull(),
+  bannerVersion: integer("banner_version").notNull().default(0),
+  // "wide-de" → { id: gid://shopify/MediaImage/…, url: https://cdn.shopify.com/… }
+  media: jsonb("media").$type<Record<string, { id: string; url: string }>>().notNull().default({}),
+  error: text("error").notNull().default(""), // z. B. needScope:write_files, network, Meldung von Shopify
+  tries: integer("tries").notNull().default(0),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex("promotion_shop_unique").on(t.promotionId, t.channel)]);
 
 /**
  * WhatsApp im System (Wunsch Inhaber 16.11.2026: „الواتساب جوه الابلكيشن … المراسله تترسل من جوه السيستم“): ein Chat je
@@ -678,6 +737,10 @@ export const shops = pgTable("shops", {
   categoryMap: jsonb("category_map").$type<Record<string, string>>().notNull().default({}),
   // Kundenkonten-Abgleich: bis hierher (updatedAt im Shop) übernommen; null = beim nächsten Mal alle (src/lib/shopify/customers.ts)
   customersSince: timestamp("customers_since", { withTimezone: true }),
+  // Aktionen: automatische Kollektion „Angebote“ (alle reduzierten Artikel) und der zuletzt geschriebene Inhalt ihres
+  // Metafelds star_style.banner (Werbebilder über/unter dem Hero) – geschrieben wird nur bei Änderung (src/lib/shopify/promo-shop.ts)
+  offersCollectionId: text("offers_collection_id").notNull().default(""),
+  promoBanner: text("promo_banner").notNull().default(""),
   updatedAt: updatedAt(),
 });
 
@@ -699,6 +762,10 @@ export const shopVariants = pgTable("shop_variants", {
   pushedWeightGrams: integer("pushed_weight_grams"),
   // zuletzt im Shop gesetzter Tag „spedition“ am Produkt (true/false); weicht er von der Versandart ab, setzt der Worker ihn neu
   pushedFreight: boolean("pushed_freight"),
+  // Aktionen: Streichpreis (Cent, wie im Shop gezeigt), den WIR gesetzt haben, und der Streichpreis davor (null = keiner).
+  // Nach der Aktion wird nur ein Streichpreis zurückgesetzt, den wir gesetzt haben (src/lib/shopify/prices.ts)
+  promoCompareCents: integer("promo_compare_cents"),
+  prePromoCompareCents: integer("pre_promo_compare_cents"),
   pushError: text("push_error").notNull().default(""),
   seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("shop_variant_unique").on(t.channel, t.shopVariantId), index("shop_variant_ours").on(t.variantId)]);

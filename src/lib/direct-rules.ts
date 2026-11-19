@@ -16,8 +16,10 @@ export const DIRECT_KEEP_DAYS = { rejected: 90, open: 180 } as const;
 
 export type CatalogVariant = {
   id: string; size: string; color: string; barcode: string;
-  /** netto, Preis der Preisgruppe des Links (جملة bzw. جملة الجملة) */
+  /** netto, Preis der Preisgruppe des Links (جملة bzw. جملة الجملة) – bei einer Aktion schon mit Rabatt */
   priceCents: number; grossCents: number; vatRateBp: number; imageId: string | null; inStock: boolean;
+  /** Aktion (Wunsch Inhaber 19.11.2026): ganze Prozent Rabatt + Preis vorher (netto/brutto, durchgestrichen) */
+  promoPct?: number; wasCents?: number; wasGrossCents?: number;
 };
 export type CatalogProduct = {
   id: string; name: string; category: string; sku: string; description: string; imageId: string | null; variants: CatalogVariant[];

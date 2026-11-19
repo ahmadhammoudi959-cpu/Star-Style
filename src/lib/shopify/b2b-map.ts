@@ -130,20 +130,24 @@ export function pickResellerSetup(markets: MarketNode[], shopTaxesIncluded: bool
   return { problem: "noPriceList" };
 }
 
-export type ResellerRow = { shopVariantId: string; netCents: number; vatRateBp: number };
-export type FixedPrice = { variantId: string; amount: string };
+export type ResellerRow = { shopVariantId: string; netCents: number; vatRateBp: number; promoBp?: number };
+export type FixedPrice = { variantId: string; amount: string; compareAt?: string | null };
+type Money = { amount: string; currencyCode: string };
 
 /**
  * Festpreise der Preisliste = جملة الجملة-Preis (Wiederverkäufer, netto im System) wie im Shop gezeigt (brutto, wenn die Preise
  * inkl. MwSt. sind – derselbe runde Bruttopreis wie überall). Ohne Wiederverkäuferpreis → Festpreis weg (dann gilt der normale Preis).
  * Nur Abweichungen; Varianten, die nicht in rows stehen, bleiben unberührt.
+ * Aktion (19.11.2026): auch Wiederverkäufer sehen „-20%“ – Festpreis minus Rabatt, Streichpreis = ihr normaler Preis;
+ * nach der Aktion wird der Streichpreis wieder entfernt (die Preisliste pflegt nur unser System).
  */
 export function planResellerPrices(rows: ResellerRow[], current: FixedPrice[], taxesIncluded: boolean, currency: string) {
-  const have = new Map(current.map((c) => [c.variantId, Math.round(Number(c.amount) * 100)]));
-  const add: { variantId: string; price: { amount: string; currencyCode: string } }[] = [];
+  const have = new Map(current.map((c) => [c.variantId, { price: Math.round(Number(c.amount) * 100), compare: c.compareAt == null || c.compareAt === "" ? null : Math.round(Number(c.compareAt) * 100) }]));
+  const add: { variantId: string; price: Money; compareAtPrice?: Money | null }[] = [];
   const del: string[] = [];
   let unchanged = 0;
   const seen = new Set<string>();
+  const m = (c: number): Money => ({ amount: (c / 100).toFixed(2), currencyCode: currency });
   for (const r of rows) {
     if (seen.has(r.shopVariantId)) continue;
     seen.add(r.shopVariantId);
@@ -152,9 +156,15 @@ export function planResellerPrices(rows: ResellerRow[], current: FixedPrice[], t
       if (cur != null) del.push(r.shopVariantId); else unchanged++;
       continue;
     }
-    const want = shopPriceCents(r.netCents, r.vatRateBp, taxesIncluded);
-    if (cur === want) { unchanged++; continue; }
-    add.push({ variantId: r.shopVariantId, price: { amount: (want / 100).toFixed(2), currencyCode: currency } });
+    const normal = shopPriceCents(r.netCents, r.vatRateBp, taxesIncluded);
+    if ((r.promoBp ?? 0) > 0) {
+      const want = Math.round((normal * (10000 - r.promoBp!)) / 10000);
+      if (cur?.price === want && cur.compare === normal) { unchanged++; continue; }
+      add.push({ variantId: r.shopVariantId, price: m(want), compareAtPrice: m(normal) });
+      continue;
+    }
+    if (cur?.price === normal && cur.compare == null) { unchanged++; continue; }
+    add.push(cur?.compare != null ? { variantId: r.shopVariantId, price: m(normal), compareAtPrice: null } : { variantId: r.shopVariantId, price: m(normal) });
   }
   return { add, del, unchanged };
 }

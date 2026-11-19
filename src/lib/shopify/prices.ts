@@ -11,10 +11,11 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { gql, getShop, ShopifyError, type ShopChannel } from "./client";
 import { CHANNELS, logEvent } from "./sync";
-import { planPriceUpdates, shopPriceCents, type ShopVariantPrice } from "./product-push-map";
+import { planPriceUpdates, shopPriceCents, type PriceMark, type ShopVariantPrice } from "./product-push-map";
 import { pushResellerPrices } from "./b2b";
+import { activeDiscounts } from "../promotions";
 
-const NODES_Q = `query($ids: [ID!]!) { nodes(ids: $ids) { ... on ProductVariant { id price product { id } } } }`;
+const NODES_Q = `query($ids: [ID!]!) { nodes(ids: $ids) { ... on ProductVariant { id price compareAtPrice product { id } } } }`;
 const UPDATE_M = `mutation($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
   productVariantsBulkUpdate(productId: $productId, variants: $variants) { productVariants { id } userErrors { field message } } }`;
 
@@ -35,13 +36,18 @@ export async function pushPrices(productIds?: string[], only?: ShopChannel): Pro
     if (only && channel !== only) continue;
     const shop = await getShop(channel);
     if (!shop?.domain || !(shop.clientSecretEnc || shop.staticTokenEnc)) continue;
-    const rows = (await db.execute<{ shop_variant_id: string; net: number; vat: number; own: boolean }>(sql`
-      select sv.shop_variant_id, coalesce(nullif(v.retail_price_cents, 0), p.retail_price_cents) as net, p.vat_rate_bp as vat,
-        coalesce(v.retail_price_cents, 0) > 0 as own
+    // Aktionen: laufender Rabatt in diesem Shop je Artikel (src/lib/promotions.ts)
+    const promo = await activeDiscounts(channel, productIds);
+    const rows = (await db.execute<{ shop_variant_id: string; product_id: string; net: number; vat: number; own: boolean; pc: number | null; ppc: number | null }>(sql`
+      select sv.shop_variant_id, p.id as product_id, coalesce(nullif(v.retail_price_cents, 0), p.retail_price_cents) as net, p.vat_rate_bp as vat,
+        coalesce(v.retail_price_cents, 0) > 0 as own, sv.promo_compare_cents as pc, sv.pre_promo_compare_cents as ppc
       from shop_variants sv join variants v on v.id = sv.variant_id join products p on p.id = v.product_id
       where sv.channel = ${channel} and v.active
         ${productIds ? sql`and p.id in (${sql.join(productIds.map((id) => sql`${id}`), sql`, `)})` : sql``}`)).rows
-      .map((r) => ({ shopVariantId: r.shop_variant_id, netCents: Number(r.net), vatRateBp: Number(r.vat), own: Boolean(r.own) }));
+      .map((r) => ({
+        shopVariantId: r.shop_variant_id, netCents: Number(r.net), vatRateBp: Number(r.vat), own: Boolean(r.own),
+        promoBp: promo.get(String(r.product_id)) ?? 0, promoCompareCents: r.pc == null ? null : Number(r.pc), prePromoCompareCents: r.ppc == null ? null : Number(r.ppc),
+      }));
     if (!rows.length) continue;
     let updated = 0, failed = 0, unchanged = 0, firstError = "", retry = false, priceCents: number | null = null;
     try {
@@ -50,19 +56,26 @@ export async function pushPrices(productIds?: string[], only?: ShopChannel): Pro
       if (want.size === 1) priceCents = [...want][0];
       const current: ShopVariantPrice[] = [];
       for (let i = 0; i < rows.length; i += 100) {
-        const d = await gql<{ nodes: ({ id: string; price: string; product: { id: string } } | null)[] }>(shop, NODES_Q,
+        const d = await gql<{ nodes: ({ id: string; price: string; compareAtPrice: string | null; product: { id: string } } | null)[] }>(shop, NODES_Q,
           { ids: rows.slice(i, i + 100).map((r) => r.shopVariantId) });
-        for (const n of d.nodes) if (n?.id && n.product) current.push({ id: n.id, price: n.price, productId: n.product.id });
+        for (const n of d.nodes) if (n?.id && n.product) current.push({ id: n.id, price: n.price, compareAtPrice: n.compareAtPrice, productId: n.product.id });
       }
       const plan = planPriceUpdates(rows, current, taxesIncluded);
       unchanged = plan.unchanged;
+      // Buchführung (Streichpreis von uns) erst nach Erfolg speichern; Varianten ohne Änderung im Shop gleich
+      const done = new Set<string>(), sent = new Set(plan.updates.flatMap((u) => u.variants.map((v) => v.id)));
+      for (const id of plan.marks.keys()) if (!sent.has(id)) done.add(id);
       for (const u of plan.updates) {
         try {
           const d = await gql<{ productVariantsBulkUpdate: { userErrors: { message: string }[] } }>(shop, UPDATE_M, u);
           const errs = d.productVariantsBulkUpdate.userErrors;
-          if (errs.length) { failed += u.variants.length; firstError ||= errs[0].message; } else updated += u.variants.length;
+          if (errs.length) { failed += u.variants.length; firstError ||= errs[0].message; } else {
+            updated += u.variants.length;
+            for (const v of u.variants) done.add(v.id);
+          }
         } catch (e) { failed += u.variants.length; firstError ||= (e as Error).message; retry ||= transient(e); }
       }
+      await saveMarks(channel, [...done].flatMap((id) => (plan.marks.has(id) ? [[id, plan.marks.get(id)!] as const] : [])));
     } catch (e) {
       // Shop nicht erreichbar o. Ä. → später noch einmal (Worker); Rechte-/Abfragefehler stehen im Protokoll
       failed = rows.length; firstError = (e as Error).message; retry = transient(e);
@@ -72,6 +85,16 @@ export async function pushPrices(productIds?: string[], only?: ShopChannel): Pro
     out.push({ channel, updated, failed, unchanged, retry, priceCents, own: rows.some((r) => r.own) });
   }
   return out;
+}
+
+/** Streichpreis-Buchführung je Shop-Variante speichern (siehe planPriceUpdates) */
+async function saveMarks(channel: ShopChannel, marks: (readonly [string, PriceMark])[]) {
+  for (let i = 0; i < marks.length; i += 200) {
+    const part = marks.slice(i, i + 200);
+    await db.execute(sql`update shop_variants sv set promo_compare_cents = m.pc, pre_promo_compare_cents = m.ppc
+      from (values ${sql.join(part.map(([id, m]) => sql`(${id}, ${m.promoCompareCents}::int, ${m.prePromoCompareCents}::int)`), sql`, `)}) as m(id, pc, ppc)
+      where sv.channel = ${channel} and sv.shop_variant_id = m.id`);
+  }
 }
 
 /** Vormerkungen löschen, die seit dem Lesen nicht neu gesetzt wurden (sonst ginge ein gleich danach gespeicherter Preis verloren) */

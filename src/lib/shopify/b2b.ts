@@ -13,6 +13,7 @@ import { and, asc, eq, lt, ne, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { gql, getShop, refreshTokenOnce, ShopifyError, type Shop, type ShopChannel } from "./client";
 import { configured, withProductLock } from "./admin";
+import { activeDiscounts } from "../promotions";
 import { CHANNELS, logEvent } from "./sync";
 import {
   ALL_PARTS, chunks, companyAddress, companyCreateInput, companyFingerprint, contactName, normEmail, partNote, pickResellerSetup, planResellerPrices,
@@ -92,7 +93,7 @@ export async function resellerSetup(shop: Shop, fresh = false): Promise<SetupRes
 // ───────────────────────── Preisliste füllen ─────────────────────────
 
 const FIXED_Q = `query($id: ID!, $after: String) { priceList(id: $id) { id prices(first: 250, after: $after, originType: FIXED) {
-  nodes { variant { id } price { amount } } pageInfo { hasNextPage endCursor } } } }`;
+  nodes { variant { id } price { amount } compareAtPrice { amount } } pageInfo { hasNextPage endCursor } } } }`;
 const FIXED_M = `mutation($id: ID!, $add: [PriceListPriceInput!]!, $del: [ID!]!) {
   priceListFixedPricesUpdate(priceListId: $id, pricesToAdd: $add, variantIdsToDelete: $del) { deletedFixedPriceVariantIds userErrors { field message } } }`;
 
@@ -112,22 +113,23 @@ export async function pushResellerPrices(productIds?: string[], only?: ShopChann
     if (!configured(shop)) continue;
     const setup = await resellerSetup(shop, !productIds);
     if ("problem" in setup) { out.push({ channel, updated: 0, removed: 0, failed: 0, unchanged: 0, retry: setup.problem === "unreachable", problem: setup.problem }); continue; }
-    const rows = (await db.execute<{ shop_variant_id: string; net: number; vat: number }>(sql`
-      select sv.shop_variant_id, coalesce(nullif(v.wholesale_price_cents, 0), p.wholesale_price_cents) as net, p.vat_rate_bp as vat
+    const promo = await activeDiscounts(channel, productIds); // Aktionen: Wiederverkäufer bekommen denselben Rabatt
+    const rows = (await db.execute<{ shop_variant_id: string; product_id: string; net: number; vat: number }>(sql`
+      select sv.shop_variant_id, p.id as product_id, coalesce(nullif(v.wholesale_price_cents, 0), p.wholesale_price_cents) as net, p.vat_rate_bp as vat
       from shop_variants sv join variants v on v.id = sv.variant_id join products p on p.id = v.product_id
       where sv.channel = ${channel} and v.active
         ${productIds ? sql`and p.id in (${sql.join(productIds.map((id) => sql`${id}`), sql`, `)})` : sql``}`)).rows
-      .map((r) => ({ shopVariantId: r.shop_variant_id, netCents: Number(r.net), vatRateBp: Number(r.vat) }));
+      .map((r) => ({ shopVariantId: r.shop_variant_id, netCents: Number(r.net), vatRateBp: Number(r.vat), promoBp: promo.get(String(r.product_id)) ?? 0 }));
     if (!rows.length) continue;
     let updated = 0, removed = 0, failed = 0, unchanged = 0, retry = false, firstError = "";
     try {
       const current: FixedPrice[] = [];
       let after: string | null = null;
       do {
-        const d: { priceList: { prices: { nodes: { variant: { id: string } | null; price: { amount: string } }[]; pageInfo: { hasNextPage: boolean; endCursor: string } } } | null } =
+        const d: { priceList: { prices: { nodes: { variant: { id: string } | null; price: { amount: string }; compareAtPrice: { amount: string } | null }[]; pageInfo: { hasNextPage: boolean; endCursor: string } } } | null } =
           await call(shop, FIXED_Q, { id: setup.priceListId, after });
         if (!d.priceList) throw new ShopifyError("graphql", "Preisliste nicht gefunden");
-        for (const n of d.priceList.prices.nodes) if (n.variant) current.push({ variantId: n.variant.id, amount: n.price.amount });
+        for (const n of d.priceList.prices.nodes) if (n.variant) current.push({ variantId: n.variant.id, amount: n.price.amount, compareAt: n.compareAtPrice?.amount ?? null });
         after = d.priceList.prices.pageInfo.hasNextPage ? d.priceList.prices.pageInfo.endCursor : null;
       } while (after);
       const plan = planResellerPrices(rows, current, setup.taxesIncluded, setup.currency);

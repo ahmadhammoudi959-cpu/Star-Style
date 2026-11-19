@@ -10,9 +10,10 @@ export type PickerLabels = Omit<BrowserLabels, "available"> & { browseAll: strin
 
 /** Artikel finden – überall gleich (Wunsch Inhaber 03.11.2026): Kategorie wählen, suchen (Name, Nr., Barcode, Kategorie)
  *  oder alle Artikel im Fenster durchsehen und antippen. `compact`: nur Suche + Knopf „alle“ (z. B. in Tabellenzeilen). */
-export function ProductPickerBar<T extends PickerOption>({ options, onPick, placeholder, stockLabel, labels, priceOf, qtyInDoc, linesCount, compact = false, closeOnPick = false }: {
+export function ProductPickerBar<T extends PickerOption>({ options, onPick, placeholder, stockLabel, labels, priceOf, wasOf, qtyInDoc, linesCount, compact = false, closeOnPick = false }: {
   options: T[]; onPick: (o: T) => void; placeholder: string; stockLabel: string; labels: PickerLabels;
-  priceOf?: (o: T) => string; qtyInDoc?: (variantId: string) => number; linesCount?: number; compact?: boolean; closeOnPick?: boolean;
+  /** wasOf: Preis vor dem Rabatt einer Aktion (durchgestrichen), nur bei o.promoPct */
+  priceOf?: (o: T) => string; wasOf?: (o: T) => string; qtyInDoc?: (variantId: string) => number; linesCount?: number; compact?: boolean; closeOnPick?: boolean;
 }) {
   const [cat, setCat] = useState("");
   const [browse, setBrowse] = useState(false);
@@ -36,7 +37,7 @@ export function ProductPickerBar<T extends PickerOption>({ options, onPick, plac
         </button>
       </div>
       {browse && (
-        <ProductBrowser options={options} onPick={onPick} onClose={close} priceOf={priceOf} qtyInDoc={qtyInDoc} linesCount={linesCount}
+        <ProductBrowser options={options} onPick={onPick} onClose={close} priceOf={priceOf} wasOf={wasOf} qtyInDoc={qtyInDoc} linesCount={linesCount}
           initialCategory={cat} closeOnPick={closeOnPick} labels={{ ...labels, available: stockLabel }} />
       )}
     </>

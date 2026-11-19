@@ -7,6 +7,8 @@ import { searchOptions } from "@/lib/product-search";
 export type PickerOption = {
   id: string; sku: string; nameDe: string; nameNl: string; size: string; color: string; barcode: string | null; stockQty: number; imageId?: string | null;
   productId?: string; category?: string;
+  /** Aktion: ganze Prozent Rabatt (Abzeichen „-20%“ + Streichpreis über wasOf) */
+  promoPct?: number;
 };
 
 export function optionLabel(o: Pick<PickerOption, "nameDe" | "size" | "color">) {

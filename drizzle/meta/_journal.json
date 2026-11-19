@@ -246,6 +246,13 @@
       "when": 1795113324616,
       "tag": "0034_direct_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795123300741,
+      "tag": "0035_promotions",
+      "breakpoints": true
     }
   ]
 }

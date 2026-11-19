@@ -3,6 +3,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { CustomerOpt, SaleOption } from "@/app/(app)/sales/DocEditor";
 import { customerOpenBalances } from "./receivables";
+import { activeDiscounts } from "./promotions";
 
 export async function customerOptions(): Promise<CustomerOpt[]> {
   const [rows, open] = await Promise.all([
@@ -25,7 +26,10 @@ export async function saleOptions(ownOfferId?: string): Promise<SaleOption[]> {
              ${ownOfferId ? sql`and r.offer_id <> ${ownOfferId}` : sql``}), 0) as available
     from variants v join products p on p.id = v.product_id
     where v.active and p.active order by p.name_de, v.created_at, v.id`);
+  // Aktionen im System (Wunsch Inhaber 19.11.2026): Rabatt kommt beim Hinzufügen als Positionsrabatt mit
+  const promo = await activeDiscounts("SYSTEM");
   return r.rows.map((x) => ({
+    promoPct: Math.round((promo.get(String(x.product_id)) ?? 0) / 100) || undefined,
     id: String(x.id), productId: String(x.product_id), category: String(x.category ?? ""),
     sku: String(x.sku), nameDe: String(x.name_de), nameNl: String(x.name_nl), size: String(x.size), color: String(x.color),
     barcode: (x.barcode as string) ?? null, stockQty: Number(x.available), wholesalePriceCents: Number(x.wholesale), retailPriceCents: Number(x.retail),

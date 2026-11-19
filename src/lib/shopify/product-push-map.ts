@@ -293,29 +293,59 @@ export function decodePush(s: string | undefined): PushResult[] {
  * Preis-Abgleich (Wunsch Inhaber 09.11.2026): geänderter Shop-Preis (Variantenpreis, sonst Artikelpreis; bei Bruttopreisen
  * inkl. MwSt.) → an die verbundenen Shop-Varianten. Nur wo der Preis im Shop abweicht; gruppiert je Shop-Produkt,
  * weil productVariantsBulkUpdate je Produkt arbeitet. Varianten ohne Preis (0) werden nie gemeldet.
+ *
+ * Aktionen (19.11.2026): promoBp > 0 → Preis = Shop-Preis minus Rabatt (kaufmännisch gerundet) und Streichpreis
+ * (compareAtPrice) = normaler Shop-Preis – genau daraus zeigt das Theme „-20%“ und die Kollektion „Angebote“ (Preis reduziert)
+ * nimmt den Artikel auf. Ohne Aktion wird nur ein Streichpreis zurückgesetzt, den WIR gesetzt haben (promoCompareCents) und den
+ * seitdem niemand im Shop geändert hat – dann kommt der Streichpreis von vorher zurück (prePromoCompareCents, meist keiner).
+ * marks = Buchführung je Shop-Variante, die nach erfolgreichem Melden gespeichert wird.
  */
-export type PriceRow = { shopVariantId: string; netCents: number; vatRateBp: number };
-export type ShopVariantPrice = { id: string; price: string; productId: string };
+export type PriceRow = {
+  shopVariantId: string; netCents: number; vatRateBp: number;
+  promoBp?: number; promoCompareCents?: number | null; prePromoCompareCents?: number | null;
+};
+export type ShopVariantPrice = { id: string; price: string; productId: string; compareAtPrice?: string | null };
+export type PriceVariantUpdate = { id: string; price: string; compareAtPrice?: string | null };
+export type PriceMark = { promoCompareCents: number | null; prePromoCompareCents: number | null };
+const toCents = (x: string | null | undefined) => (x == null || x === "" ? null : Math.round(Number(x) * 100));
+export const promoPriceCents = (cents: number, bp: number) => Math.round((cents * (10000 - bp)) / 10000);
+
 export function planPriceUpdates(rows: PriceRow[], current: ShopVariantPrice[], taxesIncluded: boolean) {
   const now = new Map(current.map((c) => [c.id, c]));
-  const byProduct = new Map<string, { id: string; price: string }[]>();
+  const byProduct = new Map<string, PriceVariantUpdate[]>();
+  const marks = new Map<string, PriceMark>();
   let unchanged = 0, missing = 0;
   for (const r of rows) {
     if (!(r.netCents > 0)) continue;
     const c = now.get(r.shopVariantId);
     if (!c) { missing++; continue; }
-    const wantCents = shopPriceCents(r.netCents, r.vatRateBp, taxesIncluded), cur = Math.round(Number(c.price) * 100);
-    // Stimmt schon, wenn der Shop-Preis netto derselbe ist und mindestens so rund (z. B. 490,00 € statt 489,99 € bleibt)
-    const same = taxesIncluded
-      ? netFromGross(cur, r.vatRateBp) === r.netCents && priceRoundness(cur) >= priceRoundness(wantCents)
-      : cur === wantCents;
-    if (same) { unchanged++; continue; }
-    const want = money(wantCents);
+    const normal = shopPriceCents(r.netCents, r.vatRateBp, taxesIncluded), cur = Math.round(Number(c.price) * 100);
+    const curCompare = toCents(c.compareAtPrice);
+    const ours = r.promoCompareCents ?? null;
+    let upd: PriceVariantUpdate | null = null;
+    if ((r.promoBp ?? 0) > 0) {
+      const want = promoPriceCents(normal, r.promoBp!);
+      if (cur !== want || curCompare !== normal) upd = { id: c.id, price: money(want), compareAtPrice: money(normal) };
+      // Streichpreis von vorher nur beim ersten Setzen merken (danach ist der im Shop unserer)
+      if (ours !== normal) marks.set(c.id, { promoCompareCents: normal, prePromoCompareCents: ours == null ? (curCompare === normal ? null : curCompare) : r.prePromoCompareCents ?? null });
+    } else {
+      // Stimmt schon, wenn der Shop-Preis netto derselbe ist und mindestens so rund (z. B. 490,00 € statt 489,99 € bleibt)
+      const same = taxesIncluded
+        ? netFromGross(cur, r.vatRateBp) === r.netCents && priceRoundness(cur) >= priceRoundness(normal)
+        : cur === normal;
+      const restore = ours != null && curCompare === ours; // unser Streichpreis steht noch → zurück auf den von vorher
+      if (!same || restore) {
+        upd = { id: c.id, price: same ? c.price : money(normal) };
+        if (restore) upd.compareAtPrice = r.prePromoCompareCents != null ? money(r.prePromoCompareCents) : null;
+      }
+      if (ours != null) marks.set(c.id, { promoCompareCents: null, prePromoCompareCents: null });
+    }
+    if (!upd) { unchanged++; continue; }
     const list = byProduct.get(c.productId) ?? [];
-    if (!list.some((x) => x.id === c.id)) list.push({ id: c.id, price: want });
+    if (!list.some((x) => x.id === c.id)) list.push(upd);
     byProduct.set(c.productId, list);
   }
-  return { updates: [...byProduct].map(([productId, variants]) => ({ productId, variants })), unchanged, missing };
+  return { updates: [...byProduct].map(([productId, variants]) => ({ productId, variants })), unchanged, missing, marks };
 }
 
 /**

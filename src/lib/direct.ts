@@ -22,6 +22,8 @@ import { createDraft, saveOfferTx } from "./sales";
 import { grossFromNet } from "./money";
 import { addDaysIso, todayIso } from "./dates";
 import { productPhotoIds } from "./product-photos";
+import { activeDiscounts } from "./promotions";
+import { discounted } from "./promo-rules";
 import {
   DIRECT_GROUPS, DIRECT_KEEP_DAYS, DIRECT_MIN_FILL_MS, cartProblems, cartTotals, directState, lineDescription, looksLikeToken, rateLimited,
   type CatalogProduct, type DirectGroup, type DirectState,
@@ -133,6 +135,7 @@ export async function publicCatalog(group: DirectGroup): Promise<CatalogProduct[
     from variants v join products p on p.id = v.product_id
     where v.active and ${PUBLIC_PRODUCT} and ${PRICE} > 0
     order by p.name_de, p.id, v.created_at, v.id`);
+  const promo = await activeDiscounts("DIRECT"); // Aktionen am Bestell-Link
   const byId = new Map<string, CatalogProduct>();
   for (const x of r.rows) {
     const pid = String(x.product_id);
@@ -142,9 +145,11 @@ export async function publicCatalog(group: DirectGroup): Promise<CatalogProduct[
         imageId: (x.p_image as string) ?? (x.v_image as string) ?? null, variants: [] };
       byId.set(pid, p);
     }
-    const price = Number(x.price), rate = Number(x.vat_rate_bp);
+    const list = Number(x.price), rate = Number(x.vat_rate_bp), bp = promo.get(pid) ?? 0;
+    const price = bp ? discounted(list, bp) : list;
     p.variants.push({ id: String(x.id), size: String(x.size), color: String(x.color), barcode: String(x.barcode), priceCents: price,
-      grossCents: grossFromNet(price, rate), vatRateBp: rate, imageId: (x.v_image as string) ?? null, inStock: Number(x.available) > 0 });
+      grossCents: grossFromNet(price, rate), vatRateBp: rate, imageId: (x.v_image as string) ?? null, inStock: Number(x.available) > 0,
+      ...(bp ? { promoPct: Math.round(bp / 100), wasCents: list, wasGrossCents: grossFromNet(list, rate) } : {}) });
   }
   return [...byId.values()];
 }
@@ -188,9 +193,10 @@ export async function submitDirectOrder(input: DirectOrderInput, ctx: { ip: stri
   const PRICE = priceOf(ctx.group);
   const ids = input.lines.map((l) => l.variantId);
   const rows = (await db.execute<Record<string, unknown>>(sql`
-    select v.id, p.name_de, v.size, v.color, coalesce(v.barcode, '') as barcode, p.vat_rate_bp, ${PRICE} as price, ${AVAILABLE} as available
+    select v.id, v.product_id, p.name_de, v.size, v.color, coalesce(v.barcode, '') as barcode, p.vat_rate_bp, ${PRICE} as price, ${AVAILABLE} as available
     from variants v join products p on p.id = v.product_id
     where v.id in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)}) and v.active and ${PUBLIC_PRODUCT} and ${PRICE} > 0`)).rows;
+  const promo = await activeDiscounts("DIRECT", [...new Set(rows.map((x) => String(x.product_id)))]);
   const info = new Map(rows.map((x) => [String(x.id), x]));
   const problems = cartProblems(input.lines, new Map(rows.map((x) => [String(x.id), Number(x.available)])));
   if (problems.length) throw new DirectError("unavailable", problems);
@@ -199,10 +205,11 @@ export async function submitDirectOrder(input: DirectOrderInput, ctx: { ip: stri
     const x = info.get(l.variantId)!;
     return {
       position: i + 1, variantId: l.variantId, qty: l.qty, unitPriceCents: Number(x.price), vatRateBp: Number(x.vat_rate_bp), barcode: String(x.barcode),
-      description: lineDescription(String(x.name_de), { size: String(x.size), color: String(x.color) }),
+      description: lineDescription(String(x.name_de), { size: String(x.size), color: String(x.color) }), promoBp: promo.get(String(x.product_id)) ?? 0,
     };
   });
-  const totals = cartTotals(lines.map((l) => ({ qty: l.qty, priceCents: l.unitPriceCents, vatRateBp: l.vatRateBp })));
+  // Summen mit dem Preis, den der Kunde gesehen hat (Aktion: mit Rabatt); gespeichert wird der Preis vorher + Rabatt
+  const totals = cartTotals(lines.map((l) => ({ qty: l.qty, priceCents: l.promoBp ? discounted(l.unitPriceCents, l.promoBp) : l.unitPriceCents, vatRateBp: l.vatRateBp })));
   return db.transaction(async (tx) => {
     const [o] = await tx.insert(schema.directOrders).values({
       name: input.name, email: input.email, company: input.company, phone: input.phone, street: input.street, zip: input.zip, city: input.city,
@@ -282,6 +289,8 @@ export async function listDirectOrders(f: { state?: string; q?: string } = {}): 
 export type DirectItem = {
   id: string; variantId: string | null; productId: string | null; description: string; barcode: string; qty: number; unitPriceCents: number;
   vatRateBp: number; imageId: string | null; available: number | null; groupPrice: { WHOLESALE: number; RETAIL: number } | null;
+  /** Rabatt einer Aktion, mit dem die Zeile am Bestell-Link gezeigt wurde (0 = keiner) */
+  promoBp: number;
 };
 export type DirectDetail = DirectRow & {
   street: string; zip: string; city: string; country: string; vatId: string; note: string; lang: string;
@@ -306,7 +315,7 @@ export async function directOrderDetail(id: string): Promise<DirectDetail | null
       id: String(l.id), variantId: (l.variant_id as string) ?? null, productId: (l.product_id as string) ?? null, description: String(l.description),
       barcode: String(l.barcode), qty: Number(l.qty), unitPriceCents: Number(l.unit_price_cents), vatRateBp: Number(l.vat_rate_bp),
       imageId: (l.image_id as string) ?? null, available: l.available == null ? null : Number(l.available),
-      groupPrice: l.product_id ? { WHOLESALE: Number(l.wholesale), RETAIL: Number(l.retail) } : null,
+      groupPrice: l.product_id ? { WHOLESALE: Number(l.wholesale), RETAIL: Number(l.retail) } : null, promoBp: Number(l.promo_bp ?? 0),
     })),
   };
 }
@@ -369,11 +378,12 @@ export async function convertDirectOrder(id: string, opts: { customerId: string;
     const byId = new Map(cur.map((x) => [String(x.id), x]));
     const lines = [...o.lines].sort((a, b) => a.position - b.position).map((l) => {
       const x = l.variantId ? byId.get(l.variantId) : undefined;
-      if (!x) return { variantId: null, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: 0, vatRateBp: l.vatRateBp };
+      // Aktion: der Rabatt, den der Kunde am Link gesehen hat, bleibt als Positionsrabatt (auch wenn die Aktion inzwischen vorbei ist)
+      if (!x) return { variantId: null, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.promoBp ?? 0, vatRateBp: l.vatRateBp };
       const price = customer.priceGroup === "RETAIL" ? Number(x.retail) : Number(x.wholesale);
       return {
         variantId: l.variantId, description: lineDescription(String(x.name_de), { size: String(x.size), color: String(x.color) }), qty: l.qty,
-        unitPriceCents: price > 0 ? price : l.unitPriceCents, discountBp: 0, vatRateBp: Number(x.vat_rate_bp),
+        unitPriceCents: price > 0 ? price : l.unitPriceCents, discountBp: l.promoBp ?? 0, vatRateBp: Number(x.vat_rate_bp),
       };
     });
 

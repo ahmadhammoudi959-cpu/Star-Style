@@ -33,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/sales", label: t.nav.sales, icon: "cart", badge: can(session, "sales.shipping") ? "/api/sales/waiting" : undefined },
     // Direktverkauf (Wunsch Inhaber 19.11.2026): Listen vom Bestell-Link – Zahl der neuen
     { href: "/direct", label: t.nav.direct, icon: "list", badge: "/api/direct/unread" },
+    { href: "/promotions", label: t.nav.promotions, icon: "percent" },
     { href: "/returns", label: t.nav.returns, icon: "undo" },
     { href: "/receivables", label: t.nav.receivables, icon: "euro" },
     { href: "/customers", label: t.nav.customers, icon: "users" },

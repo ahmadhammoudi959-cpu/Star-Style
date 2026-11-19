@@ -224,6 +224,8 @@ export function OrderApp({ token, group, catalog, t, locale, countries, company,
               const avail = productInStock(p);
               const inList = p.variants.reduce((s, v) => s + qtyOf(v.id), 0);
               const photo = p.imageId ?? p.variants.find((v) => v.imageId)?.imageId ?? null;
+              const pct = Math.max(0, ...p.variants.map((v) => v.promoPct ?? 0)); // Aktion
+              const wasMin = Math.min(...p.variants.map((v) => v.wasCents ?? v.priceCents));
               return (
                 <button key={p.id} type="button" onClick={() => setOpenId(p.id)} data-product={p.id}
                   className={`group card card-hover flex flex-col overflow-hidden text-start ${avail ? "" : "opacity-75"}`}>
@@ -234,6 +236,7 @@ export function OrderApp({ token, group, catalog, t, locale, countries, company,
                     ) : (
                       <span className="grid h-full place-items-center"><Icon name="box" className="h-12 w-12 text-brand-200" /></span>
                     )}
+                    {pct > 0 && <span className="num absolute start-2 top-2 rounded-full bg-accent-600 px-2 py-0.5 text-xs font-black text-white shadow-card" dir="ltr" data-promo-corner>-{pct}%</span>}
                     {inList > 0 && (
                       <span className="absolute end-2 top-2 inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-bold text-white shadow-card">
                         <Icon name="check" className="h-3.5 w-3.5" /><span className="num">{inList}</span>
@@ -244,7 +247,8 @@ export function OrderApp({ token, group, catalog, t, locale, countries, company,
                     {p.category && <span className="truncate text-[0.6875rem] font-semibold text-brand-700" dir="auto">{p.category}</span>}
                     <span className="line-clamp-2 text-sm font-semibold leading-snug [overflow-wrap:anywhere]" dir="auto">{p.name}</span>
                     <span className="mt-auto flex flex-wrap items-baseline gap-x-1.5 pt-1">
-                      <span className="num font-bold text-ink">{r.min !== r.max ? fill(t.priceFrom, { p: eur(r.min) }) : eur(r.min)}</span>
+                      {pct > 0 && <s className="num text-xs text-ink-soft" dir="ltr">{eur(wasMin)}</s>}
+                      <span className={`num font-bold ${pct > 0 ? "text-accent-700" : "text-ink"}`}>{r.min !== r.max ? fill(t.priceFrom, { p: eur(r.min) }) : eur(r.min)}</span>
                       <span className="text-xs text-ink-soft">{t.net}</span>
                     </span>
                     <span className="flex items-center gap-1.5 text-xs text-ink-soft">
@@ -473,7 +477,13 @@ function ProductSheet({ p, t, token, img, qtyOf, setQty, onClose, onList, listCo
                         </div>
                       </div>
                       <div className="text-end">
-                        <div><span className="num text-lg font-bold text-ink">{eur(v.priceCents)}</span> <span className="text-xs font-semibold text-ink-soft">{t.net}</span></div>
+                        {v.promoPct ? (
+                          <div className="flex flex-wrap items-baseline justify-end gap-x-1.5" dir="ltr" data-promo-price>
+                            <span className="num rounded-full bg-accent-600 px-1.5 text-[0.6875rem] font-black text-white">-{v.promoPct}%</span>
+                            <s className="num text-xs text-ink-soft">{eur(v.wasCents ?? v.priceCents)}</s>
+                          </div>
+                        ) : null}
+                        <div><span className={`num text-lg font-bold ${v.promoPct ? "text-accent-700" : "text-ink"}`}>{eur(v.priceCents)}</span> <span className="text-xs font-semibold text-ink-soft">{t.net}</span></div>
                         <div className="num text-xs text-ink-soft">{fill(t.gross, { p: eur(v.grossCents) })}</div>
                       </div>
                       {v.inStock && <Stepper n={n} onChange={(x) => setQty(v.id, x)} t={t} />}
@@ -526,7 +536,7 @@ function ListStep({ t, lines, totals, img, setQty, adjusted, msg, onMore, onNext
                   <Stepper n={l.qty} onChange={(x) => setQty(l.variantId, x)} t={t} />
                   <div className="text-end text-sm">
                     <div className="num font-bold">{eur(l.qty * l.v.priceCents)}</div>
-                    <div className="num text-xs text-ink-soft">{l.qty} × {eur(l.v.priceCents)}</div>
+                    <div className="num text-xs text-ink-soft">{l.v.promoPct ? <span className="me-1 rounded-full bg-accent-600 px-1.5 text-[0.625rem] font-black text-white" dir="ltr">-{l.v.promoPct}%</span> : null}{l.qty} × {eur(l.v.priceCents)}</div>
                   </div>
                 </div>
               </div>

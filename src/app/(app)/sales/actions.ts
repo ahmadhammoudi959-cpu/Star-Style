@@ -7,6 +7,7 @@ import { db, schema } from "@/db";
 import { sendMail } from "@/lib/mail";
 import { loadMailSettings } from "@/lib/mailbox";
 import { fillDocText } from "@/lib/mail-rules";
+import { allowedPromoBps } from "@/lib/promotions";
 import { validatePlan } from "@/lib/payments";
 import { archivedInvoicePdf, offerPdf } from "@/lib/pdf";
 import { formatDate } from "@/lib/dates";
@@ -39,8 +40,20 @@ function fail(e: unknown): DocState {
   return { error: "error" };
 }
 
-/** Rabatt nur mit eigenem Recht (Positions- oder Gesamtrabatt) */
-const hasDiscount = (d: { discountBp: number; lines: { discountBp: number }[] }) => d.discountBp > 0 || d.lines.some((l) => l.discountBp > 0);
+/**
+ * Rabatt nur mit eigenem Recht (Positions- oder Gesamtrabatt). Ausnahme: der Rabatt einer Aktion auf genau diesen Artikel
+ * (Wunsch Inhaber 19.11.2026 – kommt beim Hinzufügen von selbst, siehe DocEditor).
+ */
+async function hasDiscount(d: { discountBp: number; lines: { variantId: string | null; discountBp: number }[] }): Promise<boolean> {
+  if (d.discountBp > 0) return true;
+  const disc = d.lines.filter((l) => l.discountBp > 0);
+  if (!disc.length) return false;
+  if (disc.some((l) => !l.variantId)) return true;
+  const vs = await db.query.variants.findMany({ where: inArray(schema.variants.id, [...new Set(disc.map((l) => l.variantId!))]), columns: { id: true, productId: true } });
+  const product = new Map(vs.map((v) => [v.id, v.productId]));
+  const allowed = await allowedPromoBps([...new Set(vs.map((v) => v.productId))]);
+  return disc.some((l) => !allowed.get(product.get(l.variantId!) ?? "")?.has(l.discountBp));
+}
 
 /** Preis unter dem Listenpreis der Preisgruppe des Kunden ist auch ein Rabatt (sonst ginge es über den Einzelpreis) */
 async function belowListPrice(customerId: string, ls: { variantId: string | null; unitPriceCents: number }[]): Promise<boolean> {
@@ -55,7 +68,7 @@ async function belowListPrice(customerId: string, ls: { variantId: string | null
   return ls.some((l) => l.variantId != null && list.has(l.variantId) && l.unitPriceCents < list.get(l.variantId)!);
 }
 const discountDenied = async (s: Parameters<typeof can>[0], d: { customerId: string; discountBp: number; lines: { variantId: string | null; unitPriceCents: number; discountBp: number }[] }) =>
-  !can(s, "sales.discount") && (hasDiscount(d) || (await belowListPrice(d.customerId, d.lines)));
+  !can(s, "sales.discount") && ((await hasDiscount(d)) || (await belowListPrice(d.customerId, d.lines)));
 
 export async function saveOfferAction(_: DocState, fd: FormData): Promise<DocState> {
   const s = await requirePerm("sales.offers");

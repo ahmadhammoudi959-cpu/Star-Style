@@ -6,6 +6,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { Thumb } from "@/components/Thumb";
 import { formatCents } from "@/lib/money";
+import { systemDiscounts } from "@/lib/promotions";
+import { PromoPrice } from "@/components/PromoPrice";
+import { discounted } from "@/lib/promo-rules";
 import { productCategories } from "@/lib/queries";
 import { CategorySelect } from "@/components/CategorySelect";
 import { OpenButton } from "@/components/OpenButton";
@@ -27,7 +30,13 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const category = cat.trim() || null;
   const session = await requireSession();
   const edit = can(session, "products.edit"), manageShops = can(session, "shops.manage");
-  const [cats, pend] = await Promise.all([productCategories(), manageShops ? pendingSummary() : []]);
+  const [cats, pend, promo] = await Promise.all([productCategories(), manageShops ? pendingSummary() : [], systemDiscounts()]);
+  // Aktion im System: „-20%“ + Streichpreis (Wunsch Inhaber 19.11.2026)
+  const price = (r: { id: string; wholesaleCents: number }, cls = "") => {
+    const bp = promo.get(r.id) ?? 0;
+    return bp ? <PromoPrice price={formatCents(discounted(r.wholesaleCents, bp), intl)} was={formatCents(r.wholesaleCents, intl)} pct={Math.round(bp / 100)} className={cls} />
+      : <span className={`num ${cls}`}>{formatCents(r.wholesaleCents, intl)}</span>;
+  };
   const rows: Row[] = (await db.execute<Record<string, unknown>>(sql`
     select p.id, p.image_file_id, p.sku, p.name_de, p.name_nl, p.category, p.wholesale_price_cents, p.active,
            count(v.id) filter (where v.active)::int as variants,
@@ -110,7 +119,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                     </td>
                     <td className="text-[0.8125rem] text-ink-soft [overflow-wrap:anywhere]" dir="auto">{r.nameNl || "—"}</td>
                     <td className="text-[0.8125rem] text-ink-soft [overflow-wrap:break-word]">{r.category || "—"}</td>
-                    <td className="num text-end">{formatCents(r.wholesaleCents, intl)}</td>
+                    <td className="num text-end">{price(r)}</td>
                     <td className="num text-end font-semibold"><span className={r.low ? "text-amber-600" : ""}>{r.stock}</span></td>
                     <td className="text-end"><OpenButton href={`/products/${r.id}`} label={t.product.open} /></td>
                   </tr>
@@ -140,7 +149,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 <dl className="mt-2 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-black/[0.07] text-xs ring-1 ring-black/[0.07]">
                   <Item label={t.product.sku}><Code value={r.sku} /></Item>
                   <Item label={t.product.barcode}><Barcodes list={r.barcodes} t={t} /></Item>
-                  <Item label={t.product.wholesale}><span className="num font-semibold">{formatCents(r.wholesaleCents, intl)}</span></Item>
+                  <Item label={t.product.wholesale}>{price(r, "font-semibold")}</Item>
                   <Item label={t.product.stock}><span className={`num font-semibold ${r.low ? "text-amber-600" : ""}`}>{r.stock}</span></Item>
                 </dl>
               </div>

@@ -5,6 +5,7 @@ import "server-only";
  */
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
+import { activeDiscounts } from "./promotions";
 import { barcodeCandidates } from "./barcode";
 
 export type ScanVariant = {
@@ -22,6 +23,8 @@ export type ScanResult =
     product: {
       id: string; sku: string; nameDe: string; nameNl: string; category: string; imageFileId: string | null; supplier: string;
       vatRateBp: number; tracksExpiry: boolean; active: boolean;
+      /** Aktion im System: ganze Prozent Rabatt (0 = keine) */
+      promoPct: number;
     };
     variants: ScanVariant[];
     shops: ScanShop[];
@@ -83,6 +86,7 @@ export async function lookupCode(raw: string): Promise<ScanResult> {
       id: String(p.id), sku: String(p.sku), nameDe: String(p.name_de), nameNl: String(p.name_nl ?? ""), category: String(p.category ?? ""),
       imageFileId: (p.image_file_id as string | null) ?? null, supplier: String(p.supplier), vatRateBp: Number(p.vat_rate_bp),
       tracksExpiry: Boolean(p.tracks_expiry), active: Boolean(p.active),
+      promoPct: Math.round(((await activeDiscounts("SYSTEM", [String(p.id)])).get(String(p.id)) ?? 0) / 100),
     },
     variants: vs.rows.map((v) => {
       const stock = Number(v.stock_qty), reserved = Number(v.reserved);

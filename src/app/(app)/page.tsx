@@ -19,6 +19,7 @@ import { recentBackups } from "@/lib/backup-info";
 import { NavBadge } from "@/components/Nav";
 import { newShopCustomersCount } from "@/lib/shopify/customers";
 import { newDirectCount } from "@/lib/direct";
+import { runningPromotions } from "@/lib/promotions";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
   const session = await requireSession();
@@ -29,7 +30,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const may = (p: Perm) => can(session, p);
   const opens = (href: string) => canOpen(session, href);
   const money = may("dashboard.money"), seeStock = may("products.view");
-  const [stats, al, open, ins, setup, pend, fails, toShip, backups, newShop, toPickUp, directNew] = await Promise.all([
+  const [stats, al, open, ins, setup, pend, fails, toShip, backups, newShop, toPickUp, directNew, promos] = await Promise.all([
     seeStock || money ? dashboardStats(today) : null,
     seeStock ? alerts(today) : { low: [], expiring: [] },
     money ? openItems() : [],
@@ -42,6 +43,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     opens("/customers") ? newShopCustomersCount().catch(() => 0) : 0,
     may("sales.shipping") ? shopOrdersToPickUp() : [],
     may("direct") ? newDirectCount().catch(() => 0) : 0,
+    // Aktionen (Wunsch Inhaber 19.11.2026: „على الداشبورد برضه يظهر الخصم“): wer verkauft oder Artikel sieht, soll es wissen
+    may("promotions") || may("sales.offers") || may("sales.invoices") || seeStock ? runningPromotions().catch(() => []) : [],
   ]);
   const ai = aiConfigured() && may("ask");
   const debts = open.filter((r) => r.state.openCents > 0);
@@ -114,6 +117,26 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
           <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">{t.home.toPickUpAction}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></span>
         </Link>
       )}
+
+      {/* laufende bzw. geplante Aktionen */}
+      {promos.map((p) => {
+        const name = p.title || fill(t.promo.name, { n: p.number });
+        const running = p.state.price === "active" || p.state.banner === "active";
+        const text = running
+          ? fill(t.promo.homeRunning, { name, p: Math.round(p.discountBp / 100), n: p.items }) + (p.state.price === "active" && p.priceUntil ? fill(t.promo.homeUntil, { d: formatDate(p.priceUntil, intl) }) : "")
+          : fill(t.promo.homeScheduled, { name, d: formatDate(p.priceFrom, intl) });
+        const body = (
+          <span className="flex items-center gap-3">
+            <span className="num grid h-10 min-w-10 shrink-0 place-items-center rounded-xl bg-accent-600 px-1.5 text-sm font-black text-white" dir="ltr">−{Math.round(p.discountBp / 100)}%</span>
+            <span className="font-bold" dir="auto">{text}</span>
+          </span>
+        );
+        return opens("/promotions") ? (
+          <Link key={p.id} href={`/promotions/${p.id}`} className="group card flex animate-rise flex-wrap items-center justify-between gap-3 p-4 ring-2 ring-accent-500/25 hover:shadow-lift" data-home-promo>
+            {body}<Icon name="arrowRight" className="h-4 w-4 text-brand-700 rtl:rotate-180" />
+          </Link>
+        ) : <div key={p.id} className="card flex animate-rise items-center gap-3 p-4 ring-2 ring-accent-500/25" data-home-promo>{body}</div>;
+      })}
 
       {/* Listen vom Bestell-Link (Direktverkauf), aus denen noch kein Angebot / keine Rechnung wurde */}
       {directNew > 0 && (

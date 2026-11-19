@@ -4,7 +4,8 @@ import "server-only";
  * - alle 20 s: geänderte Bestände an die Shops melden
  * - alle 5 min: Bestellungen abholen (falls ein Webhook verloren ging) und alle Bestände vergleichen;
  *   im Shop zu löschende Galerie-Fotos und geänderte Preise, bei denen das noch nicht geklappt hat, erneut versuchen;
- *   Gewichte melden, die im Shop noch fehlen oder veraltet sind (pushDueWeights); Tag „spedition“ nach der Versandart (pushFreightTags)
+ *   Gewichte melden, die im Shop noch fehlen oder veraltet sind (pushDueWeights); Tag „spedition“ nach der Versandart (pushFreightTags);
+ *   Aktionen: Rabatt-Datum erreicht → Preise neu (syncPromoPriceStates), Werbebild + Kollektion „Angebote“ (syncPromoShops)
  */
 import { runCycle } from "./sync";
 import { retryGalleryDeletes } from "./gallery";
@@ -17,6 +18,8 @@ import { syncAllShopCustomers } from "./customers";
 import { ensureCustomerWebhooks } from "./webhooks";
 import { CHANNELS } from "./sync";
 import { purgeDirectOrders } from "../direct";
+import { syncPromoPriceStates } from "../promotions";
+import { syncPromoShops } from "./promo-shop";
 
 let started = false, busy = false, ticks = 0;
 
@@ -32,8 +35,12 @@ export function startWorker() {
       await runCycle({ orders: full, reconcile: full });
       // im Shop zu löschende Fotos, bei denen es noch nicht geklappt hat (Wahl des Nutzers beim Entfernen)
       if (full) await retryGalleryDeletes().catch((e) => console.error("shopify gallery retry", e));
-      // geänderte Preise, die noch nicht im Shop angekommen sind (Shop war kurz nicht erreichbar)
+      // Aktionen: Rabatt hat sein Datum erreicht (startet/endet) → Artikel vormerken, damit der Preis-Abgleich sie gleich mitnimmt
+      if (full) await syncPromoPriceStates().catch((e) => console.error("promo price states", e));
+      // geänderte Preise, die noch nicht im Shop angekommen sind (Shop war kurz nicht erreichbar); Aktionen: Streichpreis
       if (full) await pushDirtyPrices().catch((e) => console.error("shopify prices retry", e));
+      // Aktionen: Werbebild über/unter dem Hero hochladen bzw. entfernen, Kollektion „Angebote“ anlegen
+      if (full) await syncPromoShops().catch((e) => console.error("promo shops", e));
       // Gewichte, die im Shop noch fehlen oder veraltet sind (Delta-Pro-Abgleich, Shop beim Speichern nicht erreichbar)
       if (full) await pushDueWeights().catch((e) => console.error("shopify weights retry", e));
       // Versandart → Tag „spedition“ an den Shop-Produkten (Möbel: im Shop nur Abholung/Anfrage; nur Abweichungen)

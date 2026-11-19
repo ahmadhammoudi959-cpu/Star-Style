@@ -13,6 +13,7 @@ import { customerOptions } from "@/lib/sales-queries";
 import { regionOptions } from "@/lib/regions";
 import { DirectActions, ReopenButton } from "../DirectActions";
 import { LANG_NAMES } from "@/lib/lang-names";
+import { discounted } from "@/lib/promo-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,14 @@ export default async function DirectListPage({ params, searchParams }: { params:
     );
   }
 
+  // Aktion: Preis vorher + Rabatt, so wie der Kunde ihn am Link gesehen hat
+  const eff = (l: { unitPriceCents: number; promoBp: number }) => (l.promoBp ? discounted(l.unitPriceCents, l.promoBp) : l.unitPriceCents);
+  const unit = (l: { unitPriceCents: number; promoBp: number }) => l.promoBp ? (
+    <span className="inline-flex flex-wrap items-baseline justify-end gap-x-1.5" dir="ltr">
+      <span className="rounded-full bg-accent-600 px-1.5 text-[0.6875rem] font-black text-white">-{Math.round(l.promoBp / 100)}%</span>
+      <s className="text-xs text-ink-soft">{formatCents(l.unitPriceCents, intl)}</s><span className="text-accent-700">{formatCents(eff(l), intl)}</span>
+    </span>
+  ) : formatCents(l.unitPriceCents, intl);
   const row = (label: string, value: React.ReactNode) => (
     <div className="grid grid-cols-[8rem_1fr] gap-2 border-b border-black/5 py-2 text-sm last:border-0">
       <span className="text-ink-soft">{label}</span><span className="min-w-0 [overflow-wrap:anywhere]">{value}</span>
@@ -96,8 +105,8 @@ export default async function DirectListPage({ params, searchParams }: { params:
                     {!l.variantId && <span className="block text-xs font-semibold text-amber-700">{D.gone}</span>}
                   </td>
                   <td className="num text-end font-semibold">{l.qty}</td>
-                  <td className="num text-end">{formatCents(l.unitPriceCents, intl)}</td>
-                  <td className="num text-end font-semibold">{formatCents(l.qty * l.unitPriceCents, intl)}</td>
+                  <td className="num text-end">{unit(l)}</td>
+                  <td className="num text-end font-semibold">{formatCents(l.qty * eff(l), intl)}</td>
                   <td>{l.available == null ? "—" : (
                     <span className={`num text-xs font-semibold ${l.available >= l.qty ? "text-emerald-700" : "text-red-700"}`}>{fill(D.nowAvailable, { n: l.available })}</span>
                   )}</td>
@@ -112,8 +121,8 @@ export default async function DirectListPage({ params, searchParams }: { params:
                     <div className="text-sm font-semibold" dir="auto">{l.description}</div>
                     {!l.variantId && <div className="text-xs font-semibold text-amber-700">{D.gone}</div>}
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <span className="num">{l.qty} × {formatCents(l.unitPriceCents, intl)}</span>
-                      <b className="num">{formatCents(l.qty * l.unitPriceCents, intl)}</b>
+                      <span className="num">{l.qty} × {unit(l)}</span>
+                      <b className="num">{formatCents(l.qty * eff(l), intl)}</b>
                     </div>
                     {l.available != null && <div className={`num text-xs font-semibold ${l.available >= l.qty ? "text-emerald-700" : "text-red-700"}`}>{fill(D.nowAvailable, { n: l.available })}</div>}
                   </div>

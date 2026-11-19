@@ -80,13 +80,15 @@ export function DocEditor({ t, kind, customers, options, initial, intl, rights =
   const planOk = !planErr;
   const overLimit = kind === "invoice" && customer?.creditLimitCents != null && (customer.openCents ?? 0) + gross - initialPaid > customer.creditLimitCents;
 
+  // Aktion im System (Wunsch Inhaber 19.11.2026): Rabatt der Aktion als Positionsrabatt – auch ohne Recht „Rabatt“
+  const promoDisc = (s: SaleOption) => (s.promoPct ? String(s.promoPct) : "");
   const pick = (o: PickerOption) => {
     const s = o as SaleOption;
     const price = customer?.priceGroup === "RETAIL" ? s.retailPriceCents : s.wholesalePriceCents;
     setLines((ls) => {
       const ex = ls.find((l) => l.variantId === s.id);
       if (ex) return ls.map((l) => (l === ex ? { ...l, qty: String((parseInt(l.qty) || 0) + 1) } : l));
-      return [...ls, { key: crypto.randomUUID(), variantId: s.id, description: optionLabel(s), qty: "1", price: toInput(price), disc: "", vatRateBp: s.vatRateBp, available: s.available }];
+      return [...ls, { key: crypto.randomUUID(), variantId: s.id, description: optionLabel(s), qty: "1", price: toInput(price), disc: promoDisc(s), vatRateBp: s.vatRateBp, available: s.available }];
     });
   };
   const upd = (k: string, p: Partial<L>) => setLines((ls) => ls.map((l) => (l.key === k ? { ...l, ...p } : l)));
@@ -100,7 +102,9 @@ export function DocEditor({ t, kind, customers, options, initial, intl, rights =
     }));
   }, [group, rights.discount, optById]);
   // Positionen finden: Kategorie, Suche oder alle Artikel im Fenster (Wunsch Inhaber 03.11.2026)
-  const priceOf = (o: SaleOption) => formatCents(customer?.priceGroup === "RETAIL" ? o.retailPriceCents : o.wholesalePriceCents, intl);
+  const listPrice = (o: SaleOption) => (customer?.priceGroup === "RETAIL" ? o.retailPriceCents : o.wholesalePriceCents);
+  const priceOf = (o: SaleOption) => formatCents(o.promoPct ? Math.round(listPrice(o) * (100 - o.promoPct) / 100) : listPrice(o), intl);
+  const wasOf = (o: SaleOption) => formatCents(listPrice(o), intl);
   const qtyInDoc = (variantId: string) => lines.reduce((n, l) => n + (l.variantId === variantId ? parseInt(l.qty) || 0 : 0), 0);
   const move = (i: number, d: number) => setLines((ls) => { const c = [...ls]; const [x] = c.splice(i, 1); c.splice(i + d, 0, x); return c; });
 
@@ -185,7 +189,7 @@ export function DocEditor({ t, kind, customers, options, initial, intl, rights =
           </button>
         </div>
         <ProductPickerBar options={options} onPick={pick} placeholder={t.receive.pickProduct} stockLabel={t.sales.available} labels={t.picker}
-          priceOf={priceOf} qtyInDoc={qtyInDoc} linesCount={lines.length} />
+          priceOf={priceOf} wasOf={wasOf} qtyInDoc={qtyInDoc} linesCount={lines.length} />
         <div className="mt-4 space-y-2">
           {lines.length === 0 && <p className="py-6 text-center text-sm text-ink-soft">{t.sales.noLines}</p>}
           {lines.map((l, i) => {

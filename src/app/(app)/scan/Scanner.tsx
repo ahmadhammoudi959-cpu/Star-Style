@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
+import { PromoPrice } from "@/components/PromoPrice";
 import { Thumb } from "@/components/Thumb";
 import { formatCents, grossFromNet } from "@/lib/money";
 import { formatDate, todayIso } from "@/lib/dates";
@@ -320,6 +321,8 @@ function ResultCard({ t, intl, r, onAgain, links }: { t: Dict; intl: string; r: 
   const lastSale = v ? v.lastSale : r.variants.map((x) => x.lastSale).filter(Boolean).sort().pop() ?? null;
   const expiry = (v ? [v] : r.variants).filter((x) => x.nextExpiry).sort((a, b) => a.nextExpiry!.localeCompare(b.nextExpiry!))[0];
   const priceOf = v ?? r.variants[0];
+  // Aktion im System: Preis mit Rabatt, alter Preis durchgestrichen
+  const promo = (c: number) => (p.promoPct ? Math.round((c * (100 - p.promoPct)) / 100) : c);
   const gross = (c: number) => grossFromNet(c, p.vatRateBp); // wie im Shop
 
   return (
@@ -377,10 +380,10 @@ function ResultCard({ t, intl, r, onAgain, links }: { t: Dict; intl: string; r: 
 
       {/* Preise, Verkäufe, MHD, Lieferant */}
       <dl className="grid grid-cols-2 gap-x-3 gap-y-3 p-4 text-sm">
-        <Fact label={S.wholesale}><span className="num font-bold">{formatCents(priceOf.wholesaleCents, intl)}</span></Fact>
+        <Fact label={S.wholesale}><PromoPrice price={formatCents(promo(priceOf.wholesaleCents), intl)} was={formatCents(priceOf.wholesaleCents, intl)} pct={p.promoPct} className="font-bold" /></Fact>
         <Fact label={S.retail}>
-          <span className="num font-bold">{formatCents(priceOf.retailCents, intl)}</span>
-          <span className="block text-xs text-ink-soft">{S.withVat}: <span className="num">{formatCents(gross(priceOf.retailCents), intl)}</span></span>
+          <PromoPrice price={formatCents(promo(priceOf.retailCents), intl)} was={formatCents(priceOf.retailCents, intl)} pct={p.promoPct} className="font-bold" />
+          <span className="block text-xs text-ink-soft">{S.withVat}: <span className="num">{formatCents(gross(promo(priceOf.retailCents)), intl)}</span></span>
         </Fact>
         <Fact label={S.sold30}><span className="num font-bold">{v ? v.sold30 : total.sold30}</span></Fact>
         <Fact label={S.sold90}><span className="num font-bold">{v ? v.sold90 : total.sold90}</span></Fact>

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
+import { PromoPrice } from "./PromoPrice";
 import type { PickerOption } from "./VariantPicker";
 import type { BrowserLabels } from "./ProductBrowser";
 
@@ -21,9 +22,9 @@ function knownPhotos<T extends PickerOption>(g: ShowcaseGroup<T>): string[] {
  * Hinzufügen, Blättern mit Pfeilen/Tasten/Wischen durch die gerade gezeigten Artikel, auf Wunsch Vollbild.
  * Ohne Bestandszahlen (nur „auf Lager“/„nicht auf Lager“) und ohne Einkaufspreis – der Kunde schaut mit.
  */
-export function ProductShowcase<T extends PickerOption>({ groups, index, onIndex, onClose, onAdd, priceOf, qtyInDoc, flash, labels }: {
+export function ProductShowcase<T extends PickerOption>({ groups, index, onIndex, onClose, onAdd, priceOf, wasOf, qtyInDoc, flash, labels }: {
   groups: ShowcaseGroup<T>[]; index: number; onIndex: (i: number) => void; onClose: () => void; onAdd: (o: T) => void;
-  priceOf?: (o: T) => string; qtyInDoc?: (variantId: string) => number; flash: string | null; labels: BrowserLabels;
+  priceOf?: (o: T) => string; wasOf?: (o: T) => string; qtyInDoc?: (variantId: string) => number; flash: string | null; labels: BrowserLabels;
 }) {
   const g = groups[Math.min(index, groups.length - 1)];
   const [photos, setPhotos] = useState<string[]>(() => knownPhotos(g));
@@ -192,7 +193,7 @@ export function ProductShowcase<T extends PickerOption>({ groups, index, onIndex
                       {o.stockQty > 0 ? labels.inStock : labels.outOfStock}
                     </span>
                   </span>
-                  {price && <span className="num shrink-0 text-lg font-bold text-brand-700">{price}</span>}
+                  {price && <span className="shrink-0 text-lg font-bold text-brand-700"><PromoPrice price={price} was={o.promoPct ? wasOf?.(o) : undefined} pct={o.promoPct} /></span>}
                   {inDoc > 0 && <span className="badge shrink-0 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">{labels.inDoc.replace("{n}", String(inDoc))}</span>}
                 </button>
               );

@@ -267,7 +267,12 @@ run("Shopify-Abgleich (Datenbank, Shopify simuliert)", async () => {
       const { query, variables } = JSON.parse(String(init.body));
       if (query.includes("taxesIncluded")) return Response.json({ data: { shop: { taxesIncluded: true } } });
       if (query.includes("nodes(")) return Response.json({ data: { nodes: variables.ids.map((id: string) => ({ id, price: shopPrice, product: { id: "gid://shopify/Product/55" } })) } });
-      if (query.includes("productVariantsBulkUpdate")) { updates.push(variables); shopPrice = variables.variants[0].price; return Response.json({ data: { productVariantsBulkUpdate: { productVariants: [], userErrors: [] } } }); }
+      if (query.includes("productVariantsBulkUpdate")) {
+        // nur diese Variante zählt – Vormerkungen anderer Tests (gleiche Test-DB, parallel) nicht mitzählen
+        const mine = variables.variants.filter((x: { id: string }) => x.id === "gid://shopify/ProductVariant/901");
+        if (mine.length) { updates.push({ ...variables, variants: mine }); shopPrice = mine[0].price; }
+        return Response.json({ data: { productVariantsBulkUpdate: { productVariants: [], userErrors: [] } } });
+      }
       return Response.json({ errors: [{ message: "unexpected" }] });
     }));
     await db.insert(schema.shopPriceDirty).values({ productId: v!.productId }).onConflictDoNothing();
