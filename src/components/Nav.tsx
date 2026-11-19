@@ -109,7 +109,12 @@ export function BottomNav({ items, all, menuLabel, closeLabel, footer }: {
           return (
             <Link key={it.href} href={it.soon ? "#" : it.href} aria-disabled={it.soon} aria-current={active ? "page" : undefined}
               className={`group flex min-w-0 flex-col items-center gap-0.5 py-2 text-xs font-semibold ${active ? "text-brand-600" : it.soon ? "text-ink-soft/40" : "text-ink-soft"}`}>
-              <Icon name={it.icon} className="h-5 w-5" /><span className="max-w-full truncate px-0.5">{it.label}</span>
+              <span className="relative">
+                <Icon name={it.icon} className="h-5 w-5" />
+                {/* Zahl am Symbol (z. B. Online-Bestellungen am „Verkauf“) */}
+                {it.badge && <NavBadge src={it.badge} className="absolute -top-1.5 start-3 min-w-[1.125rem] rounded-full bg-accent-500 px-1 text-center text-[0.625rem] font-bold leading-[1.125rem] text-white ring-2 ring-white" />}
+              </span>
+              <span className="max-w-full truncate px-0.5">{it.label}</span>
             </Link>
           );
         })}

@@ -105,6 +105,7 @@ export const ROUTES: [RegExp, Need][] = [
   [R("/sales/invoices/new"), { any: ["sales.invoices"] }],
   [R("/sales/offers/new"), { any: ["sales.offers"] }],
   [R("/sales"), { any: ["sales.view"] }],
+  [R("/api/sales"), { any: ["sales.shipping"] }], // Zahl am Menüpunkt „Verkauf“ (Online-Bestellungen zu versenden/abzuholen)
   [R("/returns/new"), { any: ["sales.returns"] }],
   [R("/direct"), { any: ["direct"] }],
   [R("/api/direct"), { any: ["direct"] }],

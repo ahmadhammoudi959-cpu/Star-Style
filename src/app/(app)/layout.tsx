@@ -29,7 +29,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const liveTip = live.live ? liveText : t.reset.badgeTestHint;
   const allItems: NavItem[] = [
     { href: "/", label: t.nav.home, icon: "home" },
-    { href: "/sales", label: t.nav.sales, icon: "cart" },
+    // rote Zahl = Online-Bestellungen, die noch verschickt/abgeholt werden müssen (Wunsch Inhaber 19.11.2026, wie WhatsApp/E-Mail)
+    { href: "/sales", label: t.nav.sales, icon: "cart", badge: can(session, "sales.shipping") ? "/api/sales/waiting" : undefined },
     // Direktverkauf (Wunsch Inhaber 19.11.2026): Listen vom Bestell-Link – Zahl der neuen
     { href: "/direct", label: t.nav.direct, icon: "list", badge: "/api/direct/unread" },
     { href: "/returns", label: t.nav.returns, icon: "undo" },

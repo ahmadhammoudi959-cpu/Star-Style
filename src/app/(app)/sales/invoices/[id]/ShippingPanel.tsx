@@ -8,7 +8,7 @@ import type { Dict } from "@/i18n/de";
 import { ClearShipNotice, NewShipment, PickupActions, ShipmentActions } from "./ShippingForms";
 import { glsConfigured } from "@/lib/gls-client";
 import { consigneeProblem } from "@/lib/gls";
-import { glsConsigneeFor, PICKUP_NAME } from "@/lib/shipments";
+import { glsConsigneeFor, isPickupShipment } from "@/lib/shipments";
 import { can, getAuth } from "@/lib/auth";
 import { carrierChoices } from "@/lib/carriers";
 import { freightByProduct } from "@/lib/freight";
@@ -20,7 +20,7 @@ const TONE: Record<ShippingState, string> = {
 
 type Ship = typeof schema.shipments.$inferSelect;
 /** Sendung „Abholung“ (Kunde hat im Lager abgeholt) */
-const isPickup = (s: Ship) => s.carrier === "OTHER" && s.carrierName === PICKUP_NAME && !s.trackingNumbers.length;
+const isPickup = (s: Ship) => isPickupShipment(s);
 
 /** Zeile „Stand im Shop“ unter einer Sendung */
 function shopLine(S: Dict["ship"], s: Ship): { text: string; tone: string; icon: IconName } | null {
@@ -33,7 +33,8 @@ function shopLine(S: Dict["ship"], s: Ship): { text: string; tone: string; icon:
   };
   if (s.shopStatus === "sent") {
     const extra = s.shopError ? ` · ${reason(s.shopError)}` : "";
-    return { text: (s.notifyCustomer ? S.shop.sentMail : S.shop.sent) + extra, tone: s.shopError.startsWith("cancelFailed:") ? "text-red-700" : "text-emerald-700", icon: "check" };
+    const base = isPickup(s) ? S.shop.sentPickup : s.notifyCustomer ? S.shop.sentMail : S.shop.sent;
+    return { text: base + extra, tone: s.shopError.startsWith("cancelFailed:") ? "text-red-700" : "text-emerald-700", icon: "check" };
   }
   if (s.shopStatus === "cancelled") return { text: S.shop.cancelled, tone: "text-slate-600", icon: "check" };
   if (s.shopStatus === "failed") return { text: `${S.shop.failed}: ${reason(s.shopError)}`, tone: "text-red-700", icon: "alert" };
@@ -70,7 +71,11 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
       .map((r) => r.n).filter((n) => !own.has(n.toLowerCase())).slice(0, 12)
     : [];
   const pickup = inv.deliveryMethod === "PICK_UP";
-  const badge = st.state === "nothing" ? null : pickup && st.state !== "done" ? S.pickupBadge : shop && st.state === "none" ? S.toShip : S.state[st.state];
+  // alles (bisher) Übergebene hat der Kunde selbst im Lager abgeholt → „Abgeholt“ statt „Versendet“
+  const active = ships.filter((s) => !s.cancelledAt);
+  const allPickup = active.length > 0 && active.every(isPickup);
+  const badge = st.state === "nothing" ? null : pickup && st.state !== "done" ? S.pickupBadge : shop && st.state === "none" ? S.toShip
+    : allPickup && st.state === "done" ? S.pickedUp : allPickup && st.state === "partial" ? S.pickedUpPartial : S.state[st.state];
   // GLS: Etikett direkt aus dem System (eingerichtet + Anschrift vollständig); Gewicht der offenen Ware als Vorschlag für die Pakete
   const glsReady = canAdd && !pickup ? await glsConfigured() : false;
   const consignee = glsReady ? await glsConsigneeFor(inv.id) : null;
@@ -167,13 +172,10 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
               <PickupActions t={t} invoiceId={inv.id} shop={shop} readyAt={inv.pickupReadyAt ? formatDateTime(inv.pickupReadyAt.toISOString(), intl) : null} />
             </>
           ) : canAdd ? (
-            <>
-              <h3 className="mb-3 flex items-center gap-2 font-bold"><Icon name="plus" className="h-4 w-4 text-brand-600" />{ships.some((s) => !s.cancelledAt) ? S.moreTitle : S.newTitle}</h3>
-              <NewShipment t={t} invoiceId={inv.id} shop={shop} names={names} choices={choices} defaultKey={carriers.default} manage={manage}
-                gls={{ ready: glsReady, problem: glsProblem }} weights={weights} freight={freight} unitNet={unitNet}
-                open={st.open.map((o) => ({ lineId: o.line.id, description: o.line.description, qty: o.qty }))} />
-            </>
-          ) : <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><Icon name="check" className="h-4 w-4" />{S.allShipped}</p>}
+            <NewShipment t={t} title={ships.some((s) => !s.cancelledAt) ? S.moreTitle : S.newTitle} invoiceId={inv.id} shop={shop} names={names} choices={choices}
+              defaultKey={carriers.default} manage={manage} gls={{ ready: glsReady, problem: glsProblem }} weights={weights} freight={freight} unitNet={unitNet}
+              open={st.open.map((o) => ({ lineId: o.line.id, description: o.line.description, qty: o.qty }))} />
+          ) : <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><Icon name="check" className="h-4 w-4" />{allPickup ? S.allPickedUp : S.allShipped}</p>}
         </aside>
       )}
     </section>

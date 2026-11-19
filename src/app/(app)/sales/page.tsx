@@ -13,7 +13,7 @@ import { openItems } from "@/lib/receivables";
 import { OpenButton } from "@/components/OpenButton";
 import { FilterSelect } from "@/components/FilterSelect";
 import { SearchPick } from "@/components/SearchPick";
-import { shippingStates, shopOrdersToPickUp, shopOrdersToShip } from "@/lib/shipments";
+import { pickedUpInvoices, shippingStates, shopOrdersToPickUp, shopOrdersToShip } from "@/lib/shipments";
 import type { ShippingState } from "@/lib/shipping";
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; customer?: string; status?: string; ship?: string }> }) {
@@ -70,6 +70,8 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
     ? await shippingStates(payShown.filter((r) => r.status === "ISSUED" && r.kind === "INVOICE").map((r) => String(r.id)))
     : new Map<string, ShippingState>();
   const shown = ship === "done" ? payShown.filter((r) => shipState.get(String(r.id)) === "done") : payShown;
+  // vom Kunden selbst im Lager abgeholt (Sendungen „Abholung“) → „Abgeholt“ statt „Versendet“
+  const pickedUp = await pickedUpInvoices([...shipState].filter(([, s]) => s === "done" || s === "partial").map(([id]) => id));
   const customers = (await db.execute<{ id: string; name: string; number: number }>(sql`
     select id, name, number from customers where active order by name`)).rows;
   const statusOptions = tab === "offers"
@@ -83,6 +85,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
     const isShop = r.channel !== "STORE";
     if (!s || s === "nothing" || (!isShop && s === "none")) return null;
     if (r.delivery_method === "PICK_UP" && s !== "done") return <span className={`badge ms-1 ${SHIP_TONE.none}`}><Icon name="box" className="h-3 w-3" />{t.ship.pickupBadge}</span>;
+    if (pickedUp.has(String(r.id)) && s !== "none") return <span className={`badge ms-1 ${SHIP_TONE[s]}`}><Icon name="box" className="h-3 w-3" />{s === "done" ? t.ship.pickedUp : t.ship.pickedUpPartial}</span>;
     return <span className={`badge ms-1 ${SHIP_TONE[s]}`}><Icon name="truck" className="h-3 w-3" />{isShop && s === "none" ? t.ship.toShip : t.ship.state[s]}</span>;
   };
   const payBadge = (r: Record<string, unknown>) => {
@@ -117,7 +120,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
           options={customers.map((c) => ({ value: c.id, label: c.name }))} />}
         <FilterSelect name="status" label={t.lists.status} allLabel={t.lists.allStatuses} defaultValue={status} icon="check" className="md:w-56" options={statusOptions} />
         {tab === "invoices" && <FilterSelect name="ship" label={t.lists.shipping} allLabel={t.lists.allShipping} defaultValue={ship} icon="truck" className="md:w-52"
-          options={[{ value: "open", label: t.ship.toShip }, { value: "pickup", label: t.ship.toPickUp }, { value: "done", label: t.ship.state.done }]} />}
+          options={[{ value: "open", label: t.ship.toShip }, { value: "pickup", label: t.ship.toPickUp }, { value: "done", label: t.ship.doneFilter }]} />}
         {filtered && <Link href={`/sales?tab=${tab}`} className="btn-ghost group"><Icon name="x" className="h-4 w-4" />{t.stock.clear}</Link>}
       </form>
       {totals && (

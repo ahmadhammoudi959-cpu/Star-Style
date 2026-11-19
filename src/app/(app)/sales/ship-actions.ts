@@ -117,13 +117,20 @@ export async function pickupReadyAction(_: ShipState, fd: FormData): Promise<Shi
   } catch (e) { return fail(e); }
 }
 
-/** Abholung: „Abgeholt“ (Sendung „Abholung“, im Shop erledigt) */
+/**
+ * Abholung: „Abgeholt“ (Sendung „Abholung“ ohne Nummer und ohne E-Mail, im Shop erledigt). Auch für Bestellungen mit Versand,
+ * wenn der Kunde doch selbst ins Lager kommt (Wunsch Inhaber 19.11.2026) – dann mit Inhalt (pick) und Hinweis.
+ */
 export async function pickedUpAction(_: ShipState, fd: FormData): Promise<ShipState> {
   const s = await requirePerm("sales.shipping");
-  const invoiceId = String(fd.get("invoiceId") ?? "");
-  if (!invoiceId) return { error: "required" };
+  const p = z.object({ invoiceId: z.string().min(1).max(64), pick: z.string().max(20000).optional(), note: z.string().max(1000).default("") })
+    .safeParse({ invoiceId: fd.get("invoiceId") ?? "", pick: fd.get("pick") ?? undefined, note: fd.get("note") ?? "" });
+  if (!p.success) return { error: "required" };
   let id: string;
-  try { id = await markPickedUp(invoiceId, s.uid); } catch (e) { return fail(e); }
+  try {
+    const pick = p.data.pick ? z.record(z.string(), z.number().int().min(0).max(1_000_000)).parse(JSON.parse(p.data.pick)) : null;
+    id = await markPickedUp(p.data.invoiceId, s.uid, { pick, note: p.data.note });
+  } catch (e) { return fail(e); }
   const shop = await pushNow(id);
   return { ok: true, shop, at: Date.now() };
 }

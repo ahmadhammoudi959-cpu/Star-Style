@@ -4,7 +4,7 @@ import "server-only";
  * im Shopify-Admin angelegte Sendungen übernehmen. Regeln rein + getestet in ./shipping.ts, Shopify-Aufrufe in ./shopify/fulfill.ts.
  * Nichts wird gelöscht: zurückgenommene Sendungen bleiben mit cancelled_at stehen, jede Änderung steht im audit_log.
  */
-import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db, schema, type Tx } from "@/db";
 import { audit } from "./stock";
 import { todayIso } from "./dates";
@@ -249,10 +249,17 @@ export async function markPickupReady(invoiceId: string, userId?: string): Promi
   return { shop, error };
 }
 
-/** „Abgeholt“: Sendung „Abholung“ (ohne Nummer) über alles Offene – im Shop gilt die Bestellung dann als abgeholt/erledigt */
-export function markPickedUp(invoiceId: string, userId?: string) {
-  return createShipment({ invoiceId, carrier: "OTHER", carrierName: PICKUP_NAME, trackingUrl: "", numbers: [], notify: false, pick: null }, userId);
+/**
+ * „Abgeholt“: Sendung „Abholung“ (ohne Nummer, ohne E-Mail) – im Shop gilt die Bestellung dann als abgeholt/erledigt.
+ * Auch bei Bestellungen mit Versand (Wunsch Inhaber 19.11.2026: Kunde kommt selbst mit dem Auto ins Lager): dann mit
+ * Inhalt (pick = null → alles Offene) und Hinweis wie bei jeder Sendung.
+ */
+export function markPickedUp(invoiceId: string, userId?: string, opts: { pick?: Record<string, number> | null; note?: string } = {}) {
+  return createShipment({ invoiceId, carrier: "OTHER", carrierName: PICKUP_NAME, trackingUrl: "", numbers: [], notify: false, pick: opts.pick ?? null, note: opts.note ?? "" }, userId);
 }
+/** Sendung „Abholung“ (Kunde hat im Lager abgeholt) – Anzeige „abgeholt“ statt „versendet“ */
+export const isPickupShipment = (s: { carrier: string; carrierName: string; trackingNumbers: string[] }) =>
+  s.carrier === "OTHER" && s.carrierName === PICKUP_NAME && !s.trackingNumbers.length;
 
 // ───────────────────────── An Shopify melden ─────────────────────────
 
@@ -402,6 +409,17 @@ export async function shippingStates(invoiceIds: string[]): Promise<Map<string, 
   return out;
 }
 
+/** Rechnungen, deren (nicht zurückgenommene) Sendungen alle „Abholung“ sind – Liste zeigt „Abgeholt“ statt „Versendet“ */
+export async function pickedUpInvoices(invoiceIds: string[]): Promise<Set<string>> {
+  if (!invoiceIds.length) return new Set();
+  const rows = await db.select({ invoiceId: schema.shipments.invoiceId, carrier: schema.shipments.carrier, carrierName: schema.shipments.carrierName,
+    trackingNumbers: schema.shipments.trackingNumbers }).from(schema.shipments)
+    .where(and(inArray(schema.shipments.invoiceId, invoiceIds), isNull(schema.shipments.cancelledAt)));
+  const all = new Map<string, boolean>();
+  for (const r of rows) all.set(r.invoiceId, (all.get(r.invoiceId) ?? true) && isPickupShipment(r));
+  return new Set([...all].filter(([, v]) => v).map(([k]) => k));
+}
+
 /**
  * Shop-Bestellungen (ausgestellt), die noch nicht ganz verschickt sind – Startseite und Filter „Zu versenden“.
  * Vorauswahl in SQL (verschickte Menge < Warenmenge), genauer Stand dann je Position.
@@ -422,3 +440,12 @@ export async function shopOrdersToShip(pickup = false): Promise<{ id: string; st
 
 /** Shop-Bestellungen zur Abholung im Lager, die noch nicht abgeholt sind (Startseite, Filter „Zur Abholung“) */
 export const shopOrdersToPickUp = () => shopOrdersToShip(true);
+
+/**
+ * Rote Zahl am Menüpunkt „Verkauf“ (Wunsch Inhaber 19.11.2026: „wie bei WhatsApp und E-Mail“): Online-Bestellungen, die noch
+ * verschickt oder abgeholt werden müssen – dieselben wie die Hinweise auf der Startseite.
+ */
+export async function shopOrdersWaitingCount(): Promise<number> {
+  const [toShip, toPickUp] = await Promise.all([shopOrdersToShip(false), shopOrdersToShip(true)]);
+  return toShip.length + toPickUp.length;
+}

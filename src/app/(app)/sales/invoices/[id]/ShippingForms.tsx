@@ -39,7 +39,7 @@ function noticeOf(r: ShipState, kind: Kind): string {
   if (r?.shop === "pending" || r?.shop === "update" || r?.shop === "cancel") return "pending";
   if (kind === "cancel") return "cancelled";
   if (kind === "edit") return r?.shop === "sent" && r.notify ? "updatedMail" : "updated";
-  if (kind === "pickedUp") return "pickedUp";
+  if (kind === "pickedUp") return r?.shop === "sent" ? "pickedUpShop" : "pickedUp";
   if (kind === "label") return r?.shop === "sent" ? (r.notify ? "labelSent" : "labelSentQuiet") : "label";
   return r?.shop === "sent" ? (r.notify ? "sent" : "sentQuiet") : "saved";
 }
@@ -162,9 +162,13 @@ function okToSend(choices: CarrierChoice[], v: TrackingState) {
 /** Spedition ohne Namen (nur bei freier Eingabe möglich) */
 const missingName = (choices: CarrierChoice[], v: TrackingState) => choiceOf(choices, v.key).kind === "free" && !v.freeName.trim();
 
-/** Neue Sendung: Versanddienst, Nummern, Inhalt (alles Offene oder Teil), E-Mail an den Kunden (nur Shop) */
-export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultKey, manage, gls, weights, freight = {}, unitNet = {} }: {
-  t: Dict; invoiceId: string; shop: boolean; open: { lineId: string; description: string; qty: number }[]; names: string[];
+/**
+ * Neue Sendung: Versanddienst, Nummern, Inhalt (alles Offene oder Teil), E-Mail an den Kunden (nur Shop).
+ * Oben umschaltbar auf „Abholung im Lager“ (Wunsch Inhaber 19.11.2026: Kunde kommt mit dem Auto ins Lager und nimmt die Ware
+ * selbst mit) – dann ohne Versanddienst, Nummer und E-Mail; gespeichert wird eine Sendung „Abholung“ (im Shop erledigt).
+ */
+export function NewShipment({ t, title, invoiceId, shop, open, names, choices, defaultKey, manage, gls, weights, freight = {}, unitNet = {} }: {
+  t: Dict; title: string; invoiceId: string; shop: boolean; open: { lineId: string; description: string; qty: number }[]; names: string[];
   choices: CarrierChoice[]; defaultKey: string; manage: boolean;
   /** GLS eingerichtet? problem = an der Anschrift fehlt etwas, das GLS braucht (Etikett dann nicht möglich) */
   gls: { ready: boolean; problem: string | null };
@@ -188,10 +192,13 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
   const choose = open.length > 1 || (open[0]?.qty ?? 0) > 1;
   const pickedNone = mode === "part" && !open.some((o) => (pick[o.lineId] ?? 0) > 0);
   const [note, setNote] = useState("");
+  // Versand oder Abholung im Lager (Kunde nimmt die Ware selbst mit)
+  const [handover, setHandover] = useState<"ship" | "pickup">("ship");
+  const self = handover === "pickup";
   // GLS: Etikett direkt bei GLS erstellen (Standard, wenn eingerichtet) oder Nummer selbst eintragen
   const isGls = v.key === "GLS";
   const [labelMode, setLabelMode] = useState(true);
-  const label = isGls && gls.ready && labelMode;
+  const label = !self && isGls && gls.ready && labelMode;
   const items = open.map((o) => ({ grams: weights[o.lineId] ?? null, qty: mode === "part" ? pick[o.lineId] ?? 0 : o.qty }));
   const sug = suggestParcels(items);
   const [kgs, setKgs] = useState<string[] | null>(null); // null = Vorschlag aus dem Gewicht der Ware
@@ -204,14 +211,16 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
   const goodsNet = open.reduce((sum, o) => sum + (unitNet[o.lineId] ?? 0) * qtyOf(o.lineId, o.qty), 0);
   const valueLevel = parcelValueLevel(goodsNet, kgList.length);
   const [consent, setConsent] = useState(false);
-  return (
+  return (<>
+    <h3 className="mb-3 flex items-center gap-2 font-bold"><Icon name={self ? "box" : "plus"} className="h-4 w-4 text-brand-600" />{self ? S.modePickup : title}</h3>
     <form className="space-y-4" onSubmit={async (e) => {
       e.preventDefault();
       setTried(true);
       if (pending || pickedNone) return;
-      if (label ? Boolean(wProblem || gls.problem || freightPicked.length) : !okToSend(choices, v)) return;
+      if (!self && (label ? Boolean(wProblem || gls.problem || freightPicked.length) : !okToSend(choices, v))) return;
       setPending(true); setState(undefined);
-      const err = await run(label ? createGlsShipmentAction : createShipmentAction, new FormData(e.currentTarget), invoiceId, label ? "label" : "create");
+      const err = await run(self ? pickedUpAction : label ? createGlsShipmentAction : createShipmentAction, new FormData(e.currentTarget), invoiceId,
+        self ? "pickedUp" : label ? "label" : "create");
       if (err) { setState(err); setPending(false); }
     }}>
       <input type="hidden" name="invoiceId" value={invoiceId} />
@@ -224,6 +233,20 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
       <input type="hidden" name="note" value={note} />
       {label && <input type="hidden" name="weights" value={JSON.stringify(kgList)} />}
       {label && <input type="hidden" name="consent" value={consent ? "1" : ""} />}
+      <div role="radiogroup" aria-label={S.handover} className="grid grid-cols-2 gap-1.5 rounded-xl bg-slate-50 p-1 ring-1 ring-black/5">
+        {(["ship", "pickup"] as const).map((m) => (
+          <button key={m} type="button" role="radio" aria-checked={handover === m} data-handover={m}
+            onClick={() => { setHandover(m); setTried(false); setState(undefined); }}
+            className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-bold leading-tight transition ${handover === m ? "bg-white text-brand-700 shadow-card ring-1 ring-brand-200" : "text-ink-soft hover:text-ink"}`}>
+            <Icon name={m === "ship" ? "truck" : "box"} className="h-4 w-4 shrink-0" /><span className="min-w-0 text-center [overflow-wrap:anywhere]">{m === "ship" ? S.modeShip : S.modePickup}</span>
+          </button>
+        ))}
+      </div>
+      {self ? (
+        <p className="flex items-start gap-2 rounded-xl bg-emerald-50 p-2.5 text-sm text-emerald-900 ring-1 ring-emerald-200">
+          <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0" /><span>{S.selfPickupHint}{shop ? ` ${S.selfPickupShop}` : ""}</span>
+        </p>
+      ) : <>
       {label ? (
         <TrackingFields t={t} v={{ ...v, numbers: [] }} set={(x) => setV({ ...x, numbers: v.numbers })} names={names} idp="new" tried={false} choices={choices} manage={manage} carrierOnly />
       ) : <TrackingFields t={t} v={v} set={setV} names={names} idp="new" tried={tried} choices={choices} manage={manage} />}
@@ -275,9 +298,10 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
         </fieldset>
       )}
       {sug.heavy && parcelCarrier && <p className="flex items-start gap-1.5 rounded-xl bg-amber-50 p-2.5 text-xs font-semibold text-amber-900 ring-1 ring-amber-200"><Icon name="alert" className="mt-px h-3.5 w-3.5 shrink-0" />{fill(S.heavy, { x: GLS_MAX_KG })}</p>}
+      </>}
       <div>
         <label htmlFor="new-note" className="mb-1 block text-xs font-bold text-ink-soft">{S.note}</label>
-        <input id="new-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={S.notePh} className="input" autoComplete="off" />
+        <input id="new-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={self ? S.pickupNotePh : S.notePh} className="input" autoComplete="off" />
       </div>
       {choose && (
         <fieldset className="space-y-1.5">
@@ -300,20 +324,22 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
           {tried && pickedNone && <p className="text-xs font-semibold text-red-600">{S.errors.empty}</p>}
         </fieldset>
       )}
-      {shop && (
+      {shop && !self && (
         <label className="flex items-start gap-2 rounded-xl bg-brand-50/60 p-2.5 text-sm ring-1 ring-brand-100">
           <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600" />
           <span>{S.notify}</span>
         </label>
       )}
-      {tried && !label && missingName(choices, v) && <p className="text-xs font-semibold text-red-600">{S.errors.carrierName}</p>}
+      {tried && !self && !label && missingName(choices, v) && <p className="text-xs font-semibold text-red-600">{S.errors.carrierName}</p>}
       <button disabled={pending} className="btn-primary group w-full">
-        {pending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name={label ? "file" : "truck"} className="h-4 w-4" />}
-        {pending ? (label ? S.glsCreating : S.saving) : label ? (shop ? S.glsCreateShop : S.glsCreate) : shop ? S.saveShop : S.save}
+        {pending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Icon name={self ? "check" : label ? "file" : "truck"} className="h-4 w-4" />}
+        {pending ? (label ? S.glsCreating : S.saving)
+          : self ? (shop ? S.selfPickupSaveShop : S.selfPickupSave)
+          : label ? (shop ? S.glsCreateShop : S.glsCreate) : shop ? S.saveShop : S.save}
       </button>
       <Msg t={t} state={state} />
     </form>
-  );
+  </>);
 }
 
 /** Ändern / Zurücknehmen / Erneut senden an einer gespeicherten Sendung */

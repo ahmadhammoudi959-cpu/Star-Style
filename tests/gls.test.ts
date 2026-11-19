@@ -281,6 +281,44 @@ run("GLS – Etikett aus dem System (DB, simuliertes GLS)", async () => {
     await expect(sh.markPickupReady(draft)).rejects.toMatchObject({ code: "notPickup" });
   });
 
+  it("Versand-Bestellung, Kunde holt doch selbst im Lager ab (19.11.2026): Teil + Hinweis, ohne E-Mail, Zahl am Menüpunkt", async () => {
+    const orderId = `gid://shopify/Order/S${Date.now()}`;
+    const [c] = await db.insert(schema.customers).values({ name: "Selbstabholer", email: `self${Date.now()}@example.com` }).returning();
+    const draft = await saveInvoiceDraft({
+      customerId: c.id, channel: "GENERAL_SHOP", discountBp: 0, notes: "", deliveryDate: "2026-11-19", retentionOfTitle: false, pricesGross: true, externalOrderId: orderId,
+      taxOverride: { mode: "DOMESTIC", ossCountry: null },
+      lines: [{ variantId, description: "Haarschneidemaschine", qty: 2, unitPriceCents: 5950, discountBp: 0, vatRateBp: 1900, externalLineId: "gid://shopify/LineItem/91" }],
+    });
+    await issueInvoice(draft, undefined, { allowNegativeStock: true });
+    const waiting = async () => {
+      const [a, b, n] = await Promise.all([sh.shopOrdersToShip(), sh.shopOrdersToPickUp(), sh.shopOrdersWaitingCount()]);
+      expect(n).toBe(a.length + b.length); // Zahl am Menüpunkt = Hinweise auf der Startseite
+      return a.map((x) => x.id);
+    };
+    expect(await waiting()).toContain(draft);
+    const line = (await db.select().from(schema.invoiceLines).where(eq(schema.invoiceLines.invoiceId, draft)))[0];
+    // erst 1 von 2 Stück mitgenommen, mit Hinweis
+    const first = await sh.markPickedUp(draft, undefined, { pick: { [line.id]: 1 }, note: "mit eigenem Transporter" });
+    const s1 = (await db.query.shipments.findFirst({ where: eq(schema.shipments.id, first) }))!;
+    expect(s1).toMatchObject({ carrier: "OTHER", carrierName: "Abholung", trackingNumbers: [], notifyCustomer: false, note: "mit eigenem Transporter", shopStatus: "pending" });
+    expect(s1.items).toMatchObject([{ qty: 1, externalLineId: "gid://shopify/LineItem/91" }]);
+    expect((await sh.shippingStates([draft])).get(draft)).toBe("partial");
+    expect(await waiting()).toContain(draft); // 1 Stück noch offen
+    // Rest mitgenommen → erledigt, nicht mehr „zu versenden“, in der Liste „Abgeholt“
+    await sh.markPickedUp(draft);
+    expect((await sh.shippingStates([draft])).get(draft)).toBe("done");
+    expect(await waiting()).not.toContain(draft);
+    expect((await sh.pickedUpInvoices([draft, invoiceId])).has(draft)).toBe(true);
+    await expect(sh.markPickedUp(draft)).rejects.toMatchObject({ code: "nothingOpen" });
+    // eine Sendung zurückgenommen → wieder offen; echte Sendung dazu → nicht mehr „nur abgeholt“
+    await sh.cancelShipment(first);
+    expect(await waiting()).toContain(draft);
+    await sh.createShipment({ invoiceId: draft, carrier: "DHL", carrierName: "", trackingUrl: "", numbers: ["00340434161094042557"], notify: false, pick: null }, undefined);
+    expect((await sh.pickedUpInvoices([draft])).has(draft)).toBe(false);
+    expect(sh.isPickupShipment({ carrier: "OTHER", carrierName: "Abholung", trackingNumbers: [] })).toBe(true);
+    expect(sh.isPickupShipment({ carrier: "OTHER", carrierName: "Abholung", trackingNumbers: ["X1"] })).toBe(false);
+  });
+
   async function lineId() {
     return (await db.select().from(schema.invoiceLines).where(eq(schema.invoiceLines.invoiceId, invoiceId)))[0].id;
   }
