@@ -241,7 +241,10 @@ function PriceCard({ t, view, live, intl, busy, onBasics, onWindow }: {
       <div className="grid grid-cols-[7rem_1fr] gap-2">
         <label className="block">
           <span className="label">{T.percentLabel}</span>
-          <input value={percent} onChange={(e) => setPercent(e.target.value.replace(/[^\d]/g, "").slice(0, 2))} inputMode="numeric" dir="ltr" className="input num text-lg font-black" data-promo-percent />
+          <div className="relative" dir="ltr">
+            <input value={percent} onChange={(e) => setPercent(e.target.value.replace(/[^\d]/g, "").slice(0, 2))} inputMode="numeric" dir="ltr" className="input num pr-9 text-right text-lg font-black" data-promo-percent />
+            <span className="pointer-events-none absolute inset-y-0 right-3 grid place-items-center text-base font-black text-ink-soft" aria-hidden="true">%</span>
+          </div>
         </label>
         <label className="block">
           <span className="label">{T.titleLabel}</span>

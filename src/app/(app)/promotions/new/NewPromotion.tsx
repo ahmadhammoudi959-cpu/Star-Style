@@ -39,10 +39,11 @@ export function NewPromotion({ t, options, intl }: { t: Dict; options: SaleOptio
       <aside className="card animate-rise space-y-4 p-5 lg:sticky lg:top-4">
         <label className="block">
           <span className="label">{T.percentLabel}</span>
-          <div className="relative">
+          {/* Zahl und „%“ immer links nach rechts (sonst lagen sie in RTL übereinander, Inhaber 20.11.2026): Zahl rechtsbündig direkt vor dem Zeichen */}
+          <div className="relative" dir="ltr">
             <input data-promo-percent value={percent} onChange={(e) => setPercent(e.target.value.replace(/[^\d]/g, "").slice(0, 2))} inputMode="numeric"
-              className="input num pe-10 text-2xl font-black" dir="ltr" aria-describedby="promo-percent-hint" />
-            <span className="pointer-events-none absolute inset-y-0 end-3 grid place-items-center text-xl font-black text-ink-soft">%</span>
+              className="input num pr-11 text-right text-2xl font-black" dir="ltr" aria-describedby="promo-percent-hint" />
+            <span className="pointer-events-none absolute inset-y-0 right-4 grid place-items-center text-xl font-black text-ink-soft" aria-hidden="true">%</span>
           </div>
           <span id="promo-percent-hint" className={`hint block ${bp == null && percent ? "font-semibold text-red-700" : ""}`}>{T.percentHint}</span>
         </label>
