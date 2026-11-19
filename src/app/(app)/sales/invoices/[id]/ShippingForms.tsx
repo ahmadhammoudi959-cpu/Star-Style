@@ -6,6 +6,8 @@ import { Icon } from "@/components/Icon";
 import { checkNumbers, customUrlOk } from "@/lib/shipping";
 import { choiceKeyFor, needsNumber, shipmentFields, type CarrierChoice } from "@/lib/carriers";
 import { checkWeights, GLS_MAX_KG, GLS_MAX_PARCELS, parseKg, suggestParcels } from "@/lib/gls";
+import { parcelValueLevel } from "@/lib/shipping-class";
+import { formatCents } from "@/lib/money";
 import type { Dict } from "@/i18n/de";
 
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? `{${k}}`));
@@ -161,13 +163,17 @@ function okToSend(choices: CarrierChoice[], v: TrackingState) {
 const missingName = (choices: CarrierChoice[], v: TrackingState) => choiceOf(choices, v.key).kind === "free" && !v.freeName.trim();
 
 /** Neue Sendung: Versanddienst, Nummern, Inhalt (alles Offene oder Teil), E-Mail an den Kunden (nur Shop) */
-export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultKey, manage, gls, weights }: {
+export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultKey, manage, gls, weights, freight = {}, unitNet = {} }: {
   t: Dict; invoiceId: string; shop: boolean; open: { lineId: string; description: string; qty: number }[]; names: string[];
   choices: CarrierChoice[]; defaultKey: string; manage: boolean;
   /** GLS eingerichtet? problem = an der Anschrift fehlt etwas, das GLS braucht (Etikett dann nicht möglich) */
   gls: { ready: boolean; problem: string | null };
   /** Gewicht je offener Position (Gramm je Stück, null = unbekannt) – Vorschlag für die Pakete */
   weights: Record<string, number | null>;
+  /** Position ist Speditionsware (Möbel) – geht nicht als GLS-Paket (GLS-Vertrag 19.11.2026) */
+  freight?: Record<string, boolean>;
+  /** Warenwert netto je Stück in Cent – Hinweis Haftung 750 € / Ausschluss über 5.000 € je Paket */
+  unitNet?: Record<string, number>;
 }) {
   const S = t.ship;
   const [state, setState] = useState<ShipState>(undefined);
@@ -192,12 +198,18 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
   const kgList = kgs ?? sug.kgs.map((k) => String(k).replace(".", ","));
   const wProblem = label ? checkWeights(kgList.map(parseKg)) : null;
   const parcelCarrier = choiceOf(choices, v.key).kind === "builtin";
+  // GLS-Vertrag: Möbel nie als Paket; Warenwert je Paket; E-Mail/Telefon an GLS nur mit Einwilligung des Kunden
+  const qtyOf = (lineId: string, all: number) => (mode === "part" ? pick[lineId] ?? 0 : all);
+  const freightPicked = open.filter((o) => freight[o.lineId] && qtyOf(o.lineId, o.qty) > 0).map((o) => o.description);
+  const goodsNet = open.reduce((sum, o) => sum + (unitNet[o.lineId] ?? 0) * qtyOf(o.lineId, o.qty), 0);
+  const valueLevel = parcelValueLevel(goodsNet, kgList.length);
+  const [consent, setConsent] = useState(false);
   return (
     <form className="space-y-4" onSubmit={async (e) => {
       e.preventDefault();
       setTried(true);
       if (pending || pickedNone) return;
-      if (label ? Boolean(wProblem || gls.problem) : !okToSend(choices, v)) return;
+      if (label ? Boolean(wProblem || gls.problem || freightPicked.length) : !okToSend(choices, v)) return;
       setPending(true); setState(undefined);
       const err = await run(label ? createGlsShipmentAction : createShipmentAction, new FormData(e.currentTarget), invoiceId, label ? "label" : "create");
       if (err) { setState(err); setPending(false); }
@@ -211,6 +223,7 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
       {mode === "part" && <input type="hidden" name="pick" value={JSON.stringify(pick)} />}
       <input type="hidden" name="note" value={note} />
       {label && <input type="hidden" name="weights" value={JSON.stringify(kgList)} />}
+      {label && <input type="hidden" name="consent" value={consent ? "1" : ""} />}
       {label ? (
         <TrackingFields t={t} v={{ ...v, numbers: [] }} set={(x) => setV({ ...x, numbers: v.numbers })} names={names} idp="new" tried={false} choices={choices} manage={manage} carrierOnly />
       ) : <TrackingFields t={t} v={v} set={setV} names={names} idp="new" tried={tried} choices={choices} manage={manage} />}
@@ -249,6 +262,16 @@ export function NewShipment({ t, invoiceId, shop, open, names, choices, defaultK
           {sug.unknown > 0 && <p className="text-[0.6875rem] text-amber-800">{fill(S.glsWeightUnknown, { n: sug.unknown })}</p>}
           {wProblem && <p role="alert" className="text-xs font-semibold text-red-600">{fill((S.errors as Record<string, string>)[`weight_${wProblem}`] ?? S.errors.error, { x: GLS_MAX_KG })}</p>}
           {gls.problem && <p role="alert" className="text-xs font-semibold text-red-600">{(S.errors as Record<string, string>)[`address_${gls.problem}`] ?? S.errors.error}</p>}
+          {freightPicked.length > 0 && <p role="alert" className="text-xs font-semibold text-red-600">{fill(S.glsFreight, { names: freightPicked.join(", ") })}</p>}
+          {valueLevel !== "ok" && (
+            <p className={`text-xs font-semibold ${valueLevel === "over5000" ? "text-red-600" : "text-amber-800"}`}>
+              {fill(valueLevel === "over5000" ? S.glsValue5000 : S.glsValue750, { x: formatCents(Math.round(goodsNet / Math.max(1, kgList.length))) })}
+            </p>
+          )}
+          <label className="flex items-start gap-2 pt-1 text-xs">
+            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600" />
+            <span><span className="font-semibold">{S.glsConsent}</span> <span className="text-ink-soft">{S.glsConsentHint}</span></span>
+          </label>
         </fieldset>
       )}
       {sug.heavy && parcelCarrier && <p className="flex items-start gap-1.5 rounded-xl bg-amber-50 p-2.5 text-xs font-semibold text-amber-900 ring-1 ring-amber-200"><Icon name="alert" className="mt-px h-3.5 w-3.5 shrink-0" />{fill(S.heavy, { x: GLS_MAX_KG })}</p>}

@@ -208,6 +208,7 @@ run("Artikel im Shop anlegen (Datenbank, Shopify simuliert)", async () => {
   let denyProducts = false, denyPublish = false, created = 0;
   // Shop-Produkt zu einer verbundenen Variante (für „Größen/Farben ergänzen“)
   let shopProduct: { id: string; hasOnlyDefaultVariant: boolean; options: { name: string; position: number; optionValues: { name: string }[] }[]; variants: { nodes: { id: string; selectedOptions: { name: string; value: string }[] }[] } } | null = null;
+  let shopTags: string[] = []; // Tags des Shop-Produkts (Versandart → „spedition“)
 
   function shopifyMock() {
     return vi.fn(async (url: string, init?: { body?: unknown }) => {
@@ -223,6 +224,10 @@ run("Artikel im Shop anlegen (Datenbank, Shopify simuliert)", async () => {
       if (query.includes("productVariant(id:")) return Response.json({ data: { productVariant: shopProduct ? { product: shopProduct } : null } });
       if (query.includes("productOptionsCreate")) return Response.json({ data: { productOptionsCreate: { userErrors: [] } } });
       if (query.includes("inventoryItemUpdate")) return Response.json({ data: { inventoryItemUpdate: { inventoryItem: { id: variables.id }, userErrors: [] } } });
+      if (query.includes("product { id tags }")) return Response.json({ data: { nodes: (variables.ids as string[]).map((id) =>
+        id.endsWith("gone") ? null : { id, product: { id: `gid://shopify/Product/${tag}F`, tags: [...shopTags] } }) } });
+      if (query.includes("tagsAdd")) { for (const x of variables.tags as string[]) if (!shopTags.includes(x)) shopTags.push(x); return Response.json({ data: { tagsAdd: { userErrors: [] } } }); }
+      if (query.includes("tagsRemove")) { shopTags = shopTags.filter((x) => !(variables.tags as string[]).includes(x)); return Response.json({ data: { tagsRemove: { userErrors: [] } } }); }
       if (query.includes("productVariantsBulkCreate")) {
         const vs = variables.variants as { barcode?: string; inventoryItem: { sku: string } }[];
         return Response.json({ data: { productVariantsBulkCreate: { userErrors: [], productVariants: vs.map((x, i) => ({
@@ -427,6 +432,40 @@ run("Artikel im Shop anlegen (Datenbank, Shopify simuliert)", async () => {
     await db.update(schema.variants).set({ weightGrams: 18000 }).where(eq(schema.variants.id, vs[0].id));
     await pushDueWeights(5000);
     expect(mine()).toEqual([{ id: iid, input: { measurement: { weight: { unit: "GRAMS", value: 18000 } } } }]);
+  });
+
+  it("Versandart → Tag „spedition“ am Shop-Produkt: aus Gewicht/Paketmaßen oder fest eingestellt, nur bei Abweichung", async () => {
+    vi.stubGlobal("fetch", shopifyMock());
+    const { pushFreightTags } = await import("../src/lib/shopify/freight-tags");
+    const { p, vs } = await newProduct(`PUSH-${tag}-SQ`, { sizes: ["S"] });
+    await db.insert(schema.shopVariants).values({ channel: "GENERAL_SHOP", shopVariantId: `gid://shopify/ProductVariant/${tag}f1`, variantId: vs[0].id, matchedBy: "barcode" });
+    const tagCalls = () => calls.filter((c) => c.query?.includes("tagsAdd") || c.query?.includes("tagsRemove")).map((c) => [c.query!.includes("tagsAdd") ? "add" : "remove", c.variables!.tags]);
+    // im Shop von Hand schon „spedition“, laut System ein Paket (nichts bekannt → Paket) → Tag weg, andere Tags bleiben
+    shopTags = ["spedition", "faq:kamm"];
+    calls = [];
+    expect(await pushFreightTags({ productIds: [p.id] })).toEqual([{ channel: "GENERAL_SHOP", added: 0, removed: 1, same: 0, failed: 0 }]);
+    expect(tagCalls()).toEqual([["remove", ["spedition"]]]);
+    expect(shopTags).toEqual(["faq:kamm"]);
+    calls = [];
+    expect(await pushFreightTags({ productIds: [p.id] })).toEqual([]); // gemerkt → nichts mehr zu tun
+    expect(calls).toEqual([]);
+    // Waschliege 150 × 70 × 90 cm → zu hoch für GLS → Spedition
+    await db.update(schema.variants).set({ pkgLengthMm: 1500, pkgWidthMm: 700, pkgHeightMm: 900 }).where(eq(schema.variants.id, vs[0].id));
+    calls = [];
+    expect(await pushFreightTags({ productIds: [p.id] })).toEqual([{ channel: "GENERAL_SHOP", added: 1, removed: 0, same: 0, failed: 0 }]);
+    expect(tagCalls()).toEqual([["add", ["spedition"]]]);
+    // am Artikel fest „Paket“ → Tag wieder weg
+    await db.update(schema.products).set({ shippingClass: "PARCEL" }).where(eq(schema.products.id, p.id));
+    calls = [];
+    await pushFreightTags({ productIds: [p.id] });
+    expect(tagCalls()).toEqual([["remove", ["spedition"]]]);
+    // Shop-Variante gibt es im Shop nicht mehr → gemerkt, kein Dauer-Versuch
+    const g = await newProduct(`PUSH-${tag}-SZ`, { sizes: ["S"] });
+    await db.update(schema.products).set({ shippingClass: "FREIGHT" }).where(eq(schema.products.id, g.p.id));
+    await db.insert(schema.shopVariants).values({ channel: "GENERAL_SHOP", shopVariantId: `gid://shopify/ProductVariant/${tag}gone`, variantId: g.vs[0].id, matchedBy: "barcode" });
+    await pushFreightTags({ productIds: [g.p.id] });
+    calls = [];
+    expect(await pushFreightTags({ productIds: [g.p.id] })).toEqual([]);
   });
 
   it("Shop-Produkt mit nur der Standard-Variante bekommt erst die Option „Farbe“, dann die neue Farbe", async () => {

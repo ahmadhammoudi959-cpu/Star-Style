@@ -19,6 +19,7 @@ import { glsCancelParcel, glsCreateParcels, GlsError } from "./gls-client";
 import { PDFDocument } from "pdf-lib";
 import { createHash } from "node:crypto";
 import { withOrderLock } from "./shopify/order-lock";
+import { freightByProduct } from "./freight";
 import { berlinDate, type ShopOrder } from "./shopify/order-map";
 
 export type Shipment = typeof schema.shipments.$inferSelect;
@@ -56,10 +57,11 @@ async function once(key: string) {
 // ───────────────────────── Speichern, ändern, zurücknehmen ─────────────────────────
 
 /** Neue Sendung: Versanddienst, Nummer je Paket, Inhalt (pick = null → alles, was noch offen ist) */
-export async function createShipment(input: Input & { invoiceId: string; pick: Record<string, number> | null; gls?: { trackIds: string[]; labelFileId: string | null } },
+export async function createShipment(input: Input & { invoiceId: string; pick: Record<string, number> | null;
+  gls?: { trackIds: string[]; labelFileId: string | null; consent?: boolean } },
   userId?: string): Promise<string> {
   const data = clean(input);
-  const gls = input.gls ? { glsTrackIds: input.gls.trackIds, glsStatus: "created", labelFileId: input.gls.labelFileId } : {};
+  const gls = input.gls ? { glsTrackIds: input.gls.trackIds, glsStatus: "created", labelFileId: input.gls.labelFileId, glsContactConsent: Boolean(input.gls.consent) } : {};
   return db.transaction(async (tx) => {
     // gleichzeitiges Speichern (Doppelklick) wartet, damit nichts doppelt verschickt wird
     await tx.execute(sql`select id from invoices where id = ${input.invoiceId} for update`);
@@ -74,7 +76,8 @@ export async function createShipment(input: Input & { invoiceId: string; pick: R
       invoiceId: inv.id, channel: inv.channel, externalOrderId: inv.externalOrderId, ...data, notifyCustomer: shop && data.notifyCustomer,
       items: r.items, shippedOn: todayIso(), shopStatus: shop ? "pending" : "none", createdBy: userId ?? null, ...gls,
     }).returning({ id: schema.shipments.id });
-    await audit(tx, { entity: "shipment", entityId: row.id, action: "create", after: { invoice: inv.number, ...data, items: r.items, ...(input.gls ? { gls: input.gls.trackIds } : {}) }, userId });
+    await audit(tx, { entity: "shipment", entityId: row.id, action: "create", after: { invoice: inv.number, ...data, items: r.items,
+      ...(input.gls ? { gls: input.gls.trackIds, contactConsent: Boolean(input.gls.consent) } : {}) }, userId });
     return row.id;
   });
 }
@@ -154,6 +157,16 @@ async function storeLabel(labels: string[], name: string): Promise<string | null
   return row.id;
 }
 
+/** Positionen einer Sendung, deren Artikel Speditionsware ist (Namen, je Artikel einmal) */
+async function freightItems(items: { variantId: string | null; description: string }[]): Promise<string[]> {
+  const vids = [...new Set(items.map((i) => i.variantId).filter((x): x is string => Boolean(x)))];
+  if (!vids.length) return [];
+  const rows = await db.select({ id: schema.variants.id, productId: schema.variants.productId }).from(schema.variants).where(inArray(schema.variants.id, vids));
+  const productOf = new Map(rows.map((r) => [r.id, r.productId]));
+  const freight = await freightByProduct([...new Set(rows.map((r) => r.productId))]);
+  return [...new Set(items.filter((i) => i.variantId && freight.get(productOf.get(i.variantId) ?? "")).map((i) => i.description))];
+}
+
 /** Empfänger für GLS aus der Rechnung (Anschrift wie auf der Rechnung, bei Shop-Bestellungen = Lieferanschrift) + Kontakt des Kunden */
 export async function glsConsigneeFor(invoiceId: string): Promise<GlsConsignee | null> {
   const inv = await db.query.invoices.findFirst({ where: eq(schema.invoices.id, invoiceId), with: { customer: true } });
@@ -169,9 +182,11 @@ export async function glsConsigneeFor(invoiceId: string): Promise<GlsConsignee |
  * Etikett bei GLS erstellen und als Sendung speichern (Wunsch Inhaber 13.11.2026): Gewicht je Paket, Inhalt wie bei jeder Sendung.
  * Erst bei GLS anlegen, dann speichern; klappt das Speichern nicht (z. B. inzwischen alles verschickt), wird bei GLS gleich storniert.
  * Doppelklick: zweiter Aufruf wartet auf den ersten und scheitert dann an „nichts mehr offen“.
+ * GLS-Vertrag (19.11.2026): Speditionsware (Möbel, über 40 kg oder Übermaß) nie als GLS-Paket; E-Mail und Telefon des Kunden
+ * bekommt GLS nur mit seiner Einwilligung (consent, an der Sendung gespeichert) – sonst ohne, und dann auch ohne FlexDeliveryService.
  */
-export async function createGlsShipment(input: { invoiceId: string; parcelsKg: number[]; pick: Record<string, number> | null; notify: boolean; note?: string },
-  userId?: string): Promise<string> {
+export async function createGlsShipment(input: { invoiceId: string; parcelsKg: number[]; pick: Record<string, number> | null; notify: boolean; note?: string;
+  consent?: boolean }, userId?: string): Promise<string> {
   return withOrderLock(`label:${input.invoiceId}`, async () => {
     const w = checkWeights(input.parcelsKg);
     if (w) throw new ShipmentError(`weight_${w}`);
@@ -181,9 +196,12 @@ export async function createGlsShipment(input: { invoiceId: string; parcelsKg: n
     const existing = await db.select().from(schema.shipments).where(eq(schema.shipments.invoiceId, inv.id));
     const r = resolveItems(inv.lines, existing, input.pick);
     if (r.problem) throw new ShipmentError(r.problem);
-    const consignee = await glsConsigneeFor(inv.id);
-    const cp = consignee ? consigneeProblem(consignee) : "name";
-    if (!consignee || cp) throw new ShipmentError(`address_${cp}`);
+    const freightNames = await freightItems(r.items);
+    if (freightNames.length) throw new ShipmentError("freight", freightNames.join(", ").slice(0, 300));
+    const found = await glsConsigneeFor(inv.id);
+    const cp = found ? consigneeProblem(found) : "name";
+    if (!found || cp) throw new ShipmentError(`address_${cp}`);
+    const consignee: GlsConsignee = input.consent ? found : { ...found, email: "", phone: "" };
     let created;
     try {
       created = await glsCreateParcels({ reference: inv.number ?? "", shippingDate: todayIso(), consignee, parcelsKg: input.parcelsKg });
@@ -195,7 +213,7 @@ export async function createGlsShipment(input: { invoiceId: string; parcelsKg: n
       const labelFileId = await storeLabel(created.labels, `GLS-${inv.number ?? inv.id}.pdf`);
       return await createShipment({
         invoiceId: inv.id, carrier: "GLS", carrierName: "", trackingUrl: "", numbers: created.parcels.map(trackingNumberOf),
-        notify: input.notify, note: input.note, pick: input.pick, gls: { trackIds, labelFileId },
+        notify: input.notify, note: input.note, pick: input.pick, gls: { trackIds, labelFileId, consent: Boolean(input.consent) },
       }, userId);
     } catch (e) {
       for (const t of trackIds) await glsCancelParcel(t).catch(() => {});

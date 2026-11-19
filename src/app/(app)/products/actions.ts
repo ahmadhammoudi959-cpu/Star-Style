@@ -20,6 +20,8 @@ import { syncProductTypesLater } from "@/lib/shopify/collections";
 import type { ShopChannel } from "@/lib/shopify/client";
 import { canonicalCategory } from "@/lib/categories";
 import { parseWeight } from "@/lib/weight";
+import { parseDims } from "@/lib/shipping-class";
+import { pushFreightTagsLater } from "@/lib/shopify/freight-tags";
 
 export type ProductFormState = { error?: string; field?: string; values?: Record<string, string> } | undefined;
 
@@ -42,6 +44,10 @@ const VariantSchema = z.object({
   // Gewicht einer Packung: Text + Einheit („150“ g, „1,5“ kg, „250 g“)
   weight: z.string().trim().max(20).default(""),
   weightUnit: z.enum(["g", "kg"]).default("g"),
+  // Paketmaße in cm (Länge, Breite, Höhe) – entscheiden mit dem Gewicht über Paket/Spedition
+  pkgL: z.string().trim().max(12).default(""),
+  pkgW: z.string().trim().max(12).default(""),
+  pkgH: z.string().trim().max(12).default(""),
   // Anfangsbestand nur für neue Varianten: wird als Wareneingang gebucht (Bestand nie direkt setzen)
   initialQty: z.coerce.number().int().min(0).max(1_000_000).default(0),
   initialExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal("")).default(""),
@@ -63,6 +69,7 @@ const ProductSchema = z.object({
   tracksExpiry: z.string().optional().transform((v) => v === "on"),
   inBrandShop: z.string().optional().transform((v) => v === "on"),
   inGeneralShop: z.string().optional().transform((v) => v === "on"),
+  shippingClass: z.enum(["", "PARCEL", "FREIGHT"]).default(""),
   variants: z.string().transform((s) => JSON.parse(s)).pipe(z.array(VariantSchema).min(1)),
 });
 
@@ -90,6 +97,8 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   if (new Set(barcodes).size !== barcodes.length) return { error: "barcodeTaken" };
   const weights = d.variants.map((v) => parseWeight(v.weight, v.weightUnit));
   if (weights.some((w) => w === undefined)) return { error: "weightInvalid" };
+  const dims = d.variants.map((v) => parseDims(v.pkgL, v.pkgW, v.pkgH));
+  if (dims.some((x) => x === undefined)) return { error: "pkgInvalid" };
   // Art.-Nr. = Barcode (Wunsch Inhaber 03.11.2026): leer gelassen → Barcode der ersten Variante mit Barcode
   const sku = d.sku || barcodes[0] || "";
   if (!sku) return { error: "skuOrBarcode" };
@@ -122,6 +131,7 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
     wholesalePriceCents: canPrices ? d.wholesalePrice : (prev?.wholesalePriceCents ?? 0),
     retailPriceCents: canPrices ? d.retailPrice : (prev?.retailPriceCents ?? 0),
     tracksExpiry: d.tracksExpiry, inBrandShop: d.inBrandShop, inGeneralShop: d.inGeneralShop,
+    shippingClass: d.shippingClass || null,
     ...(imageFileId !== undefined ? { imageFileId } : {}),
   };
 
@@ -167,18 +177,25 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
       // Barcodes dieses Artikels zuerst leeren, damit Tausch zwischen Varianten möglich ist
       await tx.update(schema.variants).set({ barcode: null }).where(eq(schema.variants.productId, productId!));
       const opening: { variantId: string; qty: number; expiryDate: string | null }[] = [];
-      const oldWeights = new Map((await tx.select({ id: schema.variants.id, w: schema.variants.weightGrams }).from(schema.variants)
-        .where(eq(schema.variants.productId, productId!))).map((r) => [r.id, r.w]));
+      const oldRows = await tx.select({ id: schema.variants.id, w: schema.variants.weightGrams, l: schema.variants.pkgLengthMm, b: schema.variants.pkgWidthMm, h: schema.variants.pkgHeightMm })
+        .from(schema.variants).where(eq(schema.variants.productId, productId!));
+      const oldWeights = new Map(oldRows.map((r) => [r.id, r.w]));
+      const oldDims = new Map(oldRows.map((r) => [r.id, r.l && r.b && r.h ? [r.l, r.b, r.h] : null]));
       for (const [vi, v] of d.variants.entries()) {
         const weightGrams = weights[vi] ?? null;
+        const pkg = dims[vi] ?? null;
         const vals = {
           size: v.size, color: v.color, barcode: v.barcode || null, minStock: v.minStock, active: true, weightGrams,
+          pkgLengthMm: pkg?.l ?? null, pkgWidthMm: pkg?.w ?? null, pkgHeightMm: pkg?.h ?? null,
           ...(variantImages.has(v.ref) ? { imageFileId: variantImages.get(v.ref) ?? null } : {}),
         };
         if (v.id && oldWeights.has(v.id) && (oldWeights.get(v.id) ?? null) !== weightGrams) {
           await audit(tx, { entity: "variant", entityId: v.id, action: "weight", before: { weightGrams: oldWeights.get(v.id) ?? null }, after: { weightGrams }, userId: session.uid });
           if (weightGrams) weightChanged.push(v.id);
         }
+        const newDims = pkg ? [pkg.l, pkg.w, pkg.h] : null;
+        if (v.id && oldDims.has(v.id) && JSON.stringify(oldDims.get(v.id) ?? null) !== JSON.stringify(newDims))
+          await audit(tx, { entity: "variant", entityId: v.id, action: "package", before: { pkgMm: oldDims.get(v.id) ?? null }, after: { pkgMm: newDims }, userId: session.uid });
         if (v.id) await tx.update(schema.variants).set(vals).where(and(eq(schema.variants.id, v.id), eq(schema.variants.productId, productId!)));
         else {
           // evtl. früher deaktivierte Variante mit gleicher Größe/Farbe reaktivieren
@@ -262,6 +279,8 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   }
   // Kategorie geändert → verbundene Shop-Produkte wandern in die passende Kollektion; geänderte Shop-Fotos abgleichen
   if (categoryChanged) syncProductTypesLater([productId!]);
+  // Versandart (aus Gewicht/Paketmaßen oder fest eingestellt) → Tag „spedition“ an den verbundenen Shop-Produkten
+  pushFreightTagsLater([productId!]);
   syncGalleryLater(productId!, galleryChanged);
   redirect(`/products/${productId}?saved=1${push ? `&push=${encodeURIComponent(push)}` : ""}${price ? `&price=${encodeURIComponent(price)}` : ""}`);
 }

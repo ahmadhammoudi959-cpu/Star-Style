@@ -205,6 +205,10 @@ run("GLS – Etikett aus dem System (DB, simuliertes GLS)", async () => {
     const req = calls.at(-1)!.body as { Shipment: { Consignee: { Address: Record<string, string> }; ShipmentUnit: { Weight: string }[] } };
     expect(req.Shipment.Consignee.Address).toMatchObject({ Name1: "Barber Elite", Street: "Hauptstraße", StreetNumber: "12a", ZIPCode: "44623", City: "Herne", CountryCode: "DE" });
     expect(req.Shipment.ShipmentUnit.map((u) => u.Weight)).toEqual(["2.50", "1.10"]);
+    // ohne Einwilligung des Kunden bekommt GLS weder E-Mail noch Telefon (GLS-Vertrag 19.11.2026)
+    expect(req.Shipment.Consignee.Address).not.toHaveProperty("eMail");
+    expect(req.Shipment.Consignee.Address).not.toHaveProperty("MobilePhoneNumber");
+    expect(s.glsContactConsent).toBe(false);
     // GLS-Etikett: Nummer nicht änderbar
     await expect(sh.editShipment(id, { carrier: "DHL", carrierName: "", trackingUrl: "", numbers: ["00340434161094042557"], notify: false })).rejects.toMatchObject({ code: "glsLocked" });
   });
@@ -231,6 +235,25 @@ run("GLS – Etikett aus dem System (DB, simuliertes GLS)", async () => {
     expect(after.glsStatus).toBe("cancelled");
     expect(after.cancelledAt).not.toBeNull();
     expect(calls.filter((c) => c.url.includes("/shipments/cancel/")).map((c) => c.url.split("/").pop())).toEqual(expect.arrayContaining(s.glsTrackIds));
+  });
+
+  it("Mit Einwilligung: E-Mail + Telefon an GLS (und FlexDelivery, wenn eingeschaltet); Speditionsware nie als GLS-Paket", async () => {
+    vi.stubGlobal("fetch", mock());
+    await saveGlsSettings({ endpoint: "http://localhost:9/backend/rs", user: "2764200001", password: "", contactId: "276a45fkqM", flex: true });
+    const id = await sh.createGlsShipment({ invoiceId, parcelsKg: [3.6], pick: null, notify: false, consent: true });
+    const req = calls.at(-1)!.body as { Shipment: { Consignee: { Address: Record<string, string> }; Service?: { Service: { ServiceName: string } }[] } };
+    expect(req.Shipment.Consignee.Address).toMatchObject({ eMail: expect.stringMatching(/^gls\d+@example\.com$/), MobilePhoneNumber: "+49 170 1234567" });
+    expect(req.Shipment.Service).toEqual([{ Service: { ServiceName: "service_flexdelivery" } }]);
+    expect((await db.query.shipments.findFirst({ where: eq(schema.shipments.id, id) }))!.glsContactConsent).toBe(true);
+    await sh.cancelShipment(id);
+    // Artikel ist Speditionsware (Möbel) → gar nicht erst bei GLS
+    const pid = (await db.query.variants.findFirst({ where: eq(schema.variants.id, variantId) }))!.productId;
+    await db.update(schema.products).set({ shippingClass: "FREIGHT" }).where(eq(schema.products.id, pid));
+    const before = calls.length;
+    await expect(sh.createGlsShipment({ invoiceId, parcelsKg: [3.6], pick: null, notify: false, consent: true })).rejects.toMatchObject({ code: "freight", detail: "Haarschneidemaschine" });
+    expect(calls.length).toBe(before);
+    await db.update(schema.products).set({ shippingClass: null }).where(eq(schema.products.id, pid));
+    await saveGlsSettings({ endpoint: "http://localhost:9/backend/rs", user: "2764200001", password: "", contactId: "276a45fkqM", flex: false });
   });
 
   it("Abholung: nicht „zu versenden“, sondern „zur Abholung“; Bereit + Abgeholt", async () => {

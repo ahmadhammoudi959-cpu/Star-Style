@@ -10,17 +10,24 @@ import { Icon } from "@/components/Icon";
 import { parseMoney } from "@/lib/money";
 import { PhotoPicker } from "@/components/PhotoPicker";
 import { WeightInput } from "@/components/WeightInput";
-import type { WeightUnit } from "@/lib/weight";
+import { parseWeight, type WeightUnit } from "@/lib/weight";
+import { parseDims, productShipping, type ShippingClass } from "@/lib/shipping-class";
 import type { Dict } from "@/i18n/de";
+
+const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
 
 type V = {
   key: string; id?: string; size: string; color: string; barcode: string; minStock: number; stockQty?: number; initialQty?: number; initialExpiry?: string;
   imageFileId?: string | null; weight?: string; weightUnit?: WeightUnit;
+  /** Paketmaße in cm (Länge, Breite, Höhe) */
+  pkgL?: string; pkgW?: string; pkgH?: string;
 };
 export type ProductFormData = {
   id?: string; sku: string; nameDe: string; nameNl: string; descriptionDe: string; descriptionNl: string; category: string;
   supplierId: string; vatRateBp: number; purchasePrice: string; wholesalePrice: string; retailPrice: string;
   tracksExpiry: boolean; inBrandShop: boolean; inGeneralShop: boolean; imageFileId?: string | null;
+  /** Versandart: "" = automatisch aus Gewicht/Paketmaßen, PARCEL = immer Paket, FREIGHT = immer Spedition */
+  shippingClass?: "" | ShippingClass;
   variants: Omit<V, "key">[];
   /** eigene Fotos je Shop (Galerie) */
   galleries?: Record<Channel, { fileId: string; mediaId: string; error: string; hidden: boolean }[]>;
@@ -72,6 +79,12 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
     shopStatus?.linked[c] ? { text: t.product.inShop, tone: "ok" as const }
       : shopStatus?.connected[c] && inShop[c] ? { text: t.product.willCreate, tone: "info" as const } : undefined;
   const [prices, setPrices] = useState({ p: initial.purchasePrice, w: initial.wholesalePrice, r: initial.retailPrice });
+  // Versandart (Wunsch Inhaber 19.11.2026): automatisch aus Gewicht und Paketmaßen – oder fest eingestellt
+  const [shipMode, setShipMode] = useState<"" | ShippingClass>(initial.shippingClass ?? "");
+  const shipping = useMemo(() => productShipping(shipMode || null, variants.map((x) => ({
+    weightGrams: parseWeight(x.weight ?? "", x.weightUnit ?? "g") ?? null,
+    dims: parseDims(x.pkgL ?? "", x.pkgW ?? "", x.pkgH ?? "") ?? null,
+  }))), [shipMode, variants]);
   const margin = useMemo(() => {
     const p = parseMoney(prices.p) ?? 0;
     const calc = (s: string) => { const v = parseMoney(s) ?? 0; return v > 0 && p > 0 ? Math.round(((v - p) / v) * 100) : null; };
@@ -258,6 +271,9 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
                   <Icon name="trash" className="h-4 w-4" />
                 </button>
               </div>
+              <div className="col-span-2 lg:col-span-7">
+                <PackageInput t={t} v={v} onChange={(patch) => upd(v.key, patch)} />
+              </div>
               {!v.id && rights.receive && (
                 <div className="col-span-2 grid grid-cols-2 gap-3 md:grid-cols-4 lg:col-span-7">
                   <Field label={t.product.initialQty}>
@@ -274,6 +290,33 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Versandart: Paket mit GLS oder Spedition (Möbel) – das System setzt dafür im Shop das Merkmal „spedition“ */}
+      <section className="card space-y-3 p-4 animate-rise sm:p-5">
+        <h2 className="flex items-center gap-2 text-lg font-bold"><Icon name="truck" className="h-5 w-5 text-brand-600" />{t.product.shipTitle}</h2>
+        <div className="grid gap-3 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-end">
+          <Field label={t.product.shipMode}>
+            <select name="shippingClass" value={shipMode} onChange={(e) => setShipMode(e.target.value as "" | ShippingClass)} className="input">
+              <option value="">{t.product.shipAuto}</option>
+              <option value="PARCEL">{t.product.shipParcel}</option>
+              <option value="FREIGHT">{t.product.shipFreight}</option>
+            </select>
+          </Field>
+          <p className={`flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold ring-1 ${shipping.cls === "FREIGHT" ? "bg-amber-50 text-amber-900 ring-amber-200" : "bg-emerald-50 text-emerald-800 ring-emerald-100"}`}>
+            <Icon name={shipping.cls === "FREIGHT" ? "truck" : "box"} className="mt-px h-4 w-4 shrink-0" />
+            <span>
+              {shipping.cls === "FREIGHT" ? t.product.shipIsFreight : t.product.shipIsParcel}
+              {!shipping.auto && <span className="font-normal"> ({t.product.shipFixed})</span>}
+              {shipping.auto && shipping.reasons.length > 0 && <span className="font-normal"> – {fill(t.product.shipBecause, { r: shipping.reasons.map((r) => t.product.shipReasons[r]).join(t.product.shipSep) })}</span>}
+            </span>
+          </p>
+        </div>
+        {shipping.auto && !shipping.known && <p className="text-xs font-semibold text-amber-800">{t.product.shipUnknown}</p>}
+        {!shipping.auto && shipping.cls === "PARCEL" && shipping.reasons.length > 0 && (
+          <p className="text-xs font-semibold text-red-600">{fill(t.product.shipWarn, { r: shipping.reasons.map((r) => t.product.shipReasons[r]).join(t.product.shipSep) })}</p>
+        )}
+        <p className="text-xs text-ink-soft">{t.product.shipHint}</p>
       </section>
 
       </fieldset>
@@ -308,5 +351,26 @@ function Check({ name, label, defaultChecked, checked, onChange, note }: {
       {label}
       {note && <span className={`badge ring-1 ${note.tone === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-100" : "bg-brand-50 text-brand-700 ring-brand-100"}`}>{note.text}</span>}
     </label>
+  );
+}
+
+/** Paketmaße (Karton) in cm: Länge × Breite × Höhe – Komma oder Punkt; alle leer = unbekannt */
+function PackageInput({ t, v, onChange }: { t: Dict; v: V; onChange: (patch: Partial<V>) => void }) {
+  const l = v.pkgL ?? "", w = v.pkgW ?? "", h = v.pkgH ?? "";
+  const bad = parseDims(l, w, h) === undefined;
+  const cls = `input num min-w-0 flex-1 px-2 text-center ${bad ? "border-red-400 ring-4 ring-red-100" : ""}`;
+  return (
+    <div>
+      <div className="mb-1 text-xs font-bold text-ink-soft">{t.product.pkg}</div>
+      <div className="flex max-w-md items-center gap-1.5" dir="ltr">
+        <input aria-label={t.product.pkgL} placeholder={t.product.pkgL} inputMode="decimal" value={l} onChange={(e) => onChange({ pkgL: e.target.value })} className={cls} />
+        <span className="text-ink-soft">×</span>
+        <input aria-label={t.product.pkgW} placeholder={t.product.pkgW} inputMode="decimal" value={w} onChange={(e) => onChange({ pkgW: e.target.value })} className={cls} />
+        <span className="text-ink-soft">×</span>
+        <input aria-label={t.product.pkgH} placeholder={t.product.pkgH} inputMode="decimal" value={h} onChange={(e) => onChange({ pkgH: e.target.value })} className={cls} />
+        <span className="text-xs text-ink-soft">cm</span>
+      </div>
+      {bad && <p className="mt-1 text-xs font-semibold text-red-600">{t.product.pkgInvalid}</p>}
+    </div>
   );
 }

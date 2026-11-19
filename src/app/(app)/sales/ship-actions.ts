@@ -90,13 +90,16 @@ export async function createGlsShipmentAction(_: ShipState, fd: FormData): Promi
   const s = await requirePerm("sales.shipping");
   const p = z.object({
     invoiceId: z.string().min(1).max(64), weights: z.string().max(2000), notify: z.string().optional(), pick: z.string().max(20000).optional(), note: z.string().max(1000).default(""),
+    consent: z.string().optional(),
   }).safeParse(Object.fromEntries(fd));
   if (!p.success) return { error: "required" };
   let id: string;
   try {
     const raw = z.array(z.union([z.string().max(20), z.number()])).max(50).parse(JSON.parse(p.data.weights));
     const pick = p.data.pick ? z.record(z.string(), z.number().int().min(0).max(1_000_000)).parse(JSON.parse(p.data.pick)) : null;
-    id = await createGlsShipment({ invoiceId: p.data.invoiceId, parcelsKg: raw.map((w) => parseKg(w) ?? 0), pick, notify: p.data.notify === "1", note: p.data.note }, s.uid);
+    id = await createGlsShipment({
+      invoiceId: p.data.invoiceId, parcelsKg: raw.map((w) => parseKg(w) ?? 0), pick, notify: p.data.notify === "1", note: p.data.note, consent: p.data.consent === "1",
+    }, s.uid);
   } catch (e) { return fail(e); }
   const shop = await pushNow(id);
   return { ok: true, shop, notify: p.data.notify === "1", at: Date.now(), label: id };

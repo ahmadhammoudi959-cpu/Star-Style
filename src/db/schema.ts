@@ -267,6 +267,9 @@ export const products = pgTable("products", {
   tracksExpiry: boolean("tracks_expiry").notNull().default(false),
   inBrandShop: boolean("in_brand_shop").notNull().default(false),
   inGeneralShop: boolean("in_general_shop").notNull().default(true),
+  // Versandart (Wunsch Inhaber 19.11.2026): null = automatisch aus Gewicht/Paketmaßen (src/lib/shipping-class.ts),
+  // PARCEL = immer Paket (GLS), FREIGHT = immer Spedition (Möbel; im Shop Tag „spedition“ → nur Abholung bzw. Anfrage)
+  shippingClass: text("shipping_class").$type<"PARCEL" | "FREIGHT">(),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -282,6 +285,10 @@ export const variants = pgTable("variants", {
   retailPriceCents: integer("retail_price_cents"),
   minStock: integer("min_stock").notNull().default(0),
   weightGrams: integer("weight_grams"), // Gewicht einer Packung in Gramm (Versand nach Gewicht im Shop); null = unbekannt
+  // Paketmaße (Karton) in mm – entscheiden mit dem Gewicht, ob die Ware als GLS-Paket geht (src/lib/shipping-class.ts); null = unbekannt
+  pkgLengthMm: integer("pkg_length_mm"),
+  pkgWidthMm: integer("pkg_width_mm"),
+  pkgHeightMm: integer("pkg_height_mm"),
   imageFileId: text("image_file_id"), // eigenes Foto (z. B. Farbe); sonst Foto des Artikels
   stockQty: integer("stock_qty").notNull().default(0), // Cache; Wahrheit = Summe der Bewegungen
   avgCostCents: integer("avg_cost_cents").notNull().default(0), // gleitender Durchschnitts-EK
@@ -639,6 +646,8 @@ export const shopVariants = pgTable("shop_variants", {
   lastPushedAt: timestamp("last_pushed_at", { withTimezone: true }),
   // zuletzt an den Shop gemeldetes Gewicht (Gramm); weicht es von variants.weight_grams ab, meldet der Worker es (pushDueWeights)
   pushedWeightGrams: integer("pushed_weight_grams"),
+  // zuletzt im Shop gesetzter Tag „spedition“ am Produkt (true/false); weicht er von der Versandart ab, setzt der Worker ihn neu
+  pushedFreight: boolean("pushed_freight"),
   pushError: text("push_error").notNull().default(""),
   seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("shop_variant_unique").on(t.channel, t.shopVariantId), index("shop_variant_ours").on(t.variantId)]);
@@ -713,6 +722,8 @@ export const shipments = pgTable("shipments", {
   /** GLS-Etikett aus dem System (ShipIT): TrackIDs zum Stornieren, Etikett als PDF, Stand created | cancelled */
   glsTrackIds: jsonb("gls_track_ids").$type<string[]>().notNull().default([]),
   glsStatus: text("gls_status").notNull().default(""),
+  // Kunde hat zugestimmt, dass GLS E-Mail/Telefon zur Zustellbenachrichtigung bekommt (GLS-Vertrag: Einwilligung nachweisen)
+  glsContactConsent: boolean("gls_contact_consent").notNull().default(false),
   labelFileId: text("label_file_id"),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   createdBy: text("created_by"),

@@ -9,7 +9,7 @@
  * Fehler: HTTP 4xx/5xx mit den Kopfzeilen „message“ / „error“ / „args“. Endpoint, Benutzer, Passwort und Contact-ID kommen von GLS.
  */
 
-export const GLS_MAX_KG = 40; // GLS-Paket national höchstens 40 kg (EU-Länder je nach Vertrag 31,5 kg)
+export const GLS_MAX_KG = 40; // GLS-Paket höchstens 40 kg (Vertrag 19.11.2026: national und EuroBusinessParcel; AGB 4.2)
 export const GLS_MIN_KG = 0.1;
 export const GLS_MAX_PARCELS = 20;
 export const GLS_SERVICES = ["flex"] as const; // FlexDeliveryService (Kunde wird per E-Mail informiert, kann Zustellung umleiten)

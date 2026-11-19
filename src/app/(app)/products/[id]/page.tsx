@@ -12,6 +12,7 @@ import { DeleteProduct } from "./DeleteProduct";
 import { decodePush, productShopStatus, type PushResult } from "@/lib/shopify/product-push";
 import { fill, type Dict } from "@/i18n";
 import { weightInputParts } from "@/lib/weight";
+import { dimsInputParts, dimsOf } from "@/lib/shipping-class";
 import { galleriesOf } from "@/lib/shopify/gallery";
 import { decodePriceNotes } from "@/lib/shopify/product-push-map";
 import { formatCents } from "@/lib/money";
@@ -42,7 +43,11 @@ export default async function EditProduct({ params, searchParams }: { params: Pr
         category: p.category, supplierId: p.supplierId ?? "", vatRateBp: p.vatRateBp,
         purchasePrice: rights.cost ? toInput(p.purchasePriceCents) : "", wholesalePrice: toInput(p.wholesalePriceCents), retailPrice: toInput(p.retailPriceCents),
         tracksExpiry: p.tracksExpiry, inBrandShop: p.inBrandShop, inGeneralShop: p.inGeneralShop, imageFileId: p.imageFileId, galleries,
-        variants: vs.map((v) => ({ id: v.id, size: v.size, color: v.color, barcode: v.barcode ?? "", minStock: v.minStock, stockQty: v.stockQty, imageFileId: v.imageFileId, ...weightInputParts(v.weightGrams) })),
+        shippingClass: p.shippingClass ?? "",
+        variants: vs.map((v) => ({
+          id: v.id, size: v.size, color: v.color, barcode: v.barcode ?? "", minStock: v.minStock, stockQty: v.stockQty, imageFileId: v.imageFileId,
+          ...weightInputParts(v.weightGrams), ...dimsInputParts(dimsOf(v)),
+        })),
       }} />
       {deletable && rights.edit && <DeleteProduct t={t} id={p.id} />}
     </div>

@@ -226,7 +226,7 @@ export async function embedBandLogo(doc: PDFDocument, fileId: string | null, th:
 export type BandHead = { label: string; number: string; date: string };
 type BandCompany = Pick<typeof schema.companySettings.$inferSelect, "name" | "street" | "zip" | "city" | "owner" | "phone" | "email" | "website" | "bankName" | "iban" | "bic" | "vatId" | "taxNumber">;
 export type FooterLabels = { thanks: string; contact: string; bank: string; tax: string; owner: string; phone: string; page: string };
-export const FOOTER_DE: FooterLabels = { thanks: "Vielen Dank für Ihr Vertrauen.", contact: "Kontakt", bank: "Bankverbindung", tax: "Steuern", owner: "Inhaber", phone: "Tel.", page: "Seite {n} von {m}" };
+export const FOOTER_DE: FooterLabels = { thanks: "Vielen Dank für Ihr Vertrauen.", contact: "Kontakt", bank: "Bankverbindung", tax: "Steuern", owner: "Gesellschafter", phone: "Tel.", page: "Seite {n} von {m}" };
 
 /**
  * Kopf: Logo am Anfang, Belegart/Nummer/Datum am Ende (RTL gespiegelt). Belegdesign: „band“ = Fläche in der Hauptfarbe

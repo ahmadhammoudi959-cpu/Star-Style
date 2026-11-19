@@ -232,6 +232,13 @@
       "when": 1795102152973,
       "tag": "0032_deltapro_weights",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795106964570,
+      "tag": "0033_freight_class",
+      "breakpoints": true
     }
   ]
 }

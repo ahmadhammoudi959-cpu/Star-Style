@@ -4,12 +4,13 @@ import "server-only";
  * - alle 20 s: geänderte Bestände an die Shops melden
  * - alle 5 min: Bestellungen abholen (falls ein Webhook verloren ging) und alle Bestände vergleichen;
  *   im Shop zu löschende Galerie-Fotos und geänderte Preise, bei denen das noch nicht geklappt hat, erneut versuchen;
- *   Gewichte melden, die im Shop noch fehlen oder veraltet sind (pushDueWeights)
+ *   Gewichte melden, die im Shop noch fehlen oder veraltet sind (pushDueWeights); Tag „spedition“ nach der Versandart (pushFreightTags)
  */
 import { runCycle } from "./sync";
 import { retryGalleryDeletes } from "./gallery";
 import { pushDirtyPrices } from "./prices";
 import { pushDueWeights } from "./weights";
+import { pushFreightTags } from "./freight-tags";
 import { retryShipments } from "../shipments";
 import { pushResellerPricesPeriodically, retryShopCompanies } from "./b2b";
 import { syncAllShopCustomers } from "./customers";
@@ -34,6 +35,8 @@ export function startWorker() {
       if (full) await pushDirtyPrices().catch((e) => console.error("shopify prices retry", e));
       // Gewichte, die im Shop noch fehlen oder veraltet sind (Delta-Pro-Abgleich, Shop beim Speichern nicht erreichbar)
       if (full) await pushDueWeights().catch((e) => console.error("shopify weights retry", e));
+      // Versandart → Tag „spedition“ an den Shop-Produkten (Möbel: im Shop nur Abholung/Anfrage; nur Abweichungen)
+      if (full) await pushFreightTags().catch((e) => console.error("shopify freight tags", e));
       // Sendungen, die noch nicht im Shop sind (Shop kurz weg, Abgleich aus, App-Recht fehlte)
       if (full) await retryShipments().catch((e) => console.error("shopify shipments retry", e));
       // Großhandelskunden (جملة الجملة), deren Verbindung im Shop noch aussteht; Preisliste höchstens alle 30 min ganz vergleichen

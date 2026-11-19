@@ -11,6 +11,7 @@ import { consigneeProblem } from "@/lib/gls";
 import { glsConsigneeFor, PICKUP_NAME } from "@/lib/shipments";
 import { can, getAuth } from "@/lib/auth";
 import { carrierChoices } from "@/lib/carriers";
+import { freightByProduct } from "@/lib/freight";
 import { loadCarrierSettings } from "@/lib/carrier-settings";
 
 const TONE: Record<ShippingState, string> = {
@@ -79,6 +80,13 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
     ? (await db.select({ id: schema.variants.id, g: schema.variants.weightGrams }).from(schema.variants).where(inArray(schema.variants.id, variantIds))).map((r) => [r.id, r.g])
     : []);
   const weights = Object.fromEntries(st.open.map((o) => [o.line.id, o.line.variantId ? grams.get(o.line.variantId) ?? null : null]));
+  // GLS-Vertrag (19.11.2026): Speditionsware nie als GLS-Paket; Warenwert je Paket (Haftung 750 €, über 5.000 € ausgeschlossen)
+  const productOfVariant = new Map(variantIds.length
+    ? (await db.select({ id: schema.variants.id, p: schema.variants.productId }).from(schema.variants).where(inArray(schema.variants.id, variantIds))).map((r) => [r.id, r.p])
+    : []);
+  const freightMap = glsReady ? await freightByProduct([...new Set(productOfVariant.values())]) : new Map<string, boolean>();
+  const freight = Object.fromEntries(st.open.map((o) => [o.line.id, Boolean(o.line.variantId && freightMap.get(productOfVariant.get(o.line.variantId) ?? ""))]));
+  const unitNet = Object.fromEntries(st.open.map((o) => [o.line.id, o.line.qty ? Math.round(o.line.netCents / o.line.qty) : 0]));
 
   return (
     <section id="shipping" className="mt-6 grid scroll-mt-20 gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -162,7 +170,7 @@ export async function ShippingPanel({ t, intl, invoiceId, notice }: { t: Dict; i
             <>
               <h3 className="mb-3 flex items-center gap-2 font-bold"><Icon name="plus" className="h-4 w-4 text-brand-600" />{ships.some((s) => !s.cancelledAt) ? S.moreTitle : S.newTitle}</h3>
               <NewShipment t={t} invoiceId={inv.id} shop={shop} names={names} choices={choices} defaultKey={carriers.default} manage={manage}
-                gls={{ ready: glsReady, problem: glsProblem }} weights={weights}
+                gls={{ ready: glsReady, problem: glsProblem }} weights={weights} freight={freight} unitNet={unitNet}
                 open={st.open.map((o) => ({ lineId: o.line.id, description: o.line.description, qty: o.qty }))} />
             </>
           ) : <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><Icon name="check" className="h-4 w-4" />{S.allShipped}</p>}
