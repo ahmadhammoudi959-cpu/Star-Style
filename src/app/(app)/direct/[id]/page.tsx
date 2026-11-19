@@ -12,6 +12,7 @@ import { directOrderDetail } from "@/lib/direct";
 import { customerOptions } from "@/lib/sales-queries";
 import { regionOptions } from "@/lib/regions";
 import { DirectActions, ReopenButton } from "../DirectActions";
+import { LANG_NAMES } from "@/lib/lang-names";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default async function DirectListPage({ params, searchParams }: { params:
   const groupName = { RETAIL: t.customer.RETAIL, WHOLESALE: t.customer.WHOLESALE };
   const country = regionOptions(locale, [o.country]).find((c) => c.code === o.country)?.name ?? o.country;
   const vat = Math.max(0, o.grossCents - o.netCents);
-  const LANGS: Record<string, string> = { de: "Deutsch", ar: "العربية", en: "English", ku: "Kurdî" };
+  const LANGS: Record<string, string> = LANG_NAMES;
 
   const stateBadge = o.state === "done"
     ? <span className="badge bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"><Icon name="check" className="h-3.5 w-3.5" />{D.states.done}</span>

@@ -1130,6 +1130,7 @@ const de = {
     },
     searchHint: "Name, Firma, E-Mail oder Nummer …",
     empty: "Keine neuen Listen.",
+    emptyAll: "Noch keine Listen.",
     emptyHint: "Sobald ein Kunde über den Link eine Liste schickt, steht sie hier – mit Zahl im Menü.",
     noMatch: "Keine Liste gefunden.",
     number: "Nr.",

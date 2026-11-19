@@ -1131,6 +1131,7 @@ const en: Dict = {
     },
     searchHint: "Name, company, e-mail or number …",
     empty: "No new lists.",
+    emptyAll: "No lists yet.",
     emptyHint: "As soon as a customer sends a list through the link, it shows up here – with a number in the menu.",
     noMatch: "No list found.",
     number: "No.",

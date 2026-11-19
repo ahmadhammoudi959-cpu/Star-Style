@@ -7,13 +7,14 @@ import { Icon } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
 import { ALL_PERMS, PERMISSION_GROUPS, PRESETS, effectivePerms, isPerm, type Perm, type PermGroup } from "@/lib/permissions";
 import { resetPasswordAction, saveUserAction, setActiveAction, type UserResult } from "../actions";
+import { LANG_NAME_TAG, LANG_NAMES } from "@/lib/lang-names";
 
 export type UserView = {
   id: string; name: string; email: string; locale: string; admin: boolean; perms: string[];
   active: boolean; mustChange: boolean; twoOn: boolean; self: boolean;
 };
 
-const LANGS = { de: "Deutsch", ar: "العربية", en: "English", ku: "Kurdî" } as const;
+const LANGS = LANG_NAMES;
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
 const closure = (p: Perm) => effectivePerms([p], false);
 
@@ -107,7 +108,7 @@ export function UserForm({ t, u, loginUrl }: { t: Dict; u: UserView; loginUrl: s
             </Field>
             <Field label={t.common.language}>
               <select name="locale" value={locale} onChange={(e) => setLocale(e.target.value)} className="input">
-                {(Object.keys(LANGS) as (keyof typeof LANGS)[]).map((l) => <option key={l} value={l} lang={l}>{LANGS[l]}</option>)}
+                {(Object.keys(LANGS) as (keyof typeof LANGS)[]).map((l) => <option key={l} value={l} lang={LANG_NAME_TAG[l]}>{LANGS[l]}</option>)}
               </select>
             </Field>
           </div>

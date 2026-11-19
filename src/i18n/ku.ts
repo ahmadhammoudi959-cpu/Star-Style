@@ -2063,6 +2063,7 @@ const ku: Dict = {
     },
     searchHint: "Nav, şîrket, e-name an hejmar …",
     empty: "Lîsteyên nû tune.",
+    emptyAll: "Hîn lîste tune.",
     emptyHint: "Gava mişteriyek bi girêdanê lîsteyekê bişîne, ew li vir xuya dibe – bi hejmarekê di menûyê de.",
     noMatch: "Tu lîste nehat dîtin.",
     number: "Hejmar",

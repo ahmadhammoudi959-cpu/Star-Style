@@ -16,11 +16,15 @@ export const dynamic = "force-dynamic";
 
 const STATES = ["new", "done", "rejected", "all"] as const;
 
-/** Direktverkauf (Wunsch Inhaber 19.11.2026): Bestell-Links + Listen, die Kunden darüber schicken */
+/**
+ * Direktverkauf (Wunsch Inhaber 19.11.2026): Bestell-Links + Listen, die Kunden darüber schicken.
+ * Filter: „Alle“ steht zuerst und ist der Standard (Wunsch Inhaber 19.11.2026: „خليه يطلع الكل اول شي لحالو“);
+ * neue Listen sind in der Liste markiert, der Hinweis auf der Startseite öffnet ?state=new.
+ */
 export default async function DirectPage({ searchParams }: { searchParams: Promise<{ state?: string; q?: string }> }) {
   const session = await requirePerm("direct");
   const sp = await searchParams;
-  const state = (STATES as readonly string[]).includes(sp.state ?? "") ? sp.state! : "new";
+  const state = (STATES as readonly string[]).includes(sp.state ?? "") ? sp.state! : "all";
   const q = (sp.q ?? "").slice(0, 100);
   const { t, intl } = await getI18n();
   const D = t.direct;
@@ -57,8 +61,8 @@ export default async function DirectPage({ searchParams }: { searchParams: Promi
 
       <section className="card animate-rise overflow-hidden">
         <form method="get" className="grid grid-cols-2 gap-3 border-b border-black/5 p-4 md:grid-cols-[14rem_1fr_auto] md:items-end">
-          <FilterSelect name="state" label={D.show} allLabel={D.states.new} defaultValue={state === "new" ? "" : state} icon="list"
-            options={(["done", "rejected", "all"] as const).map((s) => ({ value: s, label: D.states[s] }))} />
+          <FilterSelect name="state" label={D.show} allLabel={D.states.all} defaultValue={state === "all" ? "" : state} icon="list"
+            options={(["new", "done", "rejected"] as const).map((s) => ({ value: s, label: D.states[s] }))} />
           <label className="col-span-2 block md:col-span-1">
             <span className="label">{t.common.search.replace(/[ .…]+$/, "")}</span>
             <input name="q" defaultValue={q} placeholder={D.searchHint} className="input" autoComplete="off" />
@@ -66,7 +70,10 @@ export default async function DirectPage({ searchParams }: { searchParams: Promi
           <button className="btn-ghost group col-span-2 md:col-span-1"><Icon name="search" className="icon-pop h-4 w-4" />{t.common.search.replace(/[ .…]+$/, "")}</button>
         </form>
         {rows.length === 0 ? (
-          <div className="space-y-1 p-5 text-sm text-ink-soft"><p className="font-semibold text-ink">{q ? D.noMatch : D.empty}</p>{!q && <p>{D.emptyHint}</p>}</div>
+          <div className="space-y-1 p-5 text-sm text-ink-soft">
+            <p className="font-semibold text-ink">{q ? D.noMatch : state === "all" ? D.emptyAll : state === "new" ? D.empty : D.noMatch}</p>
+            {!q && (state === "all" || state === "new") && <p>{D.emptyHint}</p>}
+          </div>
         ) : (
           <>
             <div className="table-wrap hidden md:block"><table className="tbl tbl-fit">

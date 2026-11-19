@@ -13,7 +13,7 @@ const PAGES: Page[] = [
   { path: "/sales/offers/new", what: "New offer (quote) editor, same as invoice editor; saving reserves stock" },
   { path: "/sales/invoices/<id>", check: "/sales", what: "Invoice detail: PDF, payments (record payment, plan), shipping with tracking number, e-mail to customer, edit (= correction), cancel, return" },
   { path: "/sales/offers/<id>", check: "/sales", what: "Offer detail: turn into invoice, PDF, e-mail, status" },
-  { path: "/direct", what: "Direct sales: lists that customers send through the public order link (catalogue on a tablet or phone, no payment) – order links per price group (copy, WhatsApp, QR), list of received lists" },
+  { path: "/direct", what: "Direct sales: lists that customers send through the public order link (catalogue on a tablet or phone, no payment) – order links per price group (copy, QR), list of received lists (filter: all by default, new / done / declined; ?state=new shows only new ones)" },
   { path: "/direct/<id>", check: "/direct", what: "One received list: requested products, the customer's details, choose the customer (or add a new one) and create a quote or an invoice draft from it; decline" },
   { path: "/returns", what: "Returns list" },
   { path: "/returns/new", what: "Record a return for an issued invoice (back to stock or damaged, refund)" },

@@ -2,9 +2,7 @@
 import { useState } from "react";
 import { setLocale } from "@/app/actions-auth";
 import { Icon } from "./Icon";
-
-const LABELS = { de: "Deutsch", ar: "العربية", en: "English", ku: "Kurdî" } as const;
-type Lang = keyof typeof LABELS;
+import { LANG_NAME_TAG, LANG_NAMES as LABELS, type LangCode as Lang } from "@/lib/lang-names";
 
 export function LanguageSwitcher({ current, compact = false }: { current: Lang; compact?: boolean }) {
   const [busy, setBusy] = useState(false);
@@ -27,7 +25,7 @@ export function LanguageSwitcher({ current, compact = false }: { current: Lang; 
         onChange={(e) => change(e.target.value as Lang)}
         className="cursor-pointer bg-transparent text-sm font-semibold text-ink outline-none"
       >
-        {(Object.keys(LABELS) as Lang[]).map((l) => <option key={l} value={l} lang={l}>{LABELS[l]}</option>)}
+        {(Object.keys(LABELS) as Lang[]).map((l) => <option key={l} value={l} lang={LANG_NAME_TAG[l]}>{LABELS[l]}</option>)}
       </select>
     </label>
   );
