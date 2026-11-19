@@ -3,13 +3,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
-import { shareText, type DirectGroup } from "@/lib/direct-rules";
+import type { DirectGroup } from "@/lib/direct-rules";
 import { directLinkAction } from "./actions";
 
 type D = Dict["direct"];
 export type LinkCardData = { group: DirectGroup; title: string; url: string | null; exists: boolean; on: boolean; since: string | null };
 
-/** Bestell-Links (je Preisgruppe einer): kopieren, per WhatsApp schicken, als Kunde öffnen, QR-Code drucken; Admin: an/aus, neu */
+/** Bestell-Links (je Preisgruppe einer): kopieren, als Kunde öffnen, QR-Code drucken; Admin: an/aus, neu (WhatsApp-Knopf auf Wunsch Inhaber 19.11.2026 entfernt) */
 export function LinkCards({ t, links, mayLink, state }: { t: D; links: LinkCardData[]; mayLink: boolean; state: { on: string; off: string } }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [copied, setCopied] = useState<DirectGroup | null>(null);
@@ -79,9 +79,6 @@ export function LinkCards({ t, links, mayLink, state }: { t: D; links: LinkCardD
                 )}
                 {l.url && l.on && (
                   <div className="flex flex-wrap gap-2">
-                    <a href={`https://wa.me/?text=${encodeURIComponent(shareText(t.shareText, l.url))}`} target="_blank" rel="noopener noreferrer" className="btn-ghost group px-3 py-2 text-xs">
-                      <Icon name="chat" className="icon-pop h-4 w-4" />{t.whatsapp}
-                    </a>
                     <a href={l.url} target="_blank" rel="noopener noreferrer" className="btn-ghost group px-3 py-2 text-xs"><Icon name="eye" className="icon-pop h-4 w-4" />{t.open}</a>
                     <Link href={`/direct/print?g=${l.group}`} className="btn-ghost group px-3 py-2 text-xs"><Icon name="scan" className="icon-pop h-4 w-4" />{t.qr}</Link>
                   </div>

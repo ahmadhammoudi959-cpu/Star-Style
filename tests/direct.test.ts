@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { db, schema } from "../src/db";
 import {
   applyProblems, cartProblems, cartTotals, catalogCategories, directLinkUrl, directState, lineDescription, looksLikeToken, mergeCart,
-  priceRange, productInStock, rateLimited, searchCatalog, shareText, type CatalogProduct,
+  priceRange, productInStock, rateLimited, searchCatalog, type CatalogProduct,
 } from "../src/lib/direct-rules";
 import { parseDirectOrder } from "../src/lib/direct-input";
 
@@ -70,12 +70,11 @@ describe("Bestell-Link – Regeln (rein)", () => {
     expect(lineDescription("Kamm", { size: " ", color: "" })).toBe("Kamm");
   });
 
-  it("Token-Form, Link-Adresse, Text zum Teilen", () => {
+  it("Token-Form, Link-Adresse", () => {
     expect(looksLikeToken("abcdefghijklmnopqrstuvwx")).toBe(true);
     expect(looksLikeToken("abc")).toBe(false);
     expect(looksLikeToken("abcdefghijklmnopqrstuv/x")).toBe(false);
     expect(directLinkUrl("https://star-style.onrender.com/", "T0k")).toBe("https://star-style.onrender.com/b/T0k");
-    expect(shareText("Hier: {url}", "https://x/b/1")).toBe("Hier: https://x/b/1");
   });
 });
 

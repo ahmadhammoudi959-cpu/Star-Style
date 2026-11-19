@@ -2044,7 +2044,6 @@ const ku: Dict = {
     since: "ji {d}",
     copy: "Kopî bike",
     copied: "Hat kopîkirin ✓",
-    whatsapp: "Bi WhatsApp bişîne",
     open: "Wek mişterî veke",
     qr: "Koda QR çap bike",
     off: "Neçalak bike",
@@ -2052,7 +2051,6 @@ const ku: Dict = {
     renew: "Girêdana nû",
     renewConfirm: "Girêdaneke nû çêke? Girêdana kevn êdî naxebite – ya nû ji mişteriyên xwe re bişîne.",
     offConfirm: "Girêdanê neçalak bike? Heta tu dîsa çalak bikî, kes nikare lîsteyekê bişîne.",
-    shareText: "Silav! Li vir tu hemû berhemên Star Style bi bihayan dibînî û dikarî lîsteya xwe ji min re bişînî: {url}",
     show: "Nîşan bide",
     states: {
       new: "Nû",
@@ -2081,7 +2079,6 @@ const ku: Dict = {
     note: "Peyam",
     lang: "Ziman",
     writeMail: "E-name binivîse",
-    whatsappChat: "WhatsApp",
     itemsTitle: "Berhemên xwestî",
     qty: "Hejmar",
     price: "Bihayê net (wek hatî nîşandan)",

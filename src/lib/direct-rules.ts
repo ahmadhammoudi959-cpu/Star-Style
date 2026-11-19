@@ -126,6 +126,3 @@ export type DirectGroup = (typeof DIRECT_GROUPS)[number];
 export const directLinkUrl = (base: string, token: string) => `${base.replace(/\/+$/, "")}/b/${token}`;
 /** Token-Form: 24 Zeichen base64url (18 Zufallsbytes) – alles andere wird gar nicht erst in der Datenbank gesucht */
 export const looksLikeToken = (s: string) => /^[A-Za-z0-9_-]{24}$/.test(s);
-
-/** Nachricht zum Teilen (WhatsApp) – Platzhalter {url} */
-export const shareText = (template: string, url: string) => template.replace("{url}", url);

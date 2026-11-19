@@ -1111,7 +1111,6 @@ const de = {
     since: "seit {d}",
     copy: "Kopieren",
     copied: "Kopiert ✓",
-    whatsapp: "Per WhatsApp schicken",
     open: "Öffnen wie ein Kunde",
     qr: "QR-Code drucken",
     off: "Ausschalten",
@@ -1119,7 +1118,6 @@ const de = {
     renew: "Neuer Link",
     renewConfirm: "Neuen Link erstellen? Der alte Link geht dann nicht mehr – schick deinen Kunden den neuen.",
     offConfirm: "Link ausschalten? Bis du ihn wieder einschaltest, kann niemand eine Liste schicken.",
-    shareText: "Hallo! Hier siehst du alle Artikel von Star Style mit Preisen und kannst mir deine Liste schicken: {url}",
     show: "Anzeigen",
     states: {
       new: "Neu",
@@ -1148,7 +1146,6 @@ const de = {
     note: "Nachricht",
     lang: "Sprache",
     writeMail: "E-Mail schreiben",
-    whatsappChat: "WhatsApp",
     itemsTitle: "Gewünschte Artikel",
     qty: "Menge",
     price: "Preis netto (wie gezeigt)",

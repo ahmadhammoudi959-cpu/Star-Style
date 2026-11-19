@@ -1112,7 +1112,6 @@ const en: Dict = {
     since: "since {d}",
     copy: "Copy",
     copied: "Copied ✓",
-    whatsapp: "Send via WhatsApp",
     open: "Open as a customer",
     qr: "Print QR code",
     off: "Switch off",
@@ -1120,7 +1119,6 @@ const en: Dict = {
     renew: "New link",
     renewConfirm: "Create a new link? The old link stops working – send the new one to your customers.",
     offConfirm: "Switch the link off? Until you switch it on again, nobody can send a list.",
-    shareText: "Hello! Here you can see all Star Style products with prices and send me your list: {url}",
     show: "Show",
     states: {
       new: "New",
@@ -1149,7 +1147,6 @@ const en: Dict = {
     note: "Message",
     lang: "Language",
     writeMail: "Write e-mail",
-    whatsappChat: "WhatsApp",
     itemsTitle: "Requested products",
     qty: "Qty",
     price: "Net price (as shown)",

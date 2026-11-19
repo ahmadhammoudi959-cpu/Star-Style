@@ -140,7 +140,6 @@ export default async function DirectListPage({ params, searchParams }: { params:
             {o.note && row(D.note, <span className="whitespace-pre-line" dir="auto">{o.note}</span>)}
             <div className="mt-3 flex flex-wrap gap-2">
               {can(session, "mail.send") && <Link href={`/mail/compose?to=${encodeURIComponent(o.email)}`} className="btn-ghost group px-3 py-2 text-xs"><Icon name="mail" className="icon-pop h-4 w-4" />{D.writeMail}</Link>}
-              {o.phone && can(session, "whatsapp") && <Link href={`/whatsapp?to=${encodeURIComponent(o.phone)}`} className="btn-ghost group px-3 py-2 text-xs"><Icon name="chat" className="icon-pop h-4 w-4" />{D.whatsappChat}</Link>}
             </div>
           </section>
         </div>
