@@ -1,11 +1,12 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db, schema } from "../src/db";
+import sharp from "sharp";
 import {
-  applyProblems, cartProblems, cartTotals, catalogCategories, directLinkUrl, directState, lineDescription, looksLikeToken, mergeCart,
-  priceRange, productInStock, rateLimited, searchCatalog, type CatalogProduct,
+  DIRECT_PHOTO_LIMITS, applyProblems, cartProblems, cartTotals, catalogCategories, directLinkUrl, directState, lineDescription, listTotals, looksLikeToken,
+  manualPrice, mergeCart, photoLimited, priceRange, productInStock, rateLimited, searchCatalog, type CatalogProduct,
 } from "../src/lib/direct-rules";
-import { parseDirectOrder } from "../src/lib/direct-input";
+import { parseDirectOrder, type DirectOrderInput } from "../src/lib/direct-input";
 
 // Direktverkauf über den Bestell-Link (Wunsch Inhaber 19.11.2026)
 const prod = (o: Partial<CatalogProduct> & { id: string }): CatalogProduct => ({
@@ -104,6 +105,48 @@ describe("Bestell-Link – Eingaben (rein)", () => {
   });
 });
 
+describe("Artikel von Hand – Regeln (rein)", () => {
+  it("Preis: leer = auf Anfrage, deutsch/englisch, Unsinn und Tippfehler (zu hoch) abgelehnt", () => {
+    expect(manualPrice("")).toBeNull();
+    expect(manualPrice("  ")).toBeNull();
+    expect(manualPrice("12,50")).toBe(12_50);
+    expect(manualPrice("12.5")).toBe(12_50);
+    expect(manualPrice("1.234,50 €")).toBe(1234_50);
+    expect(manualPrice("1,234.50")).toBe(1234_50);
+    expect(manualPrice("0")).toBe(0);
+    expect(manualPrice("-3")).toBe("bad");
+    expect(manualPrice("zwölf")).toBe("bad");
+    expect(manualPrice("12,345")).toBe("bad");
+    expect(manualPrice("100000,01")).toBe("bad");
+  });
+  it("Summen: Artikel von Hand mit Preis zählen mit 19 %, ohne Preis nicht", () => {
+    const t = listTotals([{ qty: 1, priceCents: 10_00, vatRateBp: 1900 }], [{ qty: 2, priceCents: 5_00 }, { qty: 3, priceCents: null }, { qty: 1, priceCents: 0 }]);
+    expect(t).toMatchObject({ netCents: 20_00, vatCents: 3_80, grossCents: 23_80 });
+  });
+  it("Fotos: Begrenzung je Netz und insgesamt (24 Stunden)", () => {
+    expect(photoLimited({ ipDay: 0, allDay: 0 }, 0)).toBe(false);
+    expect(photoLimited({ ipDay: DIRECT_PHOTO_LIMITS.perIpDay - 2, allDay: 0 }, 2)).toBe(false);
+    expect(photoLimited({ ipDay: DIRECT_PHOTO_LIMITS.perIpDay - 2, allDay: 0 }, 3)).toBe(true);
+    expect(photoLimited({ ipDay: 0, allDay: DIRECT_PHOTO_LIMITS.allDay }, 1)).toBe(true);
+  });
+  it("Eingaben: nur Artikel von Hand reicht; Name Pflicht, höchstens 10, Foto-Feldnamen p0 … eindeutig", () => {
+    const base = { name: "Ali", email: "ali@example.de", elapsedMs: 9000 };
+    const m = { name: " Stuhl\u0007 ", qty: 2, priceCents: 120_00, size: "XL", color: " Rot ", photo: "p0" };
+    const r = parseDirectOrder({ ...base, manual: [m] });
+    if (!r.ok) throw new Error(r.field);
+    expect(r.data.lines).toEqual([]);
+    expect(r.data.manual).toEqual([{ name: "Stuhl", qty: 2, priceCents: 120_00, size: "XL", color: "Rot", photo: "p0" }]);
+    expect(parseDirectOrder({ ...base, manual: [{ name: "Kamm", qty: 1 }] })).toMatchObject({ ok: true, data: { manual: [{ priceCents: null, photo: null, size: "", color: "" }] } });
+    expect(parseDirectOrder(base)).toEqual({ ok: false, field: "lines" });
+    expect(parseDirectOrder({ ...base, manual: [{ ...m, name: "  " }] })).toEqual({ ok: false, field: "manual" });
+    expect(parseDirectOrder({ ...base, manual: [{ ...m, qty: 0 }] })).toEqual({ ok: false, field: "manual" });
+    expect(parseDirectOrder({ ...base, manual: [{ ...m, priceCents: -1 }] })).toEqual({ ok: false, field: "manual" });
+    expect(parseDirectOrder({ ...base, manual: [{ ...m, photo: "../etc" }] })).toEqual({ ok: false, field: "manual" });
+    expect(parseDirectOrder({ ...base, manual: [m, { ...m }] })).toEqual({ ok: false, field: "manual" }); // gleiches Foto zweimal
+    expect(parseDirectOrder({ ...base, manual: Array.from({ length: 11 }, () => ({ name: "x", qty: 1 })) })).toEqual({ ok: false, field: "manual" });
+  });
+});
+
 const run = process.env.DATABASE_URL ? describe : describe.skip;
 
 run("Bestell-Link (Datenbank)", () => {
@@ -113,7 +156,7 @@ run("Bestell-Link (Datenbank)", () => {
   const ip = () => `10.0.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
   const input = (lines: { variantId: string; qty: number }[], email = `kunde${crypto.randomUUID().slice(0, 6)}@example.de`) => ({
     name: "Nour", email, company: "Salon Nour", phone: "", street: "", zip: "", city: "", country: "DE", vatId: "", note: "Abholung Samstag",
-    website: "", elapsedMs: 9000, lang: "ar" as const, lines,
+    website: "", elapsedMs: 9000, lang: "ar" as const, lines, manual: [] as DirectOrderInput["manual"],
   });
 
   beforeAll(async () => {
@@ -218,6 +261,108 @@ run("Bestell-Link (Datenbank)", () => {
     const row = (await L.listDirectOrders({ state: "done" })).find((x) => x.id === r.id)!;
     expect(row.offer?.number).toBe(o!.number);
     expect(row.customer?.id).toBe(cust);
+  });
+
+  // Artikel von Hand (Wunsch Inhaber 20.11.2026): Foto vom Handy (mit GPS in EXIF) → WebP ohne Metadaten, nur Angebot
+  const phoneJpeg = () => sharp({ create: { width: 2400, height: 1800, channels: 3, background: { r: 200, g: 30, b: 40 } } })
+    .jpeg().withMetadata({ orientation: 6, exif: { IFD0: { Make: "Testphone", Copyright: "GPS 51.65 N 7.34 E" } } }).toBuffer();
+
+  it("Artikel von Hand: Foto neu gerechnet (gedreht, ≤ 1600 px, WebP, ohne Metadaten), Positionen nach dem Katalog, Summe nur mit Preis", async () => {
+    const jpg = await phoneJpeg();
+    const r = await L.submitDirectOrder({ ...input([{ variantId: vIn, qty: 1 }]), manual: [
+      { name: "Barberstuhl Gold", qty: 2, priceCents: 300_00, size: "XL", color: "Gold", photo: "p0" },
+      { name: "Spiegel rund", qty: 1, priceCents: null, size: "", color: "", photo: null },
+    ] }, { ip: ip(), group: "RETAIL", photos: new Map([["p0", jpg], ["p7", Buffer.from("nicht gefragt")]]) });
+    const o = await db.query.directOrders.findFirst({ where: eq(schema.directOrders.id, r.id), with: { lines: true } });
+    expect(o!.netCents).toBe(4_00 + 600_00);
+    const ls = [...o!.lines].sort((a, b) => a.position - b.position);
+    expect(ls.map((l) => [l.position, l.variantId, l.qty, l.unitPriceCents, l.vatRateBp, l.description, l.manual])).toEqual([
+      [1, vIn, 1, 4_00, 1900, "Färbepinsel (Schwarz)", null],
+      [2, null, 2, 300_00, 1900, "Barberstuhl Gold (XL · Gold)", { name: "Barberstuhl Gold", size: "XL", color: "Gold" }],
+      [3, null, 1, 0, 1900, "Spiegel rund", { name: "Spiegel rund", size: "", color: "" }],
+    ]);
+    expect(ls[2].photoFileId).toBeNull();
+    const f = await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, ls[1].photoFileId!) });
+    expect(f).toMatchObject({ mime: "image/webp" });
+    const meta = await sharp(Buffer.from(f!.data)).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(["webp", 1200, 1600]); // EXIF-Drehung angewandt (hoch statt quer)
+    expect(meta.exif).toBeUndefined();
+    expect(Buffer.from(f!.data).includes(Buffer.from("GPS 51.65"))).toBe(false);
+    const d = (await L.directOrderDetail(r.id))!;
+    expect(d.items.map((i) => [i.manual?.name ?? null, i.imageId === ls[1].photoFileId])).toEqual([[null, false], ["Barberstuhl Gold", true], ["Spiegel rund", false]]);
+    const audit = await db.execute<{ after: { manual: number; photos: number } }>(sql`select after from audit_log where entity = 'direct' and entity_id = ${r.id} and action = 'create'`);
+    expect(audit.rows[0].after).toMatchObject({ manual: 2, photos: 1 });
+    // kein Bild → abgelehnt, nichts gespeichert
+    const n = (await db.execute<{ n: string }>(sql`select count(*) as n from direct_orders`)).rows[0].n;
+    await expect(L.submitDirectOrder({ ...input([]), manual: [{ name: "X", qty: 1, priceCents: null, size: "", color: "", photo: "p0" }] },
+      { ip: ip(), group: "RETAIL", photos: new Map([["p0", Buffer.from("<svg onload=alert(1)>")]]) })).rejects.toMatchObject({ code: "photo" });
+    expect((await db.execute<{ n: string }>(sql`select count(*) as n from direct_orders`)).rows[0].n).toBe(n);
+  });
+
+  it("Artikel von Hand: nur Angebot (mit Foto); keine Rechnung, bis er als Artikel angelegt und ersetzt ist; Foto-Rechte; Vorbelegung; Löschen", async () => {
+    const jpg = await phoneJpeg();
+    const r = await L.submitDirectOrder({ ...input([{ variantId: vIn, qty: 1 }]), manual: [{ name: "Waschbecken", qty: 1, priceCents: 250_00, size: "", color: "Weiß", photo: "p0" }] },
+      { ip: ip(), group: "WHOLESALE", photos: new Map([["p0", jpg]]) });
+    await expect(L.convertDirectOrder(r.id, { customerId: cust, kind: "invoice" }, admin)).rejects.toMatchObject({ code: "manual" });
+    const off = await L.convertDirectOrder(r.id, { customerId: cust, kind: "offer" }, admin);
+    const o = await db.query.offers.findFirst({ where: eq(schema.offers.id, off), with: { lines: true } });
+    const ls = [...o!.lines].sort((a, b) => a.position - b.position);
+    const line = (await db.query.directOrderLines.findMany({ where: eq(schema.directOrderLines.orderId, r.id) })).find((l) => l.manual)!;
+    expect(ls.map((l) => [l.variantId, l.description, l.unitPriceCents, l.manual, l.photoFileId])).toEqual([
+      [vIn, "Färbepinsel (Schwarz)", 4_00, false, null], [null, "Waschbecken (Weiß)", 250_00, true, line.photoFileId],
+    ]);
+    const { offerToInvoice, saveOffer } = await import("../src/lib/sales");
+    await expect(offerToInvoice(off, admin)).rejects.toMatchObject({ code: "manualLines" });
+    // Angebots-PDF mit dem Foto (ein Bild mehr als ohne die Zeile von Hand – Logo zählt immer mit)
+    const { offerPdf } = await import("../src/lib/pdf");
+    const images = async () => Buffer.from(await offerPdf(off)).toString("latin1").split("/Subtype /Image").length - 1;
+    const withPhoto = await images();
+    // Foto sehen: Direktverkauf bzw. Verkauf ansehen
+    const { fileNeed } = await import("../src/lib/file-access");
+    expect(await fileNeed(line.photoFileId!)).toEqual(expect.arrayContaining(["direct", "sales.view"]));
+    // „Als Artikel anlegen“: Vorbelegung, Foto als eigene Kopie
+    expect(await L.manualPrefill(line.id)).toMatchObject({ name: "Waschbecken", color: "Weiß", priceCents: 250_00, priceGroup: "WHOLESALE", photoFileId: line.photoFileId });
+    expect(await L.manualPrefill(o!.lines[0].id)).toBeNull();
+    const copy = await L.copyManualPhoto(line.photoFileId!);
+    expect(copy).not.toBe(line.photoFileId);
+    expect(await L.copyManualPhoto(photo)).toBeNull(); // Katalogfoto ist kein Foto von Hand
+    // Zeile im Angebot durch einen echten Artikel ersetzt → Rechnung geht
+    await saveOffer({ id: off, customerId: cust, date: o!.date, validUntil: o!.validUntil, discountBp: 0, notes: "", lines: [
+      { variantId: vIn, description: "Färbepinsel (Schwarz)", qty: 2, unitPriceCents: 4_00, discountBp: 0, vatRateBp: 1900 },
+    ] }, admin);
+    expect(await images()).toBe(withPhoto - 1);
+    const inv = await offerToInvoice(off, admin);
+    expect(inv).toBeTruthy();
+    // Löschen nach Frist: Foto geht mit, außer es hängt noch woanders (hier: noch am Angebot? nein – ersetzt; Liste erledigt = bleibt)
+    const old = await L.submitDirectOrder({ ...input([]), manual: [{ name: "Alt", qty: 1, priceCents: null, size: "", color: "", photo: "p0" }] },
+      { ip: ip(), group: "RETAIL", photos: new Map([["p0", jpg]]) });
+    const oldPhoto = (await db.query.directOrderLines.findFirst({ where: eq(schema.directOrderLines.orderId, old.id) }))!.photoFileId!;
+    await db.update(schema.directOrders).set({ createdAt: new Date(Date.now() - 181 * 86400_000) }).where(eq(schema.directOrders.id, old.id));
+    await L.purgeDirectOrders();
+    expect(await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, oldPhoto) })).toBeUndefined();
+    expect(await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, line.photoFileId!) })).toBeTruthy(); // Liste erledigt → bleibt
+  });
+
+  it("Absenden über die Route: multipart mit Foto, fremde Herkunft 403, zu groß 413, kaputtes Formular 400", async () => {
+    const { POST } = await import("../src/app/api/b/[token]/order/route");
+    const token = await L.newDirectLink("RETAIL", admin);
+    const params = Promise.resolve({ token });
+    const data = JSON.stringify({ ...input([]), manual: [{ name: "Trolley", qty: 1, priceCents: 99_00, size: "", color: "Schwarz", photo: "p0" }] });
+    const form = () => { const fd = new FormData(); fd.append("data", data); fd.append("p0", new Blob([new Uint8Array(jpgSmall)], { type: "image/jpeg" }), "p0.jpg"); return fd; };
+    const jpgSmall = await sharp({ create: { width: 300, height: 200, channels: 3, background: "#123456" } }).jpeg().toBuffer();
+    const req = (body: BodyInit, h: Record<string, string> = { "sec-fetch-site": "same-origin", "x-forwarded-for": ip() }) =>
+      new Request(`http://localhost/api/b/${token}/order`, { method: "POST", headers: h, body });
+    const ok = await POST(req(form()), { params });
+    expect(ok.status).toBe(200);
+    const j = await ok.json() as { number: number };
+    const o = await db.query.directOrders.findFirst({ where: eq(schema.directOrders.number, j.number), with: { lines: true } });
+    expect(o!.lines[0]).toMatchObject({ description: "Trolley (Schwarz)", unitPriceCents: 99_00 });
+    expect(o!.lines[0].photoFileId).toBeTruthy();
+    expect((await POST(req(form(), { "sec-fetch-site": "cross-site" }), { params })).status).toBe(403);
+    const big = new FormData(); big.append("data", data); big.append("p0", new Blob([new Uint8Array(17 * 1024 * 1024)], { type: "image/jpeg" }), "p0.jpg");
+    expect((await POST(req(big), { params })).status).toBe(413);
+    const broken = new FormData(); broken.append("p0", new Blob([new Uint8Array(jpgSmall)]), "p0.jpg");
+    expect((await POST(req(broken), { params })).status).toBe(400);
   });
 
   it("Vorschlag über die E-Mail, Ablehnen und wieder öffnen, Löschen nach Frist", async () => {

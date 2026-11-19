@@ -8,6 +8,7 @@ import { can, requirePerm } from "@/lib/auth";
 import { parseMoney } from "@/lib/money";
 import { audit, receiveGoodsTx } from "@/lib/stock";
 import { storeImage } from "@/lib/files";
+import { copyManualPhoto } from "@/lib/direct";
 import { todayIso } from "@/lib/dates";
 import { deleteProduct, ProductDeleteError } from "@/lib/product-delete";
 import { encodePush, pushProductToShops, pushTargets, setCategoryMapping } from "@/lib/shopify/product-push";
@@ -109,6 +110,7 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   try {
     const img = await storeImage(fd.get("image") as File | null);
     if (img) imageFileId = img; else if (fd.get("imageRemove") === "1") imageFileId = null;
+    else if (!d.id && typeof fd.get("imageFrom") === "string") imageFileId = await copyManualPhoto(String(fd.get("imageFrom"))) ?? undefined;
     for (const v of d.variants) {
       if (!v.ref) continue;
       const vi = await storeImage(fd.get(`vimg_${v.ref}`) as File | null);

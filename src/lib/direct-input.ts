@@ -1,9 +1,10 @@
 /**
  * Eingaben vom Bestell-Link prüfen (öffentlich, ohne Anmeldung – darum streng): Pflicht sind Name, E-Mail und mindestens eine
- * Position; alles andere ist freiwillig und in der Länge begrenzt. Unverbindliche Liste – kein Kauf, kein Bezahlen. Rein, getestet.
+ * Position (aus dem Katalog oder von Hand); alles andere ist freiwillig und in der Länge begrenzt. Unverbindliche Liste – kein
+ * Kauf, kein Bezahlen. Rein, getestet.
  */
 import { z } from "zod";
-import { DIRECT_MAX_LINES, DIRECT_MAX_QTY, cleanVatId, mergeCart, normalizeEmail } from "./direct-rules";
+import { DIRECT_MANUAL_MAX_CENTS, DIRECT_MAX_LINES, DIRECT_MAX_MANUAL, DIRECT_MAX_QTY, cleanVatId, mergeCart, normalizeEmail } from "./direct-rules";
 
 const text = (max: number) => z.string().max(max * 2).transform((s) => s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, max));
 
@@ -26,7 +27,21 @@ export const directOrderSchema = z.object({
   elapsedMs: z.number().int().min(0).max(1e10),
   lang: z.enum(DIRECT_LANGS).default("de"),
   lines: z.array(z.object({ variantId: z.string().min(1).max(64), qty: z.number().int().min(1).max(DIRECT_MAX_QTY) }))
-    .min(1).max(DIRECT_MAX_LINES).transform(mergeCart),
+    .max(DIRECT_MAX_LINES).default([]).transform(mergeCart),
+  /** Artikel von Hand (nicht im System): Name Pflicht, Preis netto je Stück oder null (= auf Anfrage), Foto = Feldname im Formular */
+  manual: z.array(z.object({
+    name: text(120).pipe(z.string().min(1)),
+    qty: z.number().int().min(1).max(DIRECT_MAX_QTY),
+    priceCents: z.number().int().min(0).max(DIRECT_MANUAL_MAX_CENTS).nullable().default(null),
+    size: text(40).default(""),
+    color: text(40).default(""),
+    photo: z.string().regex(/^p\d{1,2}$/).nullable().default(null),
+  })).max(DIRECT_MAX_MANUAL).default([]),
+}).superRefine((d, ctx) => {
+  // mindestens eine Position – aus dem Katalog oder von Hand
+  if (!d.lines.length && !d.manual.length) ctx.addIssue({ code: "custom", path: ["lines"], message: "empty" });
+  const keys = d.manual.flatMap((m) => (m.photo ? [m.photo] : []));
+  if (new Set(keys).size !== keys.length) ctx.addIssue({ code: "custom", path: ["manual"], message: "photo" });
 });
 export type DirectOrderInput = z.infer<typeof directOrderSchema>;
 

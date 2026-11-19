@@ -20,6 +20,8 @@ type Channel = (typeof schema.channel.enumValues)[number];
 export type LineInput = {
   variantId: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; vatRateBp: number;
   externalLineId?: string | null;
+  /** nur Angebote: Artikel von Hand vom Bestell-Link (nicht im System) + sein Foto (src/lib/direct.ts) – Rechnungen übernehmen das nicht */
+  manual?: boolean; photoFileId?: string | null;
 };
 
 function validateLines(lines: LineInput[]) {
@@ -120,7 +122,10 @@ export async function saveOfferTx(tx: Tx, input: OfferInput, userId?: string) {
       }).returning({ id: schema.offers.id });
       offerId = o.id;
     }
-    await tx.insert(schema.offerLines).values(lines.map((l, i) => ({ offerId: offerId!, position: i + 1, ...l })));
+    await tx.insert(schema.offerLines).values(lines.map((l, i) => ({
+      offerId: offerId!, position: i + 1, variantId: l.variantId, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents,
+      discountBp: l.discountBp, vatRateBp: l.vatRateBp, manual: !l.variantId && !!l.manual, photoFileId: l.variantId ? null : l.photoFileId ?? null,
+    })));
     // Ware für die Gültigkeitsdauer reservieren (bis Ende des letzten Tages)
     const perVariant = new Map<string, number>();
     lines.forEach((l) => l.variantId && perVariant.set(l.variantId, (perVariant.get(l.variantId) ?? 0) + l.qty));
@@ -176,6 +181,10 @@ export async function offerToInvoice(offerId: string, userId?: string) {
       if (inv) return inv.id;
     }
     if (["REJECTED", "EXPIRED"].includes(o.status)) throw new SalesError("locked");
+    // Artikel von Hand (nicht im System) gehen nicht in eine Rechnung: erst als Artikel anlegen und im Angebot ersetzen
+    // (Wunsch Inhaber 20.11.2026: „بندخله كمنتج نظامي بالسيستم وبعدين … بعرض سعر جديد وفاتوره نظاميه“)
+    const manual = o.lines.filter((l) => l.manual);
+    if (manual.length) throw new SalesError("manualLines", manual.map((l) => l.description).join(", ").slice(0, 300));
     const id = await createDraft(tx, {
       customerId: o.customerId, offerId: o.id, channel: "STORE", discountBp: o.discountBp, notes: o.notes,
       lines: o.lines.sort((a, b) => a.position - b.position).map((l) => ({

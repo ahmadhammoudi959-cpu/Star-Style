@@ -24,14 +24,18 @@ import { addDaysIso, todayIso } from "./dates";
 import { productPhotoIds } from "./product-photos";
 import { activeDiscounts } from "./promotions";
 import { discounted } from "./promo-rules";
+import { directPhotoWebp } from "./direct-photos";
 import {
-  DIRECT_GROUPS, DIRECT_KEEP_DAYS, DIRECT_MIN_FILL_MS, cartProblems, cartTotals, directState, lineDescription, looksLikeToken, rateLimited,
-  type CatalogProduct, type DirectGroup, type DirectState,
+  DIRECT_GROUPS, DIRECT_KEEP_DAYS, DIRECT_MANUAL_VAT_BP, DIRECT_MIN_FILL_MS, cartProblems, directState, lineDescription, listTotals, looksLikeToken,
+  photoLimited, rateLimited, type CatalogProduct, type DirectGroup, type DirectState,
 } from "./direct-rules";
 import type { DirectOrderInput } from "./direct-input";
 
 export class DirectError extends Error {
-  constructor(public code: "closed" | "rate" | "bot" | "unavailable" | "notFound" | "done" | "customer" | "noLines", public problems?: { variantId: string; available: number }[]) {
+  constructor(
+    public code: "closed" | "rate" | "bot" | "unavailable" | "notFound" | "done" | "customer" | "noLines" | "photo" | "photoRate" | "manual",
+    public problems?: { variantId: string; available: number }[],
+  ) {
     super(code);
   }
 }
@@ -178,8 +182,13 @@ export async function catalogPhotoIds(productId: string): Promise<string[] | nul
 // ───────────────────────── Liste absenden (öffentlich) ─────────────────────────
 const ipHashOf = (ip: string) => createHmac("sha256", process.env.SESSION_SECRET ?? "dev").update(`direct-ip:${ip}`).digest("hex").slice(0, 32);
 
-export async function submitDirectOrder(input: DirectOrderInput, ctx: { ip: string; group: DirectGroup }): Promise<{ number: number; id: string }> {
+/**
+ * Liste speichern. `photos` = Fotos der Artikel von Hand aus dem Formular (Feldname p0, p1 … → Bytes, Größe schon begrenzt);
+ * sie werden neu gerechnet (direct-photos.ts) und in DERSELBEN Transaktion wie die Liste gespeichert.
+ */
+export async function submitDirectOrder(input: DirectOrderInput, ctx: { ip: string; group: DirectGroup; photos?: Map<string, Buffer> }): Promise<{ number: number; id: string }> {
   if (input.website.trim() || input.elapsedMs < DIRECT_MIN_FILL_MS) throw new DirectError("bot");
+  if (!input.lines.length && !input.manual.length) throw new DirectError("noLines");
   const ipHash = ipHashOf(ctx.ip || "-");
   const c = (await db.execute<Record<string, string>>(sql`select
       count(*) filter (where ip_hash = ${ipHash} and created_at > now() - interval '1 hour') as ip_hour,
@@ -190,13 +199,28 @@ export async function submitDirectOrder(input: DirectOrderInput, ctx: { ip: stri
   if (rateLimited({ ipHour: Number(c.ip_hour ?? 0), ipDay: Number(c.ip_day ?? 0), emailDay: Number(c.email_day ?? 0), allHour: Number(c.all_hour ?? 0) }))
     throw new DirectError("rate");
 
+  // Fotos der Artikel von Hand: nur die, auf die eine Position zeigt; Begrenzung je Netz und insgesamt (24 h)
+  const wanted = input.manual.flatMap((m) => (m.photo && ctx.photos?.has(m.photo) ? [m.photo] : []));
+  if (wanted.length) {
+    const pc = (await db.execute<Record<string, string>>(sql`select count(*) filter (where o.ip_hash = ${ipHash}) as ip_day, count(*) as all_day
+      from direct_order_lines l join direct_orders o on o.id = l.order_id
+      where l.photo_file_id is not null and o.created_at > now() - interval '1 day'`)).rows[0] ?? {};
+    if (photoLimited({ ipDay: Number(pc.ip_day ?? 0), allDay: Number(pc.all_day ?? 0) }, wanted.length)) throw new DirectError("photoRate");
+  }
+  const webp = new Map<string, Buffer>();
+  for (const key of wanted) { // nacheinander (Speicher)
+    const out = await directPhotoWebp(ctx.photos!.get(key)!);
+    if (!out) throw new DirectError("photo");
+    webp.set(key, out);
+  }
+
   const PRICE = priceOf(ctx.group);
   const ids = input.lines.map((l) => l.variantId);
-  const rows = (await db.execute<Record<string, unknown>>(sql`
+  const rows = ids.length ? (await db.execute<Record<string, unknown>>(sql`
     select v.id, v.product_id, p.name_de, v.size, v.color, coalesce(v.barcode, '') as barcode, p.vat_rate_bp, ${PRICE} as price, ${AVAILABLE} as available
     from variants v join products p on p.id = v.product_id
-    where v.id in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)}) and v.active and ${PUBLIC_PRODUCT} and ${PRICE} > 0`)).rows;
-  const promo = await activeDiscounts("DIRECT", [...new Set(rows.map((x) => String(x.product_id)))]);
+    where v.id in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)}) and v.active and ${PUBLIC_PRODUCT} and ${PRICE} > 0`)).rows : [];
+  const promo = rows.length ? await activeDiscounts("DIRECT", [...new Set(rows.map((x) => String(x.product_id)))]) : new Map<string, number>();
   const info = new Map(rows.map((x) => [String(x.id), x]));
   const problems = cartProblems(input.lines, new Map(rows.map((x) => [String(x.id), Number(x.available)])));
   if (problems.length) throw new DirectError("unavailable", problems);
@@ -208,16 +232,38 @@ export async function submitDirectOrder(input: DirectOrderInput, ctx: { ip: stri
       description: lineDescription(String(x.name_de), { size: String(x.size), color: String(x.color) }), promoBp: promo.get(String(x.product_id)) ?? 0,
     };
   });
+  // Artikel von Hand: nach den Katalog-Artikeln, Preis 0 = ohne Preis (auf Anfrage), MwSt. Regelsatz
+  const manual = input.manual.map((m, i) => ({
+    position: lines.length + i + 1, variantId: null, qty: m.qty, unitPriceCents: m.priceCents ?? 0, vatRateBp: DIRECT_MANUAL_VAT_BP, barcode: "",
+    description: lineDescription(m.name, { size: m.size, color: m.color }), promoBp: 0,
+    manual: { name: m.name, size: m.size, color: m.color }, photoKey: m.photo && webp.has(m.photo) ? m.photo : null,
+  }));
   // Summen mit dem Preis, den der Kunde gesehen hat (Aktion: mit Rabatt); gespeichert wird der Preis vorher + Rabatt
-  const totals = cartTotals(lines.map((l) => ({ qty: l.qty, priceCents: l.promoBp ? discounted(l.unitPriceCents, l.promoBp) : l.unitPriceCents, vatRateBp: l.vatRateBp })));
+  const totals = listTotals(
+    lines.map((l) => ({ qty: l.qty, priceCents: l.promoBp ? discounted(l.unitPriceCents, l.promoBp) : l.unitPriceCents, vatRateBp: l.vatRateBp })),
+    input.manual,
+  );
   return db.transaction(async (tx) => {
     const [o] = await tx.insert(schema.directOrders).values({
       name: input.name, email: input.email, company: input.company, phone: input.phone, street: input.street, zip: input.zip, city: input.city,
       country: input.country, vatId: input.vatId, note: input.note, lang: input.lang, priceGroup: ctx.group,
       netCents: totals.netCents, grossCents: totals.grossCents, ipHash,
     }).returning({ id: schema.directOrders.id, number: schema.directOrders.number });
-    await tx.insert(schema.directOrderLines).values(lines.map((l) => ({ ...l, orderId: o.id })));
-    await audit(tx, { entity: "direct", entityId: o.id, action: "create", after: { number: o.number, email: input.email, group: ctx.group, lines: lines.length, netCents: totals.netCents, source: "link" } });
+    const fileOf = new Map<string, string>();
+    for (const [key, buf] of webp) {
+      const [f] = await tx.insert(schema.storedFiles).values({
+        name: `liste-${o.number}-${key}.webp`, mime: "image/webp", size: buf.length, sha256: createHash("sha256").update(buf).digest("hex"), data: buf,
+      }).returning({ id: schema.storedFiles.id });
+      fileOf.set(key, f.id);
+    }
+    const all = [
+      ...lines.map((l) => ({ ...l, orderId: o.id })),
+      ...manual.map(({ photoKey, ...m }) => ({ ...m, orderId: o.id, photoFileId: photoKey ? fileOf.get(photoKey) ?? null : null })),
+    ];
+    await tx.insert(schema.directOrderLines).values(all);
+    await audit(tx, { entity: "direct", entityId: o.id, action: "create", after: {
+      number: o.number, email: input.email, group: ctx.group, lines: lines.length, manual: manual.length, photos: fileOf.size, netCents: totals.netCents, source: "link",
+    } });
     return { number: o.number, id: o.id };
   });
 }
@@ -291,6 +337,8 @@ export type DirectItem = {
   vatRateBp: number; imageId: string | null; available: number | null; groupPrice: { WHOLESALE: number; RETAIL: number } | null;
   /** Rabatt einer Aktion, mit dem die Zeile am Bestell-Link gezeigt wurde (0 = keiner) */
   promoBp: number;
+  /** Artikel von Hand (nicht im System) – Name/Größe/Farbe wie eingetippt; imageId = sein Foto */
+  manual: { name: string; size: string; color: string } | null;
 };
 export type DirectDetail = DirectRow & {
   street: string; zip: string; city: string; country: string; vatId: string; note: string; lang: string;
@@ -302,7 +350,7 @@ export async function directOrderDetail(id: string): Promise<DirectDetail | null
   const x = r.rows[0];
   if (!x) return null;
   const items = (await db.execute<Record<string, unknown>>(sql`
-    select l.*, v.product_id, coalesce(v.image_file_id, p.image_file_id) as image_id,
+    select l.*, v.product_id, coalesce(l.photo_file_id, v.image_file_id, p.image_file_id) as image_id,
       case when v.id is null then null else ${AVAILABLE} end as available,
       coalesce(v.wholesale_price_cents, p.wholesale_price_cents) as wholesale, coalesce(v.retail_price_cents, p.retail_price_cents) as retail
     from direct_order_lines l left join variants v on v.id = l.variant_id left join products p on p.id = v.product_id
@@ -316,8 +364,49 @@ export async function directOrderDetail(id: string): Promise<DirectDetail | null
       barcode: String(l.barcode), qty: Number(l.qty), unitPriceCents: Number(l.unit_price_cents), vatRateBp: Number(l.vat_rate_bp),
       imageId: (l.image_id as string) ?? null, available: l.available == null ? null : Number(l.available),
       groupPrice: l.product_id ? { WHOLESALE: Number(l.wholesale), RETAIL: Number(l.retail) } : null, promoBp: Number(l.promo_bp ?? 0),
+      manual: manualOf(l.manual),
     })),
   };
+}
+
+function manualOf(v: unknown): DirectItem["manual"] {
+  if (!v || typeof v !== "object") return null;
+  const m = v as Record<string, unknown>;
+  return { name: String(m.name ?? ""), size: String(m.size ?? ""), color: String(m.color ?? "") };
+}
+
+/**
+ * Artikel von Hand → als normalen Artikel anlegen (Knopf an der Liste): Vorbelegung fürs Artikel-Formular. Preis = der
+ * eingetippte Preis in der Preisgruppe des Links (جملة → Großhandelspreis Salon, جملة الجملة → Wiederverkäuferpreis).
+ */
+export async function manualPrefill(lineId: string) {
+  const r = await db.execute<Record<string, unknown>>(sql`
+    select l.manual, l.unit_price_cents, l.photo_file_id, o.price_group, o.number, o.id as order_id from direct_order_lines l join direct_orders o on o.id = l.order_id
+    where l.id = ${lineId} and l.manual is not null`);
+  const x = r.rows[0];
+  const m = x ? manualOf(x.manual) : null;
+  if (!x || !m) return null;
+  return {
+    ...m, priceCents: Number(x.unit_price_cents), photoFileId: (x.photo_file_id as string) ?? null, listNumber: Number(x.number), orderId: String(x.order_id),
+    priceGroup: (x.price_group === "WHOLESALE" ? "WHOLESALE" : "RETAIL") as DirectGroup,
+  };
+}
+
+/** Foto eines Artikels von Hand als eigenes Artikelfoto kopieren (Artikel und Liste bleiben unabhängig); null = kein solches Foto */
+export async function copyManualPhoto(fileId: string): Promise<string | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(fileId) || !(await isManualPhoto(fileId))) return null;
+  const f = await db.query.storedFiles.findFirst({ where: eq(schema.storedFiles.id, fileId) });
+  if (!f) return null;
+  const [row] = await db.insert(schema.storedFiles).values({ name: `artikel-${f.name}`.slice(0, 200), mime: f.mime, size: f.size, sha256: f.sha256, data: f.data })
+    .returning({ id: schema.storedFiles.id });
+  return row.id;
+}
+
+/** Ist diese Datei das Foto eines Artikels von Hand? (darf dann Artikelfoto werden) */
+export async function isManualPhoto(fileId: string): Promise<boolean> {
+  const r = await db.execute<{ ok: boolean }>(sql`select exists(select 1 from direct_order_lines where photo_file_id = ${fileId} and manual is not null)
+    or exists(select 1 from offer_lines where photo_file_id = ${fileId} and manual) as ok`);
+  return !!r.rows[0]?.ok;
 }
 
 /** Angaben aus der Liste, um den Kunden im normalen Kundenformular vorzubelegen („Neuen Kunden anlegen“ an der Liste) */
@@ -367,6 +456,8 @@ export async function convertDirectOrder(id: string, opts: { customerId: string;
     const o = await lockOrder(tx, id);
     if (directState(o) !== "new") throw new DirectError("done");
     if (!o.lines.length) throw new DirectError("noLines");
+    // Artikel von Hand gibt es im System nicht → nur Angebot (Wunsch Inhaber 20.11.2026: „ما حنحول ابدا لفاتوره، بس كعرض سعر“)
+    if (opts.kind === "invoice" && o.lines.some((l) => l.manual)) throw new DirectError("manual");
     const customer = await tx.query.customers.findFirst({ where: eq(schema.customers.id, opts.customerId) });
     if (!customer) throw new DirectError("customer");
 
@@ -377,6 +468,8 @@ export async function convertDirectOrder(id: string, opts: { customerId: string;
       from variants v join products p on p.id = v.product_id where v.id in (${sql.join(vids.map((v) => sql`${v}`), sql`, `)})`)).rows : [];
     const byId = new Map(cur.map((x) => [String(x.id), x]));
     const lines = [...o.lines].sort((a, b) => a.position - b.position).map((l) => {
+      // Artikel von Hand: Text, Preis und Foto wie eingetippt – im Angebot als „von Hand“ markiert (für die Rechnung erst als Artikel anlegen)
+      if (l.manual) return { variantId: null, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: 0, vatRateBp: l.vatRateBp, manual: true, photoFileId: l.photoFileId };
       const x = l.variantId ? byId.get(l.variantId) : undefined;
       // Aktion: der Rabatt, den der Kunde am Link gesehen hat, bleibt als Positionsrabatt (auch wenn die Aktion inzwischen vorbei ist)
       if (!x) return { variantId: null, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.promoBp ?? 0, vatRateBp: l.vatRateBp };
@@ -407,8 +500,24 @@ export async function convertDirectOrder(id: string, opts: { customerId: string;
 
 /** Datenschutz (steht so auf der Seite): abgelehnte nach 90 Tagen, Listen ohne Angebot/Rechnung nach 180 Tagen löschen */
 export async function purgeDirectOrders(): Promise<number> {
-  const r = await db.execute(sql`delete from direct_orders where
-    (status = 'REJECTED' and coalesce(handled_at, created_at) < now() - make_interval(days => ${DIRECT_KEEP_DAYS.rejected}))
-    or (status <> 'REJECTED' and invoice_id is null and offer_id is null and created_at < now() - make_interval(days => ${DIRECT_KEEP_DAYS.open}))`);
-  return r.rowCount ?? 0;
+  const due = sql`(o.status = 'REJECTED' and coalesce(o.handled_at, o.created_at) < now() - make_interval(days => ${DIRECT_KEEP_DAYS.rejected}))
+    or (o.status <> 'REJECTED' and o.invoice_id is null and o.offer_id is null and o.created_at < now() - make_interval(days => ${DIRECT_KEEP_DAYS.open}))`;
+  return db.transaction(async (tx) => {
+    // Fotos der Artikel von Hand gehen mit – außer sie stecken noch in einem Angebot oder sind inzwischen Artikelfoto
+    const photos = (await tx.execute<{ id: string }>(sql`select l.photo_file_id as id from direct_order_lines l join direct_orders o on o.id = l.order_id
+      where l.photo_file_id is not null and (${due})`)).rows.map((x) => String(x.id));
+    const r = await tx.execute(sql`delete from direct_orders o where ${due}`);
+    if (photos.length) await deleteUnusedPhotos(tx, photos);
+    return r.rowCount ?? 0;
+  });
+}
+
+/** Fotos von Hand löschen, auf die nichts mehr zeigt (Liste, Angebot, Artikel, Größe/Farbe, Shop-Galerie) */
+async function deleteUnusedPhotos(tx: Tx, ids: string[]) {
+  await tx.execute(sql`delete from stored_files f where f.id in (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})
+    and not exists(select 1 from direct_order_lines l where l.photo_file_id = f.id)
+    and not exists(select 1 from offer_lines l where l.photo_file_id = f.id)
+    and not exists(select 1 from products p where p.image_file_id = f.id)
+    and not exists(select 1 from variants v where v.image_file_id = f.id)
+    and not exists(select 1 from shop_media m where m.file_id = f.id)`);
 }

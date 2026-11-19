@@ -13,9 +13,11 @@ const errText = (t: D, code?: string) => (code && code in t.errors ? t.errors[co
  * Liste → Kunde wählen (oder ganz normal neu anlegen) → Angebot oder Rechnungsentwurf. Das System legt keinen Kunden
  * selbst an (Wunsch Inhaber 19.11.2026: „بيختار هو بقى الزبون شو اسمه … طلع له عرض سعر، طلع له فاتوره“).
  */
-export function DirectActions({ t, id, customers, preselect, suggestionId, rights, newCustomerHref, groupNames, priceGroupLabel }: {
+export function DirectActions({ t, id, customers, preselect, suggestionId, rights, newCustomerHref, groupNames, priceGroupLabel, manualCount = 0 }: {
   t: D; id: string; customers: Opt[]; preselect: string; suggestionId: string | null; rights: { offer: boolean; invoice: boolean };
   newCustomerHref: string | null; groupNames: Record<"WHOLESALE" | "RETAIL", string>; priceGroupLabel: string;
+  /** Artikel von Hand in der Liste → nur Angebot (Rechnung erst, wenn sie als Artikel angelegt sind) */
+  manualCount?: number;
 }) {
   const [cid, setCid] = useState(preselect);
   const [cq, setCq] = useState("");
@@ -73,13 +75,15 @@ export function DirectActions({ t, id, customers, preselect, suggestionId, right
         )}
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="btn-ghost group" disabled={!rights.offer || !!busy} onClick={() => make("offer")} data-make="offer" title={rights.offer ? undefined : t.errors.noRight}>
+        <button type="button" className={manualCount > 0 ? "btn-primary group" : "btn-ghost group"} disabled={!rights.offer || !!busy} onClick={() => make("offer")} data-make="offer" title={rights.offer ? undefined : t.errors.noRight}>
           <Icon name="file" className="icon-pop h-4 w-4" />{t.makeOffer}
         </button>
-        <button type="button" className="btn-primary group" disabled={!rights.invoice || !!busy} onClick={() => make("invoice")} data-make="invoice" title={rights.invoice ? undefined : t.errors.noRight}>
+        <button type="button" className={manualCount > 0 ? "btn-ghost group" : "btn-primary group"} disabled={!rights.invoice || !!busy || manualCount > 0} onClick={() => make("invoice")} data-make="invoice"
+          title={manualCount > 0 ? t.errors.manual : rights.invoice ? undefined : t.errors.noRight}>
           <Icon name="receipt" className="icon-pop h-4 w-4" />{t.makeInvoice}
         </button>
       </div>
+      {manualCount > 0 && <p className="text-xs font-semibold text-amber-800" data-manual-only-offer>{t.manualOnlyOffer}</p>}
       <p className="text-xs text-ink-soft">{t.makeHint}</p>
       {err && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 ring-1 ring-red-200" role="alert">{err}</p>}
       <div className="border-t border-black/5 pt-3">

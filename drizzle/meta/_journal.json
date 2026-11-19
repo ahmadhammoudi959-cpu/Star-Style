@@ -253,6 +253,13 @@
       "when": 1795123300741,
       "tag": "0035_promotions",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795130102538,
+      "tag": "0036_direct_manual",
+      "breakpoints": true
     }
   ]
 }

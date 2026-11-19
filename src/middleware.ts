@@ -90,9 +90,10 @@ export const config = {
   // erst in Next 16 behoben). Kommt ein Upload über ~64 KB in Stücken an (Render-Proxy), fehlte der Action der Anfang
   // samt Datei (06.11.2026: „Beleg lesen“ → pickFirst, Belegfotos/Produktfotos still weg).
   // Sicher, weil jede Server-Action selbst requireSession() prüft (gleiche Prüfung inkl. Sitzungs-Version) und der Webhook per HMAC.
+  // api/b/ = Bestell-Link für Kunden (öffentlich, prüft selbst das Token; Liste mit Fotos von Artikeln von Hand bis 16 MB).
   matcher: [
     {
-      source: "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|fonts/|api/shopify/webhook|api/whatsapp/webhook|api/backup/upload|api/temp-files).*)",
+      source: "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|fonts/|api/shopify/webhook|api/whatsapp/webhook|api/backup/upload|api/temp-files|api/b/).*)",
       missing: [{ type: "header", key: "next-action" }],
     },
   ],

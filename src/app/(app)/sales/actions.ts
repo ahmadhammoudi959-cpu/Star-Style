@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { sendMail } from "@/lib/mail";
 import { loadMailSettings } from "@/lib/mailbox";
@@ -25,6 +25,9 @@ const Line = z.object({
   unitPriceCents: z.coerce.number().int().min(0),
   discountBp: z.coerce.number().int().min(0).max(10000),
   vatRateBp: z.coerce.number().int().refine((n) => [0, 700, 1900].includes(n)),
+  // Artikel von Hand vom Bestell-Link (nur Angebote): Kennzeichen + Foto – das Foto prüft keepManualPhotos
+  manual: z.boolean().optional(),
+  photoFileId: z.string().max(64).nullable().optional(),
 });
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const lines = z.string().transform((s) => JSON.parse(s)).pipe(z.array(Line));
@@ -70,6 +73,22 @@ async function belowListPrice(customerId: string, ls: { variantId: string | null
 const discountDenied = async (s: Parameters<typeof can>[0], d: { customerId: string; discountBp: number; lines: { variantId: string | null; unitPriceCents: number; discountBp: number }[] }) =>
   !can(s, "sales.discount") && ((await hasDiscount(d)) || (await belowListPrice(d.customerId, d.lines)));
 
+/**
+ * Fotos an Angebotspositionen gibt es nur für Artikel von Hand aus einer Liste vom Bestell-Link: eine Foto-ID bleibt nur, wenn
+ * sie schon an einer solchen Position hängt (sonst könnte man über ein Angebot beliebige Dateien – z. B. Belege – sichtbar machen).
+ */
+async function keepManualPhotos<T extends { variantId: string | null; manual?: boolean; photoFileId?: string | null }>(lines: T[]): Promise<T[]> {
+  const ids = [...new Set(lines.flatMap((l) => (!l.variantId && l.photoFileId ? [l.photoFileId] : [])))];
+  const ok = new Set<string>();
+  if (ids.length) {
+    const list = sql.join(ids.map((i) => sql`${i}`), sql`, `);
+    const r = await db.execute<{ id: string }>(sql`select photo_file_id as id from direct_order_lines where photo_file_id in (${list}) and manual is not null
+      union select photo_file_id from offer_lines where photo_file_id in (${list}) and manual`);
+    r.rows.forEach((x) => ok.add(String(x.id)));
+  }
+  return lines.map((l) => ({ ...l, manual: !l.variantId && !!l.manual, photoFileId: !l.variantId && l.photoFileId && ok.has(l.photoFileId) ? l.photoFileId : null }));
+}
+
 export async function saveOfferAction(_: DocState, fd: FormData): Promise<DocState> {
   const s = await requirePerm("sales.offers");
   const p = OfferIn.safeParse(Object.fromEntries(fd));
@@ -77,7 +96,7 @@ export async function saveOfferAction(_: DocState, fd: FormData): Promise<DocSta
   if (!p.data.lines.length) return { error: "noLines" };
   if (await discountDenied(s, p.data)) return { error: "noRight" };
   let id: string;
-  try { id = await saveOffer(p.data, s.uid); } catch (e) { return fail(e); }
+  try { id = await saveOffer({ ...p.data, lines: await keepManualPhotos(p.data.lines) }, s.uid); } catch (e) { return fail(e); }
   revalidatePath("/sales");
   redirect(`/sales/offers/${id}`);
 }
@@ -114,7 +133,9 @@ export async function saveInvoiceAction(_: DocState, fd: FormData): Promise<DocS
   const p = InvoiceIn.safeParse(Object.fromEntries(fd));
   if (!p.success) return { error: p.error.issues[0]?.path[0] === "customerId" ? "noCustomer" : "required" };
   if (!p.data.lines.length) return { error: "noLines" };
-  const { intent, ...d } = p.data;
+  const { intent, ...raw } = p.data;
+  // Rechnungen: keine Artikel von Hand, keine Fotos (nur Angebote) – die Kennzeichen fallen hier weg
+  const d = { ...raw, lines: raw.lines.map(({ manual: _m, photoFileId: _p, ...l }) => l) };
   // Rabatt, Zahlung bei Ausstellung, Ratenplan und Korrektur einer ausgestellten Rechnung = eigene Rechte
   if ((await discountDenied(s, d)) || (d.initialPaymentCents > 0 && !can(s, "payments.record"))
     || (d.installments.length > 0 && !can(s, "payments.plans")) || (d.replacesInvoiceId && !can(s, "sales.correct"))) return { error: "noRight" };

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getI18n, fill } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Thumb } from "@/components/Thumb";
+import { ZoomThumb } from "@/components/ZoomThumb";
 import { Icon } from "@/components/Icon";
 import { DoneNotice } from "@/components/DoneNotice";
 import { can, requirePerm } from "@/lib/auth";
@@ -30,6 +31,21 @@ export default async function DirectListPage({ params, searchParams }: { params:
   const country = regionOptions(locale, [o.country]).find((c) => c.code === o.country)?.name ?? o.country;
   const vat = Math.max(0, o.grossCents - o.netCents);
   const LANGS: Record<string, string> = LANG_NAMES;
+  // Artikel von Hand (nicht im System): Foto groß, „Als Artikel anlegen“ (Formular vorbelegt), nur Angebot
+  const manualCount = o.items.filter((l) => l.manual).length;
+  const mayCreate = can(session, "products.edit");
+  const ownInfo = (l: (typeof o.items)[number]) => l.manual && (
+    <span className="mt-1 flex flex-wrap items-center gap-2">
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200" data-manual-item>
+        <Icon name="camera" className="h-3.5 w-3.5" />{D.manualBadge}
+      </span>
+      {mayCreate && <Link href={`/products/new?direct=${l.id}`} className="text-xs font-semibold text-brand-700 hover:underline" data-manual-create>{D.manualCreate}</Link>}
+    </span>
+  );
+  const photo = (l: (typeof o.items)[number], size: number) => l.manual && l.imageId
+    ? <a href={`/api/files/${l.imageId}`} target="_blank" rel="noopener" title={D.manualPhoto} className="shrink-0"><ZoomThumb id={l.imageId} size={size} info={{ title: l.description, sub: D.manualBadge }} /></a>
+    : <Thumb id={l.imageId} size={size} />;
+  const unitShown = (l: (typeof o.items)[number]) => (l.manual && !l.unitPriceCents ? <span className="text-xs font-semibold text-ink-soft">{D.manualNoPrice}</span> : unit(l));
 
   const stateBadge = o.state === "done"
     ? <span className="badge bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"><Icon name="check" className="h-3.5 w-3.5" />{D.states.done}</span>
@@ -42,7 +58,7 @@ export default async function DirectListPage({ params, searchParams }: { params:
     const pre = sp.customer && customers.some((c) => c.id === sp.customer) ? sp.customer : o.suggestion?.id ?? "";
     side = (
       <DirectActions t={D} id={o.id} customers={customers} preselect={pre} suggestionId={o.suggestion?.id ?? null}
-        rights={{ offer: can(session, "sales.offers"), invoice: can(session, "sales.invoices") }}
+        rights={{ offer: can(session, "sales.offers"), invoice: can(session, "sales.invoices") }} manualCount={manualCount}
         newCustomerHref={can(session, "customers") ? `/customers/new?direct=${o.id}` : null} groupNames={groupName} priceGroupLabel={t.customer.priceGroup} />
     );
   } else if (o.state === "done") {
@@ -97,17 +113,18 @@ export default async function DirectListPage({ params, searchParams }: { params:
             <div className="table-wrap hidden md:block"><table className="tbl tbl-fit">
               <thead><tr><th className="w-px" /><th>{t.product.title}</th><th className="text-end">{D.qty}</th><th className="text-end">{D.price}</th><th className="text-end">{D.sum}</th><th>{t.picker.inStock}</th></tr></thead>
               <tbody>{o.items.map((l) => (
-                <tr key={l.id}>
-                  <td><Thumb id={l.imageId} size={44} /></td>
+                <tr key={l.id} data-item={l.manual ? "manual" : "catalog"}>
+                  <td>{photo(l, 44)}</td>
                   <td className="text-start">
                     <span className="block font-semibold" dir="auto">{l.description}</span>
                     {l.barcode && <bdi dir="ltr" className="num text-xs text-ink-soft">{l.barcode}</bdi>}
-                    {!l.variantId && <span className="block text-xs font-semibold text-amber-700">{D.gone}</span>}
+                    {!l.variantId && !l.manual && <span className="block text-xs font-semibold text-amber-700">{D.gone}</span>}
+                    {ownInfo(l)}
                   </td>
                   <td className="num text-end font-semibold">{l.qty}</td>
-                  <td className="num text-end">{unit(l)}</td>
-                  <td className="num text-end font-semibold">{formatCents(l.qty * eff(l), intl)}</td>
-                  <td>{l.available == null ? "—" : (
+                  <td className="num text-end">{unitShown(l)}</td>
+                  <td className="num text-end font-semibold">{l.manual && !l.unitPriceCents ? "—" : formatCents(l.qty * eff(l), intl)}</td>
+                  <td>{l.manual ? <span className="text-xs text-ink-soft">{D.manualStock}</span> : l.available == null ? "—" : (
                     <span className={`num text-xs font-semibold ${l.available >= l.qty ? "text-emerald-700" : "text-red-700"}`}>{fill(D.nowAvailable, { n: l.available })}</span>
                   )}</td>
                 </tr>
@@ -115,14 +132,15 @@ export default async function DirectListPage({ params, searchParams }: { params:
             </table></div>
             <div className="space-y-2 p-3 md:hidden">
               {o.items.map((l) => (
-                <div key={l.id} className="flex gap-3 rounded-xl bg-slate-50 p-2.5 ring-1 ring-black/5">
-                  <Thumb id={l.imageId} size={48} />
+                <div key={l.id} className="flex gap-3 rounded-xl bg-slate-50 p-2.5 ring-1 ring-black/5" data-item={l.manual ? "manual" : "catalog"}>
+                  {photo(l, l.manual ? 72 : 48)}
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="text-sm font-semibold" dir="auto">{l.description}</div>
-                    {!l.variantId && <div className="text-xs font-semibold text-amber-700">{D.gone}</div>}
+                    {!l.variantId && !l.manual && <div className="text-xs font-semibold text-amber-700">{D.gone}</div>}
+                    {ownInfo(l)}
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <span className="num">{l.qty} × {unit(l)}</span>
-                      <b className="num">{formatCents(l.qty * eff(l), intl)}</b>
+                      <span className="num">{l.qty} × {unitShown(l)}</span>
+                      <b className="num">{l.manual && !l.unitPriceCents ? "—" : formatCents(l.qty * eff(l), intl)}</b>
                     </div>
                     {l.available != null && <div className={`num text-xs font-semibold ${l.available >= l.qty ? "text-emerald-700" : "text-red-700"}`}>{fill(D.nowAvailable, { n: l.available })}</div>}
                   </div>
@@ -134,6 +152,7 @@ export default async function DirectListPage({ params, searchParams }: { params:
               <div className="flex justify-between gap-3 text-ink-soft"><span>{t.sales.vat}</span><span className="num">{formatCents(vat, intl)}</span></div>
               <div className="flex justify-between gap-3 font-bold"><span>{P.grossTotal}</span><span className="num">{formatCents(o.grossCents, intl)}</span></div>
               <p className="pt-2 text-xs text-ink-soft">{D.priceNote}</p>
+              {manualCount > 0 && <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 ring-1 ring-amber-200" data-manual-note>{D.manualNote}</p>}
             </div>
           </section>
 

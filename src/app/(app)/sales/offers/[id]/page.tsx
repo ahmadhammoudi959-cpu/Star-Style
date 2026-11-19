@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
+import { ZoomThumb } from "@/components/ZoomThumb";
 import { addDaysIso, formatDate, todayIso } from "@/lib/dates";
 import { expireOffers } from "@/lib/sales";
 import { customerOptions, saleOptions } from "@/lib/sales-queries";
@@ -41,6 +42,9 @@ export default async function OfferPage({ params, searchParams }: { params: Prom
   const inv = o.status === "CONVERTED" ? await db.query.invoices.findFirst({ where: eq(schema.invoices.offerId, id) }) : null;
   const editable = mayOffers && (o.status === "DRAFT" || o.status === "SENT");
   const [customers, options] = editable ? await Promise.all([customerOptions(), saleOptions(o.id)]) : [[], []];
+  // Artikel von Hand (vom Bestell-Link): Liste, aus der das Angebot kam – dort „Als Artikel anlegen“
+  const manual = o.lines.filter((l) => l.manual).sort((a, b) => a.position - b.position).map((l) => l.description);
+  const list = manual.length && can(session, "direct") ? await db.query.directOrders.findFirst({ where: eq(schema.directOrders.offerId, o.id), columns: { id: true } }) : null;
 
   return (
     <div>
@@ -51,12 +55,21 @@ export default async function OfferPage({ params, searchParams }: { params: Prom
           {editable ? (
             <DocEditor t={t} kind="offer" customers={customers} options={options} intl={intl} rights={rights} initial={{
               id: o.id, customerId: o.customerId, date: o.date, validUntil: o.validUntil, discountBp: o.discountBp, notes: o.notes,
-              lines: o.lines.sort((a, b) => a.position - b.position).map((l) => ({ variantId: l.variantId, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, vatRateBp: l.vatRateBp })),
+              lines: o.lines.sort((a, b) => a.position - b.position).map((l) => ({
+                variantId: l.variantId, description: l.description, qty: l.qty, unitPriceCents: l.unitPriceCents, discountBp: l.discountBp, vatRateBp: l.vatRateBp,
+                manual: l.manual, photoFileId: l.photoFileId,
+              })),
             }} />
           ) : (
             <div className="card p-5 animate-rise">
               <ul className="divide-y divide-black/5">
-                {o.lines.sort((a, b) => a.position - b.position).map((l) => <li key={l.id} className="flex justify-between py-2 text-sm"><span>{l.qty} × {l.description}</span></li>)}
+                {o.lines.sort((a, b) => a.position - b.position).map((l) => (
+                  <li key={l.id} className="flex items-center gap-3 py-2 text-sm">
+                    {l.photoFileId && <ZoomThumb id={l.photoFileId} size={36} info={{ title: l.description, sub: t.sales.manualBadge }} />}
+                    <span>{l.qty} × {l.description}</span>
+                    {l.manual && <span className="badge bg-amber-50 text-amber-800 ring-1 ring-amber-200">{t.sales.manualBadge}</span>}
+                  </li>
+                ))}
               </ul>
               {inv && <Link href={`/sales/invoices/${inv.id}`} className="btn-primary mt-4 group"><Icon name="receipt" className="h-4 w-4" />{inv.number ?? t.sales.status.DRAFT}</Link>}
             </div>
@@ -66,7 +79,7 @@ export default async function OfferPage({ params, searchParams }: { params: Prom
           <div className="text-sm text-ink-soft">{t.sales.reservedUntil}</div>
           <div className="font-bold">{formatDate(o.validUntil, intl)}</div>
           {o.acceptedAt && <div className="text-sm text-brand-700">{t.sales.status.ACCEPTED}: {formatDate(o.acceptedAt.toISOString(), intl)} {o.acceptedVia && `· ${o.acceptedVia}`}</div>}
-          <OfferOps t={t} id={o.id} status={o.status} can={{ offers: mayOffers, invoices: mayInvoices }} />
+          <OfferOps t={t} id={o.id} status={o.status} can={{ offers: mayOffers, invoices: mayInvoices }} manual={manual} directHref={list ? `/direct/${list.id}` : null} />
           {(await mailConfigured()) && can(session, "sales.email") && <EmailForm t={t} kind="offer" id={o.id} defaultTo={o.customer.email} />}
         </aside>
       </div>

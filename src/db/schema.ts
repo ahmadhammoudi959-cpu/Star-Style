@@ -394,6 +394,10 @@ export const offerLines = pgTable("offer_lines", {
   unitPriceCents: integer("unit_price_cents").notNull(),
   discountBp: integer("discount_bp").notNull().default(0),
   vatRateBp: integer("vat_rate_bp").notNull().default(1900),
+  // Artikel von Hand vom Bestell-Link (nicht im System, Wunsch Inhaber 20.11.2026): nur fürs Angebot – für eine Rechnung erst als
+  // Artikel anlegen und im Angebot ersetzen (offerToInvoice sperrt sonst). Foto = das Foto vom Bestell-Link (auch im Angebots-PDF).
+  manual: boolean("manual").notNull().default(false),
+  photoFileId: text("photo_file_id").references(() => storedFiles.id, { onDelete: "set null" }),
 });
 
 export const reservations = pgTable("reservations", {
@@ -574,6 +578,10 @@ export const directOrderLines = pgTable("direct_order_lines", {
   vatRateBp: integer("vat_rate_bp").notNull(),
   // Rabatt einer Aktion, mit dem die Zeile gezeigt wurde (Basispunkte; unit_price_cents ist der Preis VOR dem Rabatt)
   promoBp: integer("promo_bp").notNull().default(0),
+  // Artikel von Hand (Wunsch Inhaber 20.11.2026: am Bestell-Link mit der Kamera fotografiert, Name/Menge/Preis/Größe/Farbe
+  // eingetippt – nicht im System, nur fürs Angebot). null = Artikel aus dem Katalog. Preis 0 = „Preis auf Anfrage“.
+  manual: jsonb("manual").$type<{ name: string; size: string; color: string } | null>(),
+  photoFileId: text("photo_file_id").references(() => storedFiles.id, { onDelete: "set null" }),
 }, (t) => [index("direct_line_order").on(t.orderId)]);
 
 /**

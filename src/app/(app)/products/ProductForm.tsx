@@ -26,6 +26,8 @@ export type ProductFormData = {
   id?: string; sku: string; nameDe: string; nameNl: string; descriptionDe: string; descriptionNl: string; category: string;
   supplierId: string; vatRateBp: number; purchasePrice: string; wholesalePrice: string; retailPrice: string;
   tracksExpiry: boolean; inBrandShop: boolean; inGeneralShop: boolean; imageFileId?: string | null;
+  /** neuer Artikel aus einem Artikel von Hand (Bestell-Link): dessen Foto wird übernommen, wenn kein anderes gewählt wird */
+  imageFrom?: string | null;
   /** Versandart: "" = automatisch aus Gewicht/Paketmaßen, PARCEL = immer Paket, FREIGHT = immer Spedition */
   shippingClass?: "" | ShippingClass;
   variants: Omit<V, "key">[];
@@ -156,6 +158,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
 
       <section className="card flex flex-col gap-3 p-4 animate-rise sm:flex-row sm:items-center sm:gap-4 sm:p-5">
         <PhotoPicker name="image" initialId={initial.imageFileId} labels={photoLabels} size={132} />
+        {initial.imageFrom && <input type="hidden" name="imageFrom" value={initial.imageFrom} />}
         <div>
           <h2 className="text-lg font-bold">{t.product.photo}</h2>
           <p className="max-w-md text-sm text-ink-soft">{t.product.photoHint}</p>

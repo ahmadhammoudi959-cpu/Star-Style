@@ -84,7 +84,9 @@ export const RESET_STATEMENTS: string[] = [
      union select photo_file_id from write_offs where photo_file_id is not null
      union select file_id from expenses where file_id is not null
      union select file_id from advisor_exports
-     union select label_file_id from shipments where label_file_id is not null`,
+     union select label_file_id from shipments where label_file_id is not null
+     union select photo_file_id from direct_order_lines where photo_file_id is not null
+     union select photo_file_id from offer_lines where photo_file_id is not null`, // Fotos der Artikel von Hand (Bestell-Link)
   // kein Shop läuft (geprüft); beim Einschalten gleicht der Abgleich ohnehin alle Bestände ab
   `delete from stock_dirty`,
   `delete from direct_orders`, // Listen vom Bestell-Link (+ Positionen) verweisen auf Rechnungen, Angebote und Kunden

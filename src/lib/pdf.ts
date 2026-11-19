@@ -717,10 +717,11 @@ function setFacturXMetadata(doc: PDFDocument, title: string, author: string) {
 
 // ───────────────────────── Daten laden ─────────────────────────
 
-async function linesWithProducts(lines: { position: number; variantId: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; netCents?: number; vatRateBp: number; vatCents?: number }[]) {
+async function linesWithProducts(lines: { position: number; variantId: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; netCents?: number; vatRateBp: number; vatCents?: number; photoFileId?: string | null }[]) {
   const out: Line[] = [];
   for (const l of lines.sort((a, b) => a.position - b.position)) {
-    let sku = "", ean: string | null = null, weightGrams: number | null = null, category = "", imageFileId: string | null = null;
+    // Artikel von Hand (Angebot aus dem Bestell-Link): sein Foto
+    let sku = "", ean: string | null = null, weightGrams: number | null = null, category = "", imageFileId: string | null = l.variantId ? null : l.photoFileId ?? null;
     if (l.variantId) {
       const v = await db.query.variants.findFirst({ where: eq(schema.variants.id, l.variantId), with: { product: true } });
       sku = v?.product.sku ?? ""; ean = v?.barcode ?? null; weightGrams = v?.weightGrams ?? null; category = v?.product.category ?? ""; imageFileId = v?.imageFileId ?? v?.product.imageFileId ?? null;

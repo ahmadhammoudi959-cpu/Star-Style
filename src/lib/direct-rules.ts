@@ -105,6 +105,42 @@ export function applyProblems(lines: CartLine[], problems: { variantId: string; 
   });
 }
 
+/**
+ * Artikel von Hand (Wunsch Inhaber 20.11.2026: „تحميل منتج يدوي … بتفتح الكاميرا، بيصور المنتج … الكميه والسعر والمقاس واللون“):
+ * ein Artikel, den es im System (noch) nicht gibt – am Bestell-Link fotografiert und beschrieben, kommt mit der Liste an und
+ * geht nur ins Angebot (mit Foto). Gefällt er dem Kunden, legt der Inhaber ihn als normalen Artikel an und macht damit ein
+ * neues Angebot bzw. die Rechnung.
+ */
+export const DIRECT_MAX_MANUAL = 10;
+/** höchster Preis je Stück (netto, Cent) – darüber ist es ein Tippfehler */
+export const DIRECT_MANUAL_MAX_CENTS = 10_000_000;
+/** MwSt. eines Artikels von Hand: Regelsatz (im Angebot änderbar) */
+export const DIRECT_MANUAL_VAT_BP = 1900;
+/** Fotos von Hand je Netz/Gerät und insgesamt in 24 Stunden – schützt den Speicher (Büro-Tablet: alle Kunden über ein Netz) */
+export const DIRECT_PHOTO_LIMITS = { perIpDay: 60, allDay: 400 } as const;
+export const photoLimited = (c: { ipDay: number; allDay: number }, adding: number) =>
+  adding > 0 && (c.ipDay + adding > DIRECT_PHOTO_LIMITS.perIpDay || c.allDay + adding > DIRECT_PHOTO_LIMITS.allDay);
+
+export type ManualLine = { name: string; qty: number; priceCents: number | null; size: string; color: string };
+
+/** Preis von Hand: leer = ohne Preis („Preis auf Anfrage“), sonst deutsche oder englische Schreibweise; Unsinn = "bad" */
+export function manualPrice(s: string): number | null | "bad" {
+  const v = s.trim().replace(/[€\s]/g, "");
+  if (!v) return null;
+  let x = v;
+  const c = x.lastIndexOf(","), d = x.lastIndexOf(".");
+  if (c > -1 && d > -1) x = c > d ? x.replace(/\./g, "").replace(",", ".") : x.replace(/,/g, "");
+  else if (c > -1) x = x.replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(x)) return "bad";
+  const cents = Math.round(parseFloat(x) * 100);
+  return cents > DIRECT_MANUAL_MAX_CENTS ? "bad" : cents;
+}
+
+/** Summen mit Artikeln von Hand: nur die mit Preis zählen (ohne Preis = „Preis auf Anfrage“) */
+export function listTotals(lines: { qty: number; priceCents: number; vatRateBp: number }[], manual: Pick<ManualLine, "qty" | "priceCents">[]) {
+  return cartTotals([...lines, ...manual.flatMap((m) => (m.priceCents != null && m.priceCents > 0 ? [{ qty: m.qty, priceCents: m.priceCents, vatRateBp: DIRECT_MANUAL_VAT_BP }] : []))]);
+}
+
 export type RateCounts = { ipHour: number; ipDay: number; emailDay: number; allHour: number };
 /** Zu viele Anfragen? (Zahlen der letzten Stunde/24 Stunden aus der Datenbank) */
 export function rateLimited(c: RateCounts): boolean {

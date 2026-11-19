@@ -13,7 +13,8 @@ import { PlanEditor, fromPlanRows, planProblem, toPlanRows, type PlanRow } from 
 
 export type CustomerOpt = { id: string; number: number; name: string; city: string; type: "COMPANY" | "PERSON"; country: string; vatIdStatus: "NONE" | "PENDING" | "VALID" | "INVALID"; priceGroup: "WHOLESALE" | "RETAIL"; openCents?: number; creditLimitCents?: number | null };
 export type SaleOption = PickerOption & { wholesalePriceCents: number; retailPriceCents: number; vatRateBp: number; available: number };
-export type EditorLine = { variantId: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; vatRateBp: number };
+/** manual/photoFileId: Artikel von Hand vom Bestell-Link (nur Angebote) – bleiben beim Speichern erhalten */
+export type EditorLine = { variantId: string | null; description: string; qty: number; unitPriceCents: number; discountBp: number; vatRateBp: number; manual?: boolean; photoFileId?: string | null };
 export type EditorInitial = {
   id?: string; customerId: string; date: string; validUntil?: string; channel?: string; deliveryDate?: string;
   discountBp: number; notes: string; retentionOfTitle?: boolean;
@@ -22,7 +23,7 @@ export type EditorInitial = {
   installments?: { dueDate: string; amountCents: number }[];
 };
 
-type L = { key: string; variantId: string | null; description: string; qty: string; price: string; disc: string; vatRateBp: number; available?: number };
+type L = { key: string; variantId: string | null; description: string; qty: string; price: string; disc: string; vatRateBp: number; available?: number; manual?: boolean; photoFileId?: string | null };
 const toInput = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
 /** Was die angemeldete Person im Editor darf (Wunsch Inhaber 12.11.2026); die Action prüft dasselbe noch einmal */
@@ -41,6 +42,7 @@ export function DocEditor({ t, kind, customers, options, initial, intl, rights =
     key: crypto.randomUUID(), variantId: l.variantId, description: l.description, qty: String(l.qty), price: toInput(l.unitPriceCents),
     disc: l.discountBp ? bpToPercent(l.discountBp) : "", vatRateBp: l.variantId ? optById.get(l.variantId)?.vatRateBp ?? l.vatRateBp : l.vatRateBp,
     available: l.variantId ? optById.get(l.variantId)?.available : undefined,
+    manual: !l.variantId && !!l.manual, photoFileId: l.variantId ? null : l.photoFileId ?? null,
   })));
   const [docDisc, setDocDisc] = useState(initial.discountBp ? bpToPercent(initial.discountBp) : "");
   // Welcher Knopf gedrückt wurde – nur für die Lade-Anzeige (Wert kommt über name/value des Knopfs ins Formular)
@@ -124,7 +126,9 @@ export function DocEditor({ t, kind, customers, options, initial, intl, rights =
         <input type="hidden" name="initialPaymentMethod" value={payMethod} />
         <input type="hidden" name="installments" value={JSON.stringify(plan)} />
       </>}
-      <input type="hidden" name="lines" value={JSON.stringify(parsed.map((l, i) => ({ ...l, vatRateBp: lines[i].vatRateBp })))} />
+      <input type="hidden" name="lines" value={JSON.stringify(parsed.map((l, i) => ({
+        ...l, vatRateBp: lines[i].vatRateBp, ...(kind === "offer" && lines[i].manual ? { manual: true, photoFileId: lines[i].photoFileId ?? null } : {}),
+      })))} />
       <ErrorBox message={err ? `${err}${state?.detail ? `: ${state.detail}` : ""}` : undefined} />
 
       {initial.replacesInvoiceId && (
@@ -207,9 +211,12 @@ export function DocEditor({ t, kind, customers, options, initial, intl, rights =
                     const o = optById.get(l.variantId);
                     return <ZoomThumb id={o?.imageId} size={44} info={{ title: o?.nameDe ?? l.description, sub: [o?.size, o?.color].filter(Boolean).join(" · ") }} />;
                   })()}
+                  {!l.variantId && l.manual && <ZoomThumb id={l.photoFileId} size={44} info={{ title: l.description, sub: t.sales.manualBadge }} />}
                   <div className="min-w-0 flex-1">
-                  <input value={l.description} onChange={(e) => upd(l.key, { description: e.target.value })} className="input" placeholder={t.sales.freeText} aria-label={t.product.nameDe} />
+                  <input value={l.description} onChange={(e) => upd(l.key, { description: e.target.value })} className="input" placeholder={t.sales.freeText} aria-label={t.product.nameDe} dir="auto" />
                   {l.available != null && <span className={`mt-1 inline-block text-xs ${short ? "font-semibold text-red-600" : "text-ink-soft"}`}>{short ? t.sales.notEnough + " · " : ""}{t.sales.available}: {l.available}</span>}
+                  {l.manual && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200" data-manual-line>
+                    <Icon name="camera" className="h-3.5 w-3.5" />{t.sales.manualBadge}</span>}
                   </div>
                 </div>
                 <Field label={t.common.qty} className="col-span-2 md:col-span-1"><input type="number" min={1} value={l.qty} onChange={(e) => upd(l.key, { qty: e.target.value })} className={`input num ${short ? "border-red-400" : ""}`} /></Field>
