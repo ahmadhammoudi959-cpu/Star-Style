@@ -225,6 +225,13 @@
       "when": 1794837530394,
       "tag": "0031_wa_seq",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795102152973,
+      "tag": "0032_deltapro_weights",
+      "breakpoints": true
     }
   ]
 }

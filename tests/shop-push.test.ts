@@ -404,6 +404,29 @@ run("Artikel im Shop anlegen (Datenbank, Shopify simuliert)", async () => {
     const upd = calls.filter((c) => c.query?.includes("inventoryItemUpdate"));
     expect(upd.map((c) => c.variables)).toEqual([{ id: `gid://shopify/InventoryItem/${tag}66`, input: { measurement: { weight: { unit: "GRAMS", value: 250 } } } }]);
     expect(await pushWeights([])).toEqual([]);
+    // gemeldetes Gewicht gemerkt → der Worker schickt es nicht noch einmal
+    const link = () => db.select().from(schema.shopVariants).where(eq(schema.shopVariants.shopVariantId, sid)).then((r) => r[0]);
+    expect((await link()).pushedWeightGrams).toBe(250);
+  });
+
+  it("Worker meldet Gewichte, die im Shop fehlen oder veraltet sind (z. B. nach dem Delta-Pro-Abgleich), genau einmal", async () => {
+    vi.stubGlobal("fetch", shopifyMock());
+    const { pushDueWeights } = await import("../src/lib/shopify/weights");
+    const { vs } = await newProduct(`PUSH-${tag}-W`, { sizes: ["S"] });
+    const sid = `gid://shopify/ProductVariant/${tag}w1`, iid = `gid://shopify/InventoryItem/${tag}w1`;
+    await db.insert(schema.shopVariants).values({ channel: "GENERAL_SHOP", shopVariantId: sid, inventoryItemId: iid, variantId: vs[0].id, matchedBy: "barcode" });
+    const mine = () => calls.filter((c) => c.query?.includes("inventoryItemUpdate") && c.variables?.id === iid).map((c) => c.variables);
+    // wie Migration 0032: Gewicht direkt in der Datenbank gesetzt, im Shop noch nicht
+    calls = [];
+    await db.update(schema.variants).set({ weightGrams: 17700 }).where(eq(schema.variants.id, vs[0].id));
+    await pushDueWeights(5000);
+    expect(mine()).toEqual([{ id: iid, input: { measurement: { weight: { unit: "GRAMS", value: 17700 } } } }]);
+    calls = [];
+    await pushDueWeights(5000);
+    expect(mine()).toEqual([]); // schon gemeldet
+    await db.update(schema.variants).set({ weightGrams: 18000 }).where(eq(schema.variants.id, vs[0].id));
+    await pushDueWeights(5000);
+    expect(mine()).toEqual([{ id: iid, input: { measurement: { weight: { unit: "GRAMS", value: 18000 } } } }]);
   });
 
   it("Shop-Produkt mit nur der Standard-Variante bekommt erst die Option „Farbe“, dann die neue Farbe", async () => {

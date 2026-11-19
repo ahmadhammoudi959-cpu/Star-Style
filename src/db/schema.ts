@@ -637,6 +637,8 @@ export const shopVariants = pgTable("shop_variants", {
   matchedBy: text("matched_by").notNull().default(""),     // barcode | sku | manual
   lastPushedQty: integer("last_pushed_qty"),
   lastPushedAt: timestamp("last_pushed_at", { withTimezone: true }),
+  // zuletzt an den Shop gemeldetes Gewicht (Gramm); weicht es von variants.weight_grams ab, meldet der Worker es (pushDueWeights)
+  pushedWeightGrams: integer("pushed_weight_grams"),
   pushError: text("push_error").notNull().default(""),
   seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("shop_variant_unique").on(t.channel, t.shopVariantId), index("shop_variant_ours").on(t.variantId)]);
