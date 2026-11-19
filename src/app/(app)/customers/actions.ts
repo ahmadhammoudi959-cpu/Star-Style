@@ -37,6 +37,8 @@ const C = z.object({
   paymentTermDays: z.string().default(""),
   notes: z.string().trim().max(2000).default(""),
   shopReseller: z.string().optional().transform((v) => v === "on"),
+  // nach dem Anlegen zurück zur Liste vom Bestell-Link (Direktverkauf) – nur genau diese Form
+  returnTo: z.string().optional().transform((v) => (v && /^\/direct\/[A-Za-z0-9-]{8,64}$/.test(v) ? v : undefined)),
 });
 
 export async function saveCustomer(_: CustomerState, fd: FormData): Promise<CustomerState> {
@@ -44,7 +46,7 @@ export async function saveCustomer(_: CustomerState, fd: FormData): Promise<Cust
   const fail = (error: string): CustomerState => ({ error, values: Object.fromEntries(KEEP.map((k) => [k, String(fd.get(k) ?? "")])) });
   const p = C.safeParse(Object.fromEntries(fd));
   if (!p.success) return fail("required");
-  const { id, vatPending, creditLimit, paymentTermDays, shopReseller, ...d } = p.data;
+  const { id, vatPending, creditLimit, paymentTermDays, shopReseller, returnTo, ...d } = p.data;
   // Deutschland: PLZ = 5 Ziffern, USt-IdNr. = DE + 9 Ziffern (Shopify lehnt „0000“ ab, 12.11.2026; auch auf der Rechnung falsch).
   // Reihenfolge wie im Formular: erst die Anschrift, dann die Nummer
   if (d.country === "DE" && d.zip && !/^\d{5}$/.test(d.zip)) return fail("zipDe");
@@ -89,7 +91,7 @@ export async function saveCustomer(_: CustomerState, fd: FormData): Promise<Cust
     if (todo.length) await syncShopCompanyNow(cid!, 8000, todo);
   } catch (e) { console.error("shopify b2b", e); }
   revalidatePath("/customers");
-  redirect(`/customers/${cid}?saved=1`);
+  redirect(returnTo && !id ? `${returnTo}?customer=${cid}&saved=1` : `/customers/${cid}?saved=1`);
 }
 
 /** „Erneut versuchen“ an der Kundenseite (nach einer Ablehnung durch den Shop) */

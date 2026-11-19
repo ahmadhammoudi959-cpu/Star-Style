@@ -239,6 +239,13 @@
       "when": 1795106964570,
       "tag": "0033_freight_class",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795113324616,
+      "tag": "0034_direct_orders",
+      "breakpoints": true
     }
   ]
 }

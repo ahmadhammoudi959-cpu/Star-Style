@@ -87,6 +87,8 @@ export const RESET_STATEMENTS: string[] = [
      union select label_file_id from shipments where label_file_id is not null`,
   // kein Shop läuft (geprüft); beim Einschalten gleicht der Abgleich ohnehin alle Bestände ab
   `delete from stock_dirty`,
+  `delete from direct_orders`, // Listen vom Bestell-Link (+ Positionen) verweisen auf Rechnungen, Angebote und Kunden
+  `select setval(pg_get_serial_sequence('direct_orders', 'number'), 1, false)`,
   `delete from returns`, // Retouren (+ Positionen) verweisen auf Rechnungen und Kunden
   `delete from payments`,
   `delete from shipments`, // Sendungen mit Sendungsnummern gehören zu den Rechnungen

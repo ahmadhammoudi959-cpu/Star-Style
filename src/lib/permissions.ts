@@ -14,6 +14,8 @@ export const PERMISSION_GROUPS = {
   sales: [
     "customers", "customers.reseller", "customers.credit", "customers.export", "sales.view", "sales.offers", "sales.invoices", "sales.discount",
     "sales.correct", "sales.delivery", "sales.shipping", "sales.email", "sales.returns",
+    // Direktverkauf über den Bestell-Link (Wunsch Inhaber 19.11.2026): Anfragen ansehen/bearbeiten bzw. den Link verwalten
+    "direct", "direct.link",
   ],
   // Kommunikation (Wunsch Inhaber 16.11.2026): Postfach info@ und WhatsApp im System
   // Wunsch Inhaber 16.11.2026: lesen und schreiben getrennt
@@ -39,6 +41,7 @@ export const IMPLIES: Partial<Record<Perm, Perm[]>> = {
   "sales.offers": ["sales.view", "customers", "products.view"], "sales.invoices": ["sales.view", "customers", "products.view"],
   "sales.discount": ["sales.view"], "sales.correct": ["sales.view"], "sales.delivery": ["sales.view"],
   "sales.shipping": ["sales.view"], "sales.email": ["sales.view"], "sales.returns": ["sales.view"],
+  direct: ["sales.view", "customers", "products.view"], "direct.link": ["direct"],
   "payments.record": ["sales.view"], "payments.cancel": ["sales.view"], "payments.plans": ["sales.view"], receivables: ["sales.view"],
   "expenses.edit": ["expenses.view"],
   "reports.export": ["reports.view"], "reports.lock": ["reports.export"],
@@ -60,12 +63,12 @@ export const normalizePerms = (raw: unknown): Perm[] => { const s = effectivePer
 
 /** Vorlagen zum schnellen Vorbelegen (danach frei änderbar) – Vorschlag aus der Besprechung 12.11.2026 */
 export const PRESETS: Record<"sales" | "warehouse" | "teamLead" | "accountant", Perm[]> = {
-  sales: ["products.view", "customers", "customers.statement", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "sales.email", "sales.returns", "whatsapp", "whatsapp.send"],
-  warehouse: ["products.view", "stock.count", "stock.writeoff", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "sales.returns", "insights"],
+  sales: ["products.view", "customers", "customers.statement", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "sales.email", "sales.returns", "direct", "whatsapp", "whatsapp.send"],
+  warehouse: ["products.view", "stock.count", "stock.writeoff", "sales.offers", "sales.invoices", "sales.discount", "sales.delivery", "sales.shipping", "sales.returns", "direct", "insights"],
   teamLead: [
     "products.view", "products.edit", "suppliers", "stock.receive", "stock.count", "stock.writeoff", "customers", "customers.reseller", "customers.statement",
-    "sales.offers", "sales.invoices", "sales.discount", "sales.correct", "sales.delivery", "sales.shipping", "sales.email", "sales.returns", "insights", "shops.view",
-    "mail", "mail.send", "whatsapp", "whatsapp.send",
+    "sales.offers", "sales.invoices", "sales.discount", "sales.correct", "sales.delivery", "sales.shipping", "sales.email", "sales.returns", "direct", "direct.link",
+    "insights", "shops.view", "mail", "mail.send", "whatsapp", "whatsapp.send",
   ],
   accountant: ["reports.view", "reports.export"],
 };
@@ -103,6 +106,8 @@ export const ROUTES: [RegExp, Need][] = [
   [R("/sales/offers/new"), { any: ["sales.offers"] }],
   [R("/sales"), { any: ["sales.view"] }],
   [R("/returns/new"), { any: ["sales.returns"] }],
+  [R("/direct"), { any: ["direct"] }],
+  [R("/api/direct"), { any: ["direct"] }],
   [R("/returns"), { any: ["sales.view"] }],
   [R("/receivables"), { any: ["receivables"] }],
   [R("/expenses/new"), { any: ["expenses.edit"] }],

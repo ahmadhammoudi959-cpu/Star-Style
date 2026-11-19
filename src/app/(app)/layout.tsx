@@ -30,6 +30,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const allItems: NavItem[] = [
     { href: "/", label: t.nav.home, icon: "home" },
     { href: "/sales", label: t.nav.sales, icon: "cart" },
+    // Direktverkauf (Wunsch Inhaber 19.11.2026): Listen vom Bestell-Link – Zahl der neuen
+    { href: "/direct", label: t.nav.direct, icon: "list", badge: "/api/direct/unread" },
     { href: "/returns", label: t.nav.returns, icon: "undo" },
     { href: "/receivables", label: t.nav.receivables, icon: "euro" },
     { href: "/customers", label: t.nav.customers, icon: "users" },

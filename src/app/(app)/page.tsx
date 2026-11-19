@@ -18,6 +18,7 @@ import { pendingSummary } from "@/lib/shopify/product-push";
 import { recentBackups } from "@/lib/backup-info";
 import { NavBadge } from "@/components/Nav";
 import { newShopCustomersCount } from "@/lib/shopify/customers";
+import { newDirectCount } from "@/lib/direct";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
   const session = await requireSession();
@@ -28,7 +29,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const may = (p: Perm) => can(session, p);
   const opens = (href: string) => canOpen(session, href);
   const money = may("dashboard.money"), seeStock = may("products.view");
-  const [stats, al, open, ins, setup, pend, fails, toShip, backups, newShop, toPickUp] = await Promise.all([
+  const [stats, al, open, ins, setup, pend, fails, toShip, backups, newShop, toPickUp, directNew] = await Promise.all([
     seeStock || money ? dashboardStats(today) : null,
     seeStock ? alerts(today) : { low: [], expiring: [] },
     money ? openItems() : [],
@@ -40,6 +41,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     opens("/backup") ? recentBackups(1) : [],
     opens("/customers") ? newShopCustomersCount().catch(() => 0) : 0,
     may("sales.shipping") ? shopOrdersToPickUp() : [],
+    may("direct") ? newDirectCount().catch(() => 0) : 0,
   ]);
   const ai = aiConfigured() && may("ask");
   const debts = open.filter((r) => r.state.openCents > 0);
@@ -110,6 +112,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
             <span className="font-bold">{toPickUp.length === 1 ? t.home.toPickUpOne : fill(t.home.toPickUp, { n: toPickUp.length })}</span>
           </span>
           <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">{t.home.toPickUpAction}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></span>
+        </Link>
+      )}
+
+      {/* Listen vom Bestell-Link (Direktverkauf), aus denen noch kein Angebot / keine Rechnung wurde */}
+      {directNew > 0 && (
+        <Link href="/direct" className="group card flex animate-rise flex-wrap items-center justify-between gap-3 p-4 ring-2 ring-accent-500/25 hover:shadow-lift">
+          <span className="flex items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-50 text-accent-600"><Icon name="list" className="icon-pop h-5 w-5" /></span>
+            <span className="font-bold">{directNew === 1 ? t.direct.homeNewOne : fill(t.direct.homeNew, { n: directNew })}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">{t.direct.homeAction}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></span>
         </Link>
       )}
 

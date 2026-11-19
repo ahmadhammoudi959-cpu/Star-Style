@@ -131,6 +131,8 @@ export const companySettings = pgTable("company_settings", {
   mail: jsonb("mail").$type<Record<string, unknown>>().notNull().default({}),
   // WhatsApp Business (Cloud API, Seite „WhatsApp“, src/lib/whatsapp-rules.ts): Nummer-ID, WABA-ID, Token + App-Geheimnis (verschlüsselt), Prüfwort für den Webhook
   whatsapp: jsonb("whatsapp").$type<Record<string, unknown>>().notNull().default({}),
+  // Bestell-Links „Direktverkauf“ (src/lib/direct.ts), je Preisgruppe RETAIL/WHOLESALE: Token verschlüsselt + sha256 zum Prüfen, an/aus; {} = noch keiner
+  directLink: jsonb("direct_link").$type<Record<string, unknown>>().notNull().default({}),
   updatedAt: updatedAt(),
 });
 
@@ -524,6 +526,55 @@ export const returnLines = pgTable("return_lines", {
 });
 
 /**
+ * Direktverkauf über den Bestell-Link (Wunsch Inhaber 19.11.2026: „الزبون … بيعطيه تاب فيه لينك … حطهم بالعربة وبعتهم …
+ * اجوا على السيستم وليس على المتجر الالكتروني“): Katalog auf dem Tablet im Büro oder per Link an einen Händler; der Kunde
+ * stellt eine Liste zusammen, schreibt Name + E-Mail (Pflicht) und schickt sie ab – ohne Bezahlen, ohne Shop. Hier landet
+ * die Liste; der Mitarbeiter wählt den Kunden (oder legt ihn ganz normal an) und macht daraus ein Angebot oder einen
+ * Rechnungsentwurf. Ein Link je Preisgruppe (جملة / جملة الجملة), price_group = Preise, die der Kunde gesehen hat.
+ * NEW = wartet, CONVERTED = Angebot/Rechnungsentwurf erstellt (offer_id/invoice_id; gelöscht → null, dann wieder offen), REJECTED = abgelehnt.
+ * Logik: src/lib/direct.ts (DB), src/lib/direct-rules.ts (rein).
+ */
+export const directOrders = pgTable("direct_orders", {
+  id: id(),
+  number: serial("number").notNull().unique(),
+  status: text("status").$type<"NEW" | "CONVERTED" | "REJECTED">().notNull().default("NEW"),
+  name: text("name").notNull(),
+  email: text("email").notNull(), // klein geschrieben – Schlüssel zum Kunden (nie der Name)
+  company: text("company").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  street: text("street").notNull().default(""),
+  zip: text("zip").notNull().default(""),
+  city: text("city").notNull().default(""),
+  country: text("country").notNull().default("DE"),
+  vatId: text("vat_id").notNull().default(""),
+  note: text("note").notNull().default(""),
+  lang: text("lang").notNull().default("de"),
+  priceGroup: priceGroup("price_group").notNull().default("RETAIL"), // Link „جملة“ (RETAIL) oder „جملة الجملة“ (WHOLESALE)
+  netCents: integer("net_cents").notNull().default(0), // Summe netto, wie dem Kunden gezeigt
+  grossCents: integer("gross_cents").notNull().default(0),
+  ipHash: text("ip_hash").notNull().default(""), // nur für die Begrenzung je Gerät/Netz (HMAC, keine IP gespeichert)
+  customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
+  invoiceId: text("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+  offerId: text("offer_id").references(() => offers.id, { onDelete: "set null" }),
+  rejectReason: text("reject_reason").notNull().default(""),
+  handledBy: text("handled_by"),
+  handledAt: timestamp("handled_at", { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [index("direct_status").on(t.status, t.createdAt), index("direct_email").on(t.email), index("direct_ip").on(t.ipHash, t.createdAt)]);
+
+export const directOrderLines = pgTable("direct_order_lines", {
+  id: id(),
+  orderId: text("order_id").notNull().references(() => directOrders.id, { onDelete: "cascade" }),
+  position: integer("position").notNull(),
+  variantId: text("variant_id").references(() => variants.id, { onDelete: "set null" }),
+  description: text("description").notNull(), // wie auf der Rechnung (Name + Größe/Farbe), bleibt auch ohne Artikel
+  barcode: text("barcode").notNull().default(""),
+  qty: integer("qty").notNull(),
+  unitPriceCents: integer("unit_price_cents").notNull(), // netto, wie dem Kunden gezeigt (Preis der Preisgruppe des Links)
+  vatRateBp: integer("vat_rate_bp").notNull(),
+}, (t) => [index("direct_line_order").on(t.orderId)]);
+
+/**
  * WhatsApp im System (Wunsch Inhaber 16.11.2026: „الواتساب جوه الابلكيشن … المراسله تترسل من جوه السيستم“): ein Chat je
  * Telefonnummer (wa_id = Nummer international ohne +), verknüpft mit dem Kunden (gleiche Nummer) oder von Hand.
  * Nachrichten kommen über den Webhook (Meta Cloud API) und gehen über die Graph API raus. Logik: src/lib/whatsapp.ts.
@@ -873,3 +924,13 @@ export const returnLinesRelations = relations(returnLines, ({ one }) => ({
   variant: one(variants, { fields: [returnLines.variantId], references: [variants.id] }),
 }));
 export const installmentsRelations = relations(installments, ({ one }) => ({ invoice: one(invoices, { fields: [installments.invoiceId], references: [invoices.id] }) }));
+export const directOrdersRelations = relations(directOrders, ({ one, many }) => ({
+  lines: many(directOrderLines),
+  customer: one(customers, { fields: [directOrders.customerId], references: [customers.id] }),
+  invoice: one(invoices, { fields: [directOrders.invoiceId], references: [invoices.id] }),
+  offer: one(offers, { fields: [directOrders.offerId], references: [offers.id] }),
+}));
+export const directOrderLinesRelations = relations(directOrderLines, ({ one }) => ({
+  order: one(directOrders, { fields: [directOrderLines.orderId], references: [directOrders.id] }),
+  variant: one(variants, { fields: [directOrderLines.variantId], references: [variants.id] }),
+}));

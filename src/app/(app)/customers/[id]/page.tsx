@@ -22,16 +22,25 @@ import { deleteCustomerAction } from "../actions";
 import { DeleteRecord } from "@/components/DeleteRecord";
 import { customerUsage } from "@/lib/record-delete";
 import { customerBlocks, customerHasDocs } from "@/lib/record-delete-view";
+import { directContact } from "@/lib/direct";
 
-export default async function CustomerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
+export default async function CustomerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; direct?: string }> }) {
   const { id } = await params;
-  const { saved } = await searchParams;
+  const { saved, direct } = await searchParams;
   const { t, intl } = await getI18n();
   const session = await requireSession();
   const rights = { credit: can(session, "customers.credit"), reseller: can(session, "customers.reseller") };
   const money = can(session, "customers.statement"), sales = can(session, "sales.view");
   const empty: CustomerData = { type: "COMPANY", name: "", contact: "", email: "", phone: "", street: "", zip: "", city: "", country: "DE", vatId: "", vatIdStatus: "NONE", priceGroup: "WHOLESALE", creditLimit: "", paymentTermDays: "", notes: "" };
-  if (id === "new") return <div><PageHeader title={t.customer.new} back="/customers" /><CustomerForm t={t} initial={empty} rights={rights} /></div>;
+  if (id === "new") {
+    // aus einer Liste vom Bestell-Link (Direktverkauf): Angaben vorbelegen, nach dem Speichern zurück zur Liste
+    const d = direct && can(session, "direct") ? await directContact(direct) : null;
+    const initial: CustomerData = d ? {
+      ...empty, type: d.company ? "COMPANY" : "PERSON", name: d.company || d.name, contact: d.company ? d.name : "", email: d.email, phone: d.phone,
+      street: d.street, zip: d.zip, city: d.city, country: d.country || "DE", vatId: d.vatId, priceGroup: d.priceGroup,
+    } : empty;
+    return <div><PageHeader title={t.customer.new} back={d ? `/direct/${d.id}` : "/customers"} /><CustomerForm t={t} initial={initial} rights={rights} returnTo={d ? `/direct/${d.id}` : undefined} /></div>;
+  }
 
   const c = await db.query.customers.findFirst({ where: eq(schema.customers.id, id) });
   if (!c) notFound();

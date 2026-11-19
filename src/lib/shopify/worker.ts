@@ -16,6 +16,7 @@ import { pushResellerPricesPeriodically, retryShopCompanies } from "./b2b";
 import { syncAllShopCustomers } from "./customers";
 import { ensureCustomerWebhooks } from "./webhooks";
 import { CHANNELS } from "./sync";
+import { purgeDirectOrders } from "../direct";
 
 let started = false, busy = false, ticks = 0;
 
@@ -45,6 +46,8 @@ export function startWorker() {
       // Kunden mit Konto oder Bestellung (auch unbezahlt/Nachnahme) aus beiden Shops ins System – auch bei ausgeschaltetem Abgleich
       if (full) for (const ch of CHANNELS) await ensureCustomerWebhooks(ch).catch((e) => console.error("shopify customer hooks", e));
       if (full) await syncAllShopCustomers().catch((e) => console.error("shopify customers", e));
+      // Direktverkauf: abgelehnte Listen nach 90 Tagen, offene ohne Angebot/Rechnung nach 180 Tagen löschen (Datenschutz-Hinweis am Link)
+      if (ticks % 180 === 0) await purgeDirectOrders().catch((e) => console.error("direct purge", e));
     } catch (e) { console.error("shopify worker", e); }
     finally { busy = false; ticks++; }
   };

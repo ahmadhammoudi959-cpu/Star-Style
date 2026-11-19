@@ -90,7 +90,13 @@ export async function availability(tx: Tx | typeof db, variantIds: string[], exc
 
 export async function saveOffer(input: OfferInput, userId?: string) {
   validateLines(input.lines);
-  return db.transaction(async (tx) => {
+  return db.transaction((tx) => saveOfferTx(tx, input, userId));
+}
+
+/** Angebot speichern in einer laufenden Transaktion (z. B. aus einer Liste vom Bestell-Link, src/lib/direct.ts) */
+export async function saveOfferTx(tx: Tx, input: OfferInput, userId?: string) {
+  validateLines(input.lines);
+  {
     const customer = await tx.query.customers.findFirst({ where: eq(schema.customers.id, input.customerId) });
     if (!customer) throw new SalesError("noCustomer");
     const rates = await productRatesFor(tx, input.lines.flatMap((l) => (l.variantId ? [l.variantId] : [])));
@@ -125,7 +131,7 @@ export async function saveOffer(input: OfferInput, userId?: string) {
     await markDirty(tx, [...perVariant.keys()]);
     await audit(tx, { entity: "offer", entityId: offerId!, action: input.id ? "update" : "create", after: input, userId });
     return offerId!;
-  });
+  }
 }
 
 export async function setOfferStatus(offerId: string, status: "SENT" | "ACCEPTED" | "REJECTED", acceptedVia = "", userId?: string) {

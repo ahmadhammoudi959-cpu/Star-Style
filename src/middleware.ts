@@ -12,7 +12,8 @@ import { allowed, routeNeed } from "@/lib/permissions";
  *    keine fremden Seiten dürfen uns einbetten, Formulare gehen nur an uns.
  * Läuft in Node (nicht Edge), damit die Sitzungs-Version aus der Datenbank geprüft werden kann.
  */
-const PUBLIC = ["/login", "/setup", "/api/health", "/api/shopify/webhook", "/robots.txt"]; // Webhook prüft selbst per HMAC
+// Webhook prüft selbst per HMAC; Bestell-Link für Kunden (Direktverkauf, /b/<Token>) und seine API prüfen selbst das Token (src/lib/direct.ts)
+const PUBLIC = ["/login", "/setup", "/api/health", "/api/shopify/webhook", "/robots.txt", "/b", "/api/b"];
 const dev = process.env.NODE_ENV !== "production";
 
 function contentSecurityPolicy(nonce: string) {

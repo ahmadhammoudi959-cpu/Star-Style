@@ -112,7 +112,8 @@ describe("jede Seite hat eine Rechte-Zeile", () => {
   const urlOf = (f: string) => "/" + relative(root, f).split(sep).slice(0, -1)
     .filter((s) => !/^\(.*\)$/.test(s))
     .map((s) => (s === "[channel]" ? "GENERAL_SHOP" : s.startsWith("[") ? "x" : s)).join("/");
-  const PUBLIC = ["/login", "/setup", "/api/shopify/webhook"]; // in der Middleware ohne Sitzung (Webhook per HMAC)
+  // in der Middleware ohne Sitzung (Webhook per HMAC; Bestell-Link /b und /api/b prüfen selbst das Link-Token)
+  const PUBLIC = ["/login", "/setup", "/api/shopify/webhook", "/b", "/api/b"];
   // /api/backup/upload läuft an der Middleware vorbei, steht aber trotzdem als „nur Admin“ in ROUTES (und prüft selbst)
   const ADMIN_ONLY = ["/settings/users", "/backup", "/api/backup"];
 

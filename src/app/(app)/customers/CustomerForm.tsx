@@ -13,7 +13,7 @@ export type CustomerData = {
 };
 
 /** credit = Kreditlimit/Zahlungsziel, reseller = Großhandelspreise im Shop freischalten (ohne Recht: Feld weg, Server behält den alten Wert) */
-export function CustomerForm({ t, initial, rights = { credit: true, reseller: true } }: { t: Dict; initial: CustomerData; rights?: { credit: boolean; reseller: boolean } }) {
+export function CustomerForm({ t, initial, rights = { credit: true, reseller: true }, returnTo }: { t: Dict; initial: CustomerData; rights?: { credit: boolean; reseller: boolean }; returnTo?: string }) {
   const [state, action] = useActionState(saveCustomer, undefined);
   const [type, setType] = useState(initial.type);
   const [country, setCountry] = useState(initial.country);
@@ -31,6 +31,7 @@ export function CustomerForm({ t, initial, rights = { credit: true, reseller: tr
   return (
     <form action={action} className="card grid grid-cols-2 gap-3 p-4 animate-rise sm:p-5 md:gap-4">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
+      {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
       <input type="hidden" name="type" value={type} />
       <div className="col-span-2"><ErrorBox message={state?.error ? errors[state.error] ?? t.common.required : undefined} /></div>
       <div className="col-span-2 flex gap-2">
