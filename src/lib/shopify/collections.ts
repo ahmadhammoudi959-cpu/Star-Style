@@ -41,7 +41,8 @@ export async function navigation(shop: Shop): Promise<Navigation> {
   const denied = navDenied.get(ch);
   if (denied && Date.now() - denied < 6 * 3600_000) return { access: false, menu: null, groups: [], adminUrl };
   try {
-    const d = await gql<{ menus: { nodes: { id: string; handle: string; title: string; items: RawItem[] }[] } }>(shop, MENU_Q);
+    // fehlt das Recht, einmal mit frischem Token (der gespeicherte gilt 24 h und kann von vor der Freigabe stammen – v5, 20.11.2026)
+    const d = await withFreshToken(shop, () => gql<{ menus: { nodes: { id: string; handle: string; title: string; items: RawItem[] }[] } }>(shop, MENU_Q));
     const m = d.menus.nodes.find((x) => x.handle === "main-menu") ?? d.menus.nodes[0];
     if (!m) return { access: true, menu: null, groups: [], adminUrl };
     const menu = { id: m.id, handle: m.handle, title: m.title, items: m.items.map(toItem) };
