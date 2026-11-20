@@ -100,6 +100,7 @@ const ku: Dict = {
     paymentHint: "Dema ku mişterî pere dide",
   },
   home: {
+    direct: "Firotina rasterast", directHint: "Lîste ji girêdana siparîşê", promotions: "Kampanya", promotionsHint: "Daxistin & wêneyê reklamê", promotionsRunning: "{n} niha çalak in", promotionsRunningOne: "1 niha çalak e",
     mail: "E-name", mailHint: "Sindoqa info@", whatsapp: "WhatsApp", whatsappHint: "Peyamên mişteriyan",
     backup: "Kopiya yedek",
     backupHint: "Her tişt li laptopê",

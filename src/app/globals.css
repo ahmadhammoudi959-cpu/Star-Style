@@ -102,6 +102,19 @@ body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smooth
 .swipe-row { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .swipe-row::-webkit-scrollbar { display: none; }
 
+/* Schnellzugriffe der Startseite ab Tablet (Wunsch Inhaber 20.11.2026: „فليكسبل … ياخد الشاشه … يبقوا صفين“): Reihen über die
+   ganze Breite, alle gleich voll, die Kacheln wachsen – auch die letzte Reihe füllt die Breite (11 = 6 + 5). Wie viele je Reihe,
+   rechnet `tileVars` (src/lib/tile-rows.ts) je Breite; --tg 0 = eine/zwei Kacheln nicht über die Seite ziehen.
+   −0,5 px: Rundung darf die letzte Kachel einer vollen Reihe nie in die nächste schieben. Handy: Wischleiste (Klassen am Element). */
+@media (min-width: 640px) {
+  .tile-rows { --tc: var(--tc-sm, 3); --tile-gap: 1rem; flex-wrap: wrap; gap: var(--tile-gap); }
+  .tile-rows > .tile { flex: var(--tg, 1) 1 calc((100% - (var(--tc) - 1) * var(--tile-gap)) / var(--tc) - 0.5px); width: auto; }
+}
+@media (min-width: 768px) { .tile-rows { --tc: var(--tc-md, 4); } }
+@media (min-width: 1024px) { .tile-rows { --tc: var(--tc-lg, 4); } }
+@media (min-width: 1280px) { .tile-rows { --tc: var(--tc-xl, 6); } }
+@media (min-width: 1600px) { .tile-rows { --tc: var(--tc-x2, 7); } }
+
 /* Laden (Wunsch Inhaber 04.11.2026): Logo atmet, Balken in den Logofarben läuft durch; oben ein dünner Balken bei jedem Seitenwechsel */
 @keyframes ss-slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(330%); } }
 @keyframes ss-breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.04); opacity: .82; } }

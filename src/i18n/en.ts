@@ -24,6 +24,7 @@ const en: Dict = {
     title: "Getting started", intro: "Follow the numbers in order. Each finished step gets a ✓. When everything is done, this list disappears.", progress: "{d} of {n}", start: "Start here", done: "Done", company: "Complete company details", companyHint: "Address, tax number, bank and logo", supplier: "Add your first supplier", supplierHint: "Who you buy goods from", product: "Add products", productHint: "Photo, name, prices and current stock", receive: "Book incoming goods", receiveHint: "Every new delivery from a supplier", customer: "Add your first customer", customerHint: "The salon or person buying from you", invoice: "Write your first invoice", invoiceHint: "Or a quote – then print it", payment: "Record your first payment", paymentHint: "When the customer pays",
   },
   home: {
+    direct: "Direct sales", directHint: "Lists from the order link", promotions: "Promotions", promotionsHint: "Discount & ad image", promotionsRunning: "{n} running now", promotionsRunningOne: "1 running now",
     mail: "Email", mailHint: "Inbox info@", whatsapp: "WhatsApp", whatsappHint: "Customer messages",
     backup: "Backup",
     backupHint: "Everything to your laptop",

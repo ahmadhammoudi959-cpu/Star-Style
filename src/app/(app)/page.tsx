@@ -20,6 +20,7 @@ import { NavBadge } from "@/components/Nav";
 import { newShopCustomersCount } from "@/lib/shopify/customers";
 import { newDirectCount } from "@/lib/direct";
 import { runningPromotions } from "@/lib/promotions";
+import { tileVars } from "@/lib/tile-rows";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
   const session = await requireSession();
@@ -59,9 +60,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const backupHint = backupToday
     ? fill(t.home.backupLast, { d: new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit" }).format(new Date(backupToday)) })
     : t.home.backupNone;
+  // Aktionen-Kachel: wie viele gerade laufen (Rabatt oder Werbebild), sonst was man dort macht
+  const promoLive = promos.filter((p) => p.state.price === "active" || p.state.banner === "active").length;
+  const promoHint = promoLive === 1 ? t.home.promotionsRunningOne : promoLive > 1 ? fill(t.home.promotionsRunning, { n: promoLive }) : t.home.promotionsHint;
   const allActions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean; warn?: boolean; badge?: string }[] = [
     { href: "/scan", label: t.home.scan, hint: t.home.scanHint, icon: "scan", tone: "from-teal-500 to-emerald-700" },
     { href: "/sales/invoices/new", label: t.home.sell, hint: t.home.sellHint, icon: "cart", tone: "from-brand-500 to-brand-700" },
+    // Direktverkauf + Aktionen als Kacheln (Wunsch Inhaber 20.11.2026: „حط البيع المباشر والعروض هنا كايكونز“); Zahl = neue Listen wie im Menü
+    { href: "/direct", label: t.home.direct, hint: t.home.directHint, icon: "list", tone: "from-fuchsia-500 to-purple-700", badge: "/api/direct/unread" },
+    { href: "/promotions", label: t.home.promotions, hint: promoHint, icon: "percent", tone: "from-accent-500 to-accent-700" },
     // Kommunikation (Wunsch Inhaber 16.11.2026): Zahl der ungelesenen lädt der Browser nach (blockiert die Startseite nicht)
     { href: "/whatsapp", label: t.home.whatsapp, hint: t.home.whatsappHint, icon: "chat", tone: "from-emerald-500 to-green-700", badge: "event:ss:wa-unread" },
     { href: "/mail", label: t.home.mail, hint: t.home.mailHint, icon: "inbox", tone: "from-indigo-500 to-blue-700", badge: "/api/mail/unread" },
@@ -213,8 +220,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
         </section>
       )}
 
-      {/* Handy: Kacheln nebeneinander zum Wischen (Wunsch Inhaber 04.11.2026), ab Tablet als Raster */}
-      <div className={`stagger swipe-row -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 ${actions.length > 8 ? "sm:grid-cols-3 lg:grid-cols-5" : actions.length === 8 ? "sm:grid-cols-4 2xl:grid-cols-8" : actions.length === 7 ? "sm:grid-cols-4 xl:grid-cols-7" : "sm:grid-cols-3 lg:grid-cols-6"}`}>
+      {/* Handy: Kacheln nebeneinander zum Wischen (Wunsch Inhaber 04.11.2026); ab Tablet gleich volle Reihen über die ganze Breite,
+          am Laptop 11 Kacheln = 2 Reihen 6 + 5 (Wunsch Inhaber 20.11.2026, `tileVars` + globals.css `.tile-rows`) */}
+      <div data-home-tiles className="stagger swipe-row tile-rows -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0"
+        style={tileVars(actions.length) as React.CSSProperties}>
         {actions.map((a) => {
           const inner = (
             <>
@@ -226,7 +235,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
               <div className={`text-xs sm:text-sm ${a.warn ? "font-semibold text-amber-700" : "text-ink-soft"}`}>{a.soon ? t.home.comingSoon : a.hint}</div>
             </>
           );
-          const box = `card group relative w-[38%] shrink-0 snap-start p-4 sm:w-auto sm:p-5${a.warn ? " ring-2 ring-amber-300" : ""}`;
+          const box = `tile card group relative w-[38%] shrink-0 snap-start p-4 sm:p-5${a.warn ? " ring-2 ring-amber-300" : ""}`;
           return a.soon ? (
             <div key={a.href} className={`${box} opacity-60`}>{inner}</div>
           ) : (

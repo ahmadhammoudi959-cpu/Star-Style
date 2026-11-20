@@ -22,6 +22,7 @@ const de = {
     title: "Erste Schritte", intro: "Einfach der Reihe nach. Jeder erledigte Schritt bekommt ein ✓. Wenn alles erledigt ist, verschwindet diese Liste.", progress: "{d} von {n}", start: "Hier starten", done: "Erledigt", company: "Firmendaten ergänzen", companyHint: "Adresse, Steuernummer, Bank und Logo", supplier: "Ersten Lieferanten anlegen", supplierHint: "Bei wem du die Ware kaufst", product: "Artikel anlegen", productHint: "Foto, Name, Preise und vorhandene Menge", receive: "Wareneingang buchen", receiveHint: "Jede neue Lieferung vom Lieferanten", customer: "Ersten Kunden anlegen", customerHint: "Salon oder Person, die bei dir kauft", invoice: "Erste Rechnung schreiben", invoiceHint: "Oder ein Angebot – danach drucken", payment: "Erste Zahlung erfassen", paymentHint: "Wenn der Kunde bezahlt",
   },
   home: {
+    direct: "Direktverkauf", directHint: "Listen vom Bestell-Link", promotions: "Aktionen", promotionsHint: "Rabatt & Werbebild", promotionsRunning: "{n} laufen gerade", promotionsRunningOne: "1 läuft gerade",
     mail: "E-Mail", mailHint: "Postfach info@", whatsapp: "WhatsApp", whatsappHint: "Nachrichten der Kunden",
     backup: "Sicherung",
     backupHint: "Alles auf den Laptop",
