@@ -5,7 +5,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import {
-  ALL_PARTS, companyCreateInput, companyFingerprint, contactName, normEmail, partNote, pickResellerSetup, planResellerPrices, rejectedParts, shownInShop, validEmail,
+  ALL_PARTS, companyCreateInput, companyFingerprint, contactName, EU_REVERSE_CHARGE, normEmail, partNote, pickResellerSetup, planResellerPrices, rejectedParts,
+  reverseCharge, shownInShop, taxSettingsUpdate, validEmail,
   type B2bCustomer, type MarketNode,
 } from "../src/lib/shopify/b2b-map";
 
@@ -62,6 +63,34 @@ describe("Großhandelspreise im Shop (rein)", () => {
     expect(partNote("noTax", [{ message: "Zip is invalid" }, { message: "Tax ID is invalid" }])).toBe("noTax:Tax ID is invalid");
   });
 
+  it("Reverse Charge (20.11.2026): Firma aus anderem EU-Land mit geprüfter USt-IdNr. → Befreiung am Standort; Deutschland nie", () => {
+    const nl: B2bCustomer = { number: 5, type: "COMPANY", name: "Barbershop Hozan", contact: "", email: "hozan@example.com", street: "Markt 1", zip: "7772 CD",
+      city: "Hardenberg", country: "NL", vatId: "nl 0055.42463-b59", vatIdStatus: "VALID" };
+    expect(reverseCharge(nl)).toBe(true);
+    expect(companyCreateInput(nl, false).companyLocation).toMatchObject({ taxRegistrationId: "NL005542463B59", taxExemptions: [EU_REVERSE_CHARGE] });
+    // Nummer nicht (oder noch nicht) als gültig geprüft → MwSt. wie ein Privatkunde
+    for (const st of ["NONE", "PENDING", "INVALID", undefined] as const) {
+      expect(reverseCharge({ ...nl, vatIdStatus: st })).toBe(false);
+      expect(companyCreateInput({ ...nl, vatIdStatus: st }, false).companyLocation).not.toHaveProperty("taxExemptions");
+    }
+    // Deutschland zahlt immer 19 % – auch eine Firma mit gültiger Nummer
+    expect(reverseCharge({ ...ali, vatIdStatus: "VALID" })).toBe(false);
+    expect(companyCreateInput({ ...ali, vatIdStatus: "VALID" }, false).companyLocation).not.toHaveProperty("taxExemptions");
+    expect(reverseCharge({ ...nl, vatId: "DE123456789" })).toBe(false); // deutsche Nummer, Anschrift NL
+    expect(reverseCharge({ ...nl, type: "PERSON" })).toBe(false);
+    expect(reverseCharge({ ...nl, vatId: "" })).toBe(false);
+    expect(reverseCharge({ ...nl, country: "CH", vatId: "CHE123456789" })).toBe(false); // kein EU-Land
+    expect(reverseCharge({ ...nl, country: "GR", vatId: "EL123456789" })).toBe(true);
+    // Nummer vom Shop abgelehnt → ohne Nummer auch keine Befreiung
+    expect(companyCreateInput(nl, false, { address: true, tax: false }).companyLocation).not.toHaveProperty("taxExemptions");
+    // neue Prüfung (gültig ↔ ungültig) ändert den Fingerabdruck → der Shop wird nachgezogen
+    expect(companyFingerprint({ ...nl, vatIdStatus: "INVALID" })).not.toBe(companyFingerprint(nl));
+    expect(companyFingerprint({ ...ali, vatIdStatus: "VALID" })).toBe(companyFingerprint({ ...ali, vatIdStatus: "INVALID" }));
+    expect(taxSettingsUpdate(nl)).toEqual({ tax: "NL005542463B59", add: [EU_REVERSE_CHARGE], remove: [] });
+    expect(taxSettingsUpdate({ ...nl, vatIdStatus: "INVALID" })).toEqual({ tax: "NL005542463B59", add: [], remove: [EU_REVERSE_CHARGE] });
+    expect(taxSettingsUpdate({ ...ali, vatId: "" })).toEqual({ tax: null, add: [], remove: [EU_REVERSE_CHARGE] });
+  });
+
   it("B2B-Markt finden: Bedingung Unternehmensstandorte + Katalog mit Preisliste; Steuer aus dem Markt", () => {
     const region: MarketNode = { id: "M1", name: "Deutschland", status: "ACTIVE", type: "REGION", catalogs: { nodes: [] } };
     expect(pickResellerSetup([region], true)).toEqual({ problem: "noMarket" });
@@ -105,7 +134,7 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
 
   // Shopify-Zustand
   type Contact = { id: string; customerId: string; roles: string[] };
-  type Company = { id: string; name: string; externalId: string; mainContact: string | null; locations: { id: string; address: unknown; tax: string | null }[]; contacts: Contact[] };
+  type Company = { id: string; name: string; externalId: string; mainContact: string | null; locations: { id: string; address: unknown; tax: string | null; exemptions: string[] }[]; contacts: Contact[] };
   const S = {
     customers: new Map<string, { id: string; email: string }>(), companies: new Map<string, Company>(), fixed: new Map<string, string>(),
     seq: 100, deny: false, b2bMarket: true, calls: [] as string[],
@@ -149,7 +178,7 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
           const bad = invalid(i.companyLocation.shippingAddress, i.companyLocation.taxRegistrationId, ["input", "companyLocation"]);
           if (bad.length) return ok({ companyCreate: { company: null, userErrors: bad } });
           const co: Company = { id: gid("Company"), name: i.company.name, externalId: i.company.externalId, mainContact: null, contacts: [],
-            locations: [{ id: gid("CompanyLocation"), address: i.companyLocation.shippingAddress ?? null, tax: i.companyLocation.taxRegistrationId ?? null }] };
+            locations: [{ id: gid("CompanyLocation"), address: i.companyLocation.shippingAddress ?? null, tax: i.companyLocation.taxRegistrationId ?? null, exemptions: i.companyLocation.taxExemptions ?? [] }] };
           if (i.companyContact) {
             if (S.customers.has(i.companyContact.email)) return ok({ companyCreate: { company: null, userErrors: [{ field: ["companyContact", "email"], message: "Email has already been taken" }] } });
             const cu = newCustomer(i.companyContact.email);
@@ -188,7 +217,10 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
         case "companyLocationTaxSettingsUpdate": {
           const bad = invalid(null, v.tax, []);
           if (bad.length) return ok({ companyLocationTaxSettingsUpdate: { companyLocation: null, userErrors: bad } });
-          for (const co of S.companies.values()) for (const l of co.locations) if (l.id === v.id) l.tax = v.tax;
+          for (const co of S.companies.values()) for (const l of co.locations) if (l.id === v.id) {
+            l.tax = v.tax;
+            l.exemptions = [...new Set([...l.exemptions.filter((x) => !(v.remove ?? []).includes(x)), ...(v.add ?? [])])];
+          }
           return ok({ companyLocationTaxSettingsUpdate: { companyLocation: { id: v.id }, userErrors: [] } });
         }
         case "priceList": return ok({ priceList: { id: v.id, prices: { nodes: [...S.fixed.entries()].map(([id, amount]) => ({ variant: { id }, price: { amount } })), pageInfo: { hasNextPage: false, endCursor: "" } } } });
@@ -298,6 +330,31 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
     const ev = await db.select().from(schema.shopEvents).where(eq(schema.shopEvents.ref, mail("mahmoud")));
     expect(ev.some((e) => e.message.startsWith("resellerPartial:"))).toBe(true);
   }, 30_000);
+
+  it("Niederlande mit gültiger USt-IdNr. → Reverse Charge am Standort; Prüfung ungültig → wieder MwSt.; DE nie (20.11.2026)", async () => {
+    vi.stubGlobal("fetch", mock());
+    const id = await customer("Barbershop Hozan", mail("hozan"), { street: "Markt 1", zip: "7772 CD", city: "Hardenberg", country: "NL", vatId: "NL005542463B59", vatIdStatus: "VALID" });
+    await b2b.setResellerWanted(id, true);
+    const r = await b2b.syncShopCompany(id);
+    expect(r).toMatchObject({ status: "linked", error: "" });
+    const co = S.companies.get(r!.companyId)!;
+    expect(co.locations[0]).toMatchObject({ tax: "NL005542463B59", exemptions: [EU_REVERSE_CHARGE] });
+    // Prüfung beim Amt jetzt ungültig (Knopf „Prüfen“, ohne Speichern) → Befreiung weg, Nummer bleibt
+    await db.update(schema.customers).set({ vatIdStatus: "INVALID" }).where(eq(schema.customers.id, id));
+    await b2b.refreshShopCompanies(id);
+    expect(co.locations[0]).toMatchObject({ tax: "NL005542463B59", exemptions: [] });
+    expect(await link(id)).toMatchObject({ status: "linked", error: "" });
+    // wieder gültig, diesmal merkt es der Worker von selbst (alle 5 min)
+    await db.update(schema.customers).set({ vatIdStatus: "VALID" }).where(eq(schema.customers.id, id));
+    for (let i = 0; i < 10 && !co.locations[0].exemptions.length; i++) await b2b.retryShopCompanies();
+    expect(co.locations[0].exemptions).toEqual([EU_REVERSE_CHARGE]);
+    expect(await b2b.setResellerWanted(id, true)).toBe(false); // danach nichts mehr zu tun
+    // Firma in Deutschland mit gültiger Nummer → keine Befreiung (19 %)
+    const de = await customer("Salon Datteln", mail("datteln"), { vatId: "DE123456789", vatIdStatus: "VALID" });
+    await b2b.setResellerWanted(de, true);
+    const rd = await b2b.syncShopCompany(de);
+    expect(S.companies.get(rd!.companyId)!.locations[0]).toMatchObject({ tax: "DE123456789", exemptions: [] });
+  }, 60_000);
 
   it("Recht fehlt → bleibt vorgemerkt; nach Freigabe verbindet der Worker", async () => {
     vi.stubGlobal("fetch", mock());

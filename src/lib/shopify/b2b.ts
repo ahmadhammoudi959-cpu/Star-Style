@@ -17,7 +17,7 @@ import { activeDiscounts } from "../promotions";
 import { CHANNELS, logEvent } from "./sync";
 import {
   ALL_PARTS, chunks, companyAddress, companyCreateInput, companyFingerprint, contactName, normEmail, partNote, pickResellerSetup, planResellerPrices,
-  rejectedParts, shownInShop, validEmail, vatForShop,
+  rejectedParts, shownInShop, taxSettingsUpdate, validEmail,
   type B2bCustomer, type CompanyParts, type FixedPrice, type MarketNode, type ResellerProblem, type ResellerSetup,
 } from "./b2b-map";
 
@@ -176,7 +176,9 @@ const REVOKE_M = `mutation($id: ID!) { companyContactRevokeRoles(companyContactI
 const COMPANY_UPDATE_M = `mutation($id: ID!, $input: CompanyInput!) { companyUpdate(companyId: $id, input: $input) { company { id } userErrors { field message } } }`;
 const ADDRESS_M = `mutation($id: ID!, $address: CompanyAddressInput!) { companyLocationAssignAddress(locationId: $id, address: $address, addressTypes: [BILLING, SHIPPING]) {
   addresses { id } userErrors { field message } } }`;
-const TAX_M = `mutation($id: ID!, $tax: String) { companyLocationTaxSettingsUpdate(companyLocationId: $id, taxRegistrationId: $tax) { companyLocation { id } userErrors { field message } } }`;
+// USt-IdNr. + Reverse Charge (EU_REVERSE_CHARGE_EXEMPTION_RULE) an bzw. aus – siehe reverseCharge() in b2b-map.ts
+const TAX_M = `mutation($id: ID!, $tax: String, $add: [TaxExemption!], $remove: [TaxExemption!]) {
+  companyLocationTaxSettingsUpdate(companyLocationId: $id, taxRegistrationId: $tax, exemptionsToAssign: $add, exemptionsToRemove: $remove) { companyLocation { id } userErrors { field message } } }`;
 
 type CompanyState = {
   id: string; mainContact: { id: string } | null; defaultRole: { id: string } | null; contactRoles: { nodes: { id: string; name: string }[] };
@@ -194,6 +196,7 @@ async function shopCustomer(shop: Shop, email: string) {
 
 const toB2b = (c: typeof schema.customers.$inferSelect): B2bCustomer => ({
   number: c.number, type: c.type, name: c.name, contact: c.contact, email: c.email, street: c.street, zip: c.zip, city: c.city, country: c.country, vatId: c.vatId,
+  vatIdStatus: c.vatIdStatus,
 });
 
 /** Soll dieser Kunde im Shop die Wiederverkäuferpreise sehen? (Häkchen + Gruppe „جملة الجملة“ + gültige E-Mail + aktiv) */
@@ -343,10 +346,11 @@ export async function syncShopCompany(customerId: string, channel: ShopChannel =
         const d = await call<{ companyContactAssignRole: { userErrors: UserError[] } }>(shop, ASSIGN_ROLE_M, { contactId, roleId, locationId });
         check(d.companyContactAssignRole.userErrors, "companyContactAssignRole");
       }
-      // Name, Anschrift, USt-IdNr. geändert → im Shop nachziehen (beim Neuanlegen schon richtig). Lehnt Shopify Anschrift bzw.
-      // USt-IdNr. ab → bleibt verbunden, mit Hinweis (Fingerabdruck ohne den Teil → beim nächsten Speichern neuer Versuch)
+      // Name, Anschrift, USt-IdNr., Reverse Charge geändert → im Shop nachziehen (beim Neuanlegen schon richtig; ein vorhandenes
+      // Unternehmen, das wir übernommen haben, bekommt die Daten aus dem System). Lehnt Shopify Anschrift bzw. USt-IdNr. ab →
+      // bleibt verbunden, mit Hinweis (Fingerabdruck ohne den Teil → beim nächsten Speichern neuer Versuch)
       const fp = companyFingerprint(b2b);
-      if (!created && row.fingerprint && row.fingerprint !== fp) {
+      if (!created && row.fingerprint !== fp) {
         const u = await call<{ companyUpdate: { userErrors: UserError[] } }>(shop, COMPANY_UPDATE_M, { id: companyId, input: { name: b2b.name.trim().slice(0, 255) } });
         check(u.companyUpdate.userErrors, "companyUpdate");
         const address = companyAddress(b2b);
@@ -356,7 +360,7 @@ export async function syncShopCompany(customerId: string, channel: ShopChannel =
           if (errs.length && rejectedParts(errs).address) { parts.address = false; notes.push(partNote("noAddress", errs)); }
           else check(errs, "companyLocationAssignAddress");
         }
-        const t = await call<{ companyLocationTaxSettingsUpdate: { userErrors: UserError[] } }>(shop, TAX_M, { id: locationId, tax: vatForShop(b2b) || null });
+        const t = await call<{ companyLocationTaxSettingsUpdate: { userErrors: UserError[] } }>(shop, TAX_M, { id: locationId, ...taxSettingsUpdate(b2b) });
         const terrs = t.companyLocationTaxSettingsUpdate.userErrors ?? [];
         if (terrs.length && rejectedParts(terrs).tax) { parts.tax = false; notes.push(partNote("noTax", terrs)); }
         else check(terrs, "companyLocationTaxSettingsUpdate");
@@ -413,8 +417,29 @@ export async function syncShopCompanyNow(customerId: string, timeoutMs = 8000, c
   try { return await Promise.race([work, late]); } finally { clearTimeout(timer); }
 }
 
-/** Worker (alle 5 min): vorgemerkte Verbindungen (Shop war weg, Recht fehlte) */
+/**
+ * Verbundene Unternehmen, deren Daten sich im System geändert haben, ohne dass der Kunde gespeichert wurde – z. B. USt-IdNr. inzwischen
+ * als gültig geprüft (→ Reverse Charge im Shop, Wunsch Inhaber 20.11.2026) – zum Nachziehen vormerken. Nicht bei abgelehnter
+ * Anschrift/USt-IdNr. („noAddress:“/„noTax:“): das versucht erst das nächste Speichern (sonst alle 5 min dieselbe Ablehnung).
+ */
+async function markStaleShopCompanies(customerId?: string): Promise<ShopChannel[]> {
+  const rows = await db.select({ id: schema.shopCompanies.id, channel: schema.shopCompanies.channel, fingerprint: schema.shopCompanies.fingerprint, error: schema.shopCompanies.error, c: schema.customers })
+    .from(schema.shopCompanies).innerJoin(schema.customers, eq(schema.customers.id, schema.shopCompanies.customerId))
+    .where(and(eq(schema.shopCompanies.status, "linked"), eq(schema.shopCompanies.wanted, true), customerId ? eq(schema.shopCompanies.customerId, customerId) : undefined));
+  const stale = rows.filter((r) => !/^no(Address|Tax):/.test(r.error) && r.fingerprint !== companyFingerprint(toB2b(r.c)));
+  for (const r of stale) await db.update(schema.shopCompanies).set({ status: "pending", tries: 0, updatedAt: new Date() }).where(and(eq(schema.shopCompanies.id, r.id), eq(schema.shopCompanies.status, "linked")));
+  return stale.map((r) => r.channel as ShopChannel);
+}
+
+/** Nach der USt-Prüfung am Kunden: Reverse Charge im Shop gleich an bzw. aus (höchstens timeoutMs warten, sonst Worker) */
+export async function refreshShopCompanies(customerId: string, timeoutMs = 8000): Promise<ShopCompany[]> {
+  const channels = await markStaleShopCompanies(customerId);
+  return channels.length ? syncShopCompanyNow(customerId, timeoutMs, channels) : [];
+}
+
+/** Worker (alle 5 min): vorgemerkte Verbindungen (Shop war weg, Recht fehlte) + geänderte Daten ohne Speichern */
 export async function retryShopCompanies() {
+  await markStaleShopCompanies().catch((e) => console.error("shopify b2b stale", e));
   const rows = await db.select({ customerId: schema.shopCompanies.customerId, channel: schema.shopCompanies.channel }).from(schema.shopCompanies)
     .where(and(eq(schema.shopCompanies.status, "pending"), lt(schema.shopCompanies.tries, 2000))).orderBy(asc(schema.shopCompanies.updatedAt)).limit(30);
   for (const r of rows) await syncShopCompany(r.customerId, r.channel as ShopChannel).catch((e) => console.error("shopify b2b retry", e));

@@ -4,10 +4,13 @@
  * derselben E-Mail), Erkennen des B2B-Markts mit der Preisliste und Plan für die Festpreise der Preisliste.
  */
 import { shopPriceCents } from "./product-push-map";
+import { determineTaxMode, type VatIdStatus } from "../tax";
 
 export type B2bCustomer = {
   number: number; type: "COMPANY" | "PERSON"; name: string; contact: string; email: string;
   street: string; zip: string; city: string; country: string; vatId: string;
+  /** Ergebnis der Prüfung im System (BZSt/VIES) – nur „VALID“ befreit im Shop von der MwSt. (Reverse Charge) */
+  vatIdStatus?: VatIdStatus;
 };
 
 import { normEmail } from "./b2b-email";
@@ -22,6 +25,21 @@ export function contactName(c: Pick<B2bCustomer, "name" | "contact">): { firstNa
 
 const vatOf = (c: B2bCustomer) => c.vatId.replace(/[\s.-]/g, "").toUpperCase();
 const countryOf = (c: B2bCustomer) => (/^[A-Za-z]{2}$/.test(c.country.trim()) ? c.country.trim().toUpperCase() : "DE");
+
+/** Shopify-Steuerbefreiung für Firmen aus einem anderen EU-Land (innergemeinschaftliche Lieferung, Reverse Charge) */
+export const EU_REVERSE_CHARGE = "EU_REVERSE_CHARGE_EXEMPTION_RULE";
+
+/**
+ * Reverse Charge am Unternehmensstandort im Shop (Wunsch Inhaber 20.11.2026: Firma aus den Niederlanden/Dänemark … mit gültiger
+ * USt-IdNr. zahlt im Checkout netto – 100 statt 119; Deutschland immer 19 %, auch mit Nummer; ohne gültige Nummer mit MwSt.).
+ * Genau dann, wenn das System selbst so rechnet (`determineTaxMode` = EU_REVERSE_CHARGE: Firma, EU-Land außer DE, USt-IdNr. im System
+ * als gültig geprüft) und die Nummer nicht deutsch ist. Shopify befreit dann nur Lieferungen über eine Grenze (Lager DE → anderes EU-Land).
+ */
+export function reverseCharge(c: B2bCustomer): boolean {
+  const vat = vatOf(c);
+  if (!vat || vat.startsWith("DE")) return false;
+  return determineTaxMode({ type: c.type, country: countryOf(c), vatIdStatus: c.vatIdStatus ?? "NONE" }) === "EU_REVERSE_CHARGE";
+}
 
 /** Anschrift des Standorts; ohne Straße oder Ort keine (der Kunde gibt sie dann im Checkout ein) */
 export function companyAddress(c: B2bCustomer) {
@@ -46,6 +64,8 @@ export function companyCreateInput(c: B2bCustomer, withContact: boolean, parts: 
       name: (c.city.trim() ? `${c.name.trim()} – ${c.city.trim()}` : c.name.trim()).slice(0, 255),
       ...(address ? { shippingAddress: address, billingSameAsShipping: true } : {}),
       ...(vat ? { taxRegistrationId: vat } : {}),
+      // Firma aus einem anderen EU-Land mit gültiger USt-IdNr. → im Checkout ohne MwSt. (nur zusammen mit der Nummer)
+      ...(vat && reverseCharge(c) ? { taxExemptions: [EU_REVERSE_CHARGE] } : {}),
       // Lieferadresse im Checkout änderbar, Bestellung direkt (kein Entwurf zur Prüfung)
       buyerExperienceConfiguration: { checkoutToDraft: false, editableShippingAddress: true },
     },
@@ -53,9 +73,16 @@ export function companyCreateInput(c: B2bCustomer, withContact: boolean, parts: 
   };
 }
 
-/** Was im Shop zum Unternehmen steht – ändert sich das, wird es dort nachgezogen */
+/** Was im Shop zum Unternehmen steht – ändert sich das, wird es dort nachgezogen (auch: Reverse Charge an/aus nach neuer USt-Prüfung) */
 export function companyFingerprint(c: B2bCustomer) {
-  return JSON.stringify([c.name.trim(), companyAddress(c), vatOf(c)]);
+  return JSON.stringify([c.name.trim(), companyAddress(c), vatOf(c), reverseCharge(c)]);
+}
+
+/** Steuer-Einstellungen des Standorts beim Nachziehen (companyLocationTaxSettingsUpdate): Nummer + Reverse Charge an bzw. aus */
+export function taxSettingsUpdate(c: B2bCustomer) {
+  const vat = vatOf(c);
+  const rc = Boolean(vat) && reverseCharge(c);
+  return { tax: vat || null, add: rc ? [EU_REVERSE_CHARGE] : [], remove: rc ? [] : [EU_REVERSE_CHARGE] };
 }
 
 export const vatForShop = vatOf;

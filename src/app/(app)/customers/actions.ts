@@ -9,8 +9,9 @@ import { can, requirePerm } from "@/lib/auth";
 import { parseMoney } from "@/lib/money";
 import { audit } from "@/lib/stock";
 import { splitVatId } from "@/lib/vat-check";
+import { isEu } from "@/lib/tax";
 import { validEmail } from "@/lib/shopify/b2b-map";
-import { RESELLER_CHANNELS, setResellerWanted, syncShopCompanyNow } from "@/lib/shopify/b2b";
+import { RESELLER_CHANNELS, refreshShopCompanies, setResellerWanted, syncShopCompanyNow } from "@/lib/shopify/b2b";
 import type { ShopChannel } from "@/lib/shopify/client";
 import { deleteCustomer, RecordDeleteError } from "@/lib/record-delete";
 import type { DeleteState } from "@/components/DeleteRecord";
@@ -64,6 +65,7 @@ export async function saveCustomer(_: CustomerState, fd: FormData): Promise<Cust
   const days = paymentTermDays.trim() ? Number(paymentTermDays) : null;
 
   let cid = id;
+  let checkVat = false;
   await db.transaction(async (tx) => {
     const before = id ? await tx.query.customers.findFirst({ where: eq(schema.customers.id, id) }) : undefined;
     // Status der USt-IdNr.: geänderte Nummer muss neu geprüft werden
@@ -71,6 +73,8 @@ export async function saveCustomer(_: CustomerState, fd: FormData): Promise<Cust
     if (!before || before.vatId !== d.vatId) vatIdStatus = "NONE"; // neue Nummer → neu prüfen
     if (vatPending && !d.vatId) vatIdStatus = "PENDING";
     if (!vatPending && vatIdStatus === "PENDING") vatIdStatus = "NONE";
+    // neue bzw. noch nie geprüfte Nummer einer Firma aus einem anderen EU-Land → gleich beim Amt prüfen (unten, im Hintergrund)
+    checkVat = Boolean(d.vatId) && vatIdStatus === "NONE" && d.type === "COMPANY" && d.country !== "DE" && isEu(d.country);
     // Kreditlimit und Zahlungsziel nur mit Recht „Kreditlimit“ – sonst bleiben die alten Werte
     const credit = can(session, "customers.credit");
     const values = { ...d, vatIdStatus, creditLimitCents: credit ? limit : (before?.creditLimitCents ?? null), paymentTermDays: credit ? days : (before?.paymentTermDays ?? null) };
@@ -90,6 +94,12 @@ export async function saveCustomer(_: CustomerState, fd: FormData): Promise<Cust
     for (const ch of RESELLER_CHANNELS) if (await setResellerWanted(cid!, wantedIn(ch), session.uid, ch)) todo.push(ch);
     if (todo.length) await syncShopCompanyNow(cid!, 8000, todo);
   } catch (e) { console.error("shopify b2b", e); }
+  // Prüfung beim Amt (BZSt + VIES, je bis 12 s) im Hintergrund – gültig → Rechnungen im System ohne MwSt. (Reverse Charge) und bei
+  // Wiederverkäufern die Steuerbefreiung am Unternehmensstandort im Shop (Wunsch Inhaber 20.11.2026: NL-Nummer → 19 % weg)
+  if (checkVat) {
+    const customerId = cid!;
+    void verifyCustomerVat(customerId, session.uid).then((v) => (v.status ? refreshShopCompanies(customerId) : null)).catch((e) => console.error("vat check", e));
+  }
   revalidatePath("/customers");
   redirect(returnTo && !id ? `${returnTo}?customer=${cid}&saved=1` : `/customers/${cid}?saved=1`);
 }
@@ -112,6 +122,8 @@ export async function runVatCheck(_: CheckState, fd: FormData): Promise<CheckSta
   const c = await db.query.customers.findFirst({ where: eq(schema.customers.id, id) });
   if (!c || !c.vatId) return { error: "required" };
   const v = await verifyCustomerVat(c.id, session.uid);
+  // Wiederverkäufer im Shop: gültige ausländische EU-Nummer → Reverse Charge am Unternehmensstandort an (ungültig → aus)
+  if (v.status && v.status !== c.vatIdStatus) await refreshShopCompanies(c.id).catch((e) => console.error("shopify b2b", e));
   revalidatePath(`/customers/${c.id}`);
   if (!v.status) return { error: v.ownVatMissing ? "ownVatMissing" : "unavailable" };
   return { ok: true };

@@ -19,6 +19,8 @@ export type ShopOrder = {
   refunds: { id: string; createdAt: string; totalRefundedSet: Money; refundLineItems: { nodes: { quantity: number; restockType: string; lineItem: { id: string } }[] } }[];
   /** USt-IdNr. aus dem Checkout-Feld „USt-IdNr. des Unternehmens“ (ab API 2026-07, braucht read_customers/read_taxes) */
   customer?: { taxSettings?: { taxId?: string | null } | null } | null;
+  /** B2B-Bestellung (Wiederverkäufer): USt-IdNr. am Unternehmensstandort – im B2B-Checkout gibt es kein eigenes Feld */
+  purchasingEntity?: { location?: { taxSettings?: { taxRegistrationId?: string | null } | null } | null } | null;
   /** Sendungen (auch die im Shopify-Admin angelegten) – fehlt, wenn die App das Feld nicht lesen darf */
   fulfillments?: ShopFulfillment[];
   /** Lieferart je Fulfillment-Auftrag (Abholung im Lager = PICK_UP) – fehlt ohne Recht wie fulfillments */
@@ -55,7 +57,10 @@ export function mapOrder(o: ShopOrder, links: Map<string, string>): MappedOrder 
   const country = (addr?.countryCodeV2 ?? "DE").toUpperCase();
   const person = [bill?.firstName, bill?.lastName].filter(Boolean).join(" ").trim();
   const company = (bill?.company ?? "").trim();
-  const vatId = /^[A-Z]{2}[0-9A-Z+*]{2,13}$/.test(normalizeVatId(o.customer?.taxSettings?.taxId)) ? normalizeVatId(o.customer?.taxSettings?.taxId) : "";
+  // Nummer aus dem Checkout (normaler Kunde) bzw. vom Unternehmensstandort (Wiederverkäufer, Reverse Charge über die Steuerbefreiung)
+  const b2bLocation = o.purchasingEntity?.location ?? null;
+  const rawVat = normalizeVatId(o.customer?.taxSettings?.taxId) || normalizeVatId(b2bLocation?.taxSettings?.taxRegistrationId);
+  const vatId = /^[A-Z]{2}[0-9A-Z+*]{2,13}$/.test(rawVat) ? rawVat : "";
   const unmapped: string[] = [];
 
   const lines: LineInput[] = o.lineItems.nodes.filter((l) => l.quantity > 0).map((l) => {
@@ -102,7 +107,7 @@ export function mapOrder(o: ShopOrder, links: Map<string, string>): MappedOrder 
   return {
     ref: o.name, externalId: o.id, date: berlinDate(o.createdAt),
     customer: {
-      name: (company || person || o.email || o.name).slice(0, 120), email: (o.email ?? "").toLowerCase(), type: company || vatId ? "COMPANY" : "PERSON",
+      name: (company || person || o.email || o.name).slice(0, 120), email: (o.email ?? "").toLowerCase(), type: company || vatId || b2bLocation ? "COMPANY" : "PERSON",
       street: [addr?.address1, addr?.address2].filter(Boolean).join(", "), zip: addr?.zip ?? "", city: addr?.city ?? "", country,
       phone: addr?.phone ?? "", contact: company ? person : "", vatId,
     },

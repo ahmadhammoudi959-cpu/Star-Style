@@ -169,12 +169,15 @@ const ORDER_BASE = `id name createdAt updatedAt processedAt cancelledAt test ema
 // - Sendungen der Bestellung (auch im Shopify-Admin angelegte, Zustellstatus): ohne → nur unsere eigenen Sendungen
 const EXTRAS = [
   { key: "taxid", fields: ` customer { taxSettings { taxId } }`, match: /taxSettings|customer|read_taxes/i, log: "needScopeTaxes" },
+  // Wiederverkäufer (B2B): USt-IdNr. am Unternehmensstandort – steuerfreie EU-Bestellung = Reverse Charge (read_customers/read_companies)
+  { key: "company", fields: ` purchasingEntity { ... on PurchasingCompany { location { taxSettings { taxRegistrationId } } } }`,
+    match: /purchasingEntity|PurchasingCompany|CompanyLocation|taxRegistrationId|taxSettings|read_companies/i, log: "needScopeCompanies" },
   { key: "fulfil", log: "needScopeFulfillments", match: /fulfil/i, fields: ` fulfillments(first: 20) { id status displayStatus createdAt
     trackingInfo(first: 10) { company number url } fulfillmentLineItems(first: 100) { nodes { quantity lineItem { id } } } }
     fulfillmentOrders(first: 10) { nodes { deliveryMethod { methodType } } }` },
 ];
 const extraAccess = new Map<string, { ok: boolean; at: number }>();
-const SCOPE_ERROR = /access denied|not approved|required access|access scope|taxSettings|read_customers|read_taxes/i;
+const SCOPE_ERROR = /access denied|not approved|required access|access scope|taxSettings|read_customers|read_taxes|read_companies|purchasingEntity/i;
 
 async function gqlOrders<T>(shop: Shop, build: (fields: string) => string, variables: Record<string, unknown>): Promise<T> {
   const k = (x: (typeof EXTRAS)[number]) => `${shop.channel}:${x.key}`;

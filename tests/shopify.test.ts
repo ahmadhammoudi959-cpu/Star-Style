@@ -78,6 +78,23 @@ describe("Shopify-Bestellung → Rechnung", () => {
     // Inland mit USt-IdNr.: normale 19 %, Nummer wird beim Kunden gespeichert
     expect(mapOrder(order({ customer: { taxSettings: { taxId: "DE123456789" } } }), links)).toMatchObject({ taxMode: "DOMESTIC", customer: { type: "COMPANY", vatId: "DE123456789" } });
   });
+  it("Wiederverkäufer (B2B, 20.11.2026): Nummer vom Unternehmensstandort, steuerfrei nach NL → Reverse Charge; mit MwSt. bleibt es normal", () => {
+    const nl = { firstName: "Hozan", lastName: "", company: "Barbershop Hozan", address1: "Markt 1", zip: "7772 CD", city: "Hardenberg", countryCodeV2: "NL" };
+    const noTax = { nodes: [{ ...order().lineItems.nodes[0], taxLines: [] }] };
+    const company = { location: { taxSettings: { taxRegistrationId: "nl 005542463 b59" } } };
+    const base = { shippingAddress: nl, billingAddress: nl, lineItems: noTax, shippingLines: { nodes: [] }, totalPriceSet: money(23.97), customer: { taxSettings: { taxId: null } } };
+    expect(mapOrder(order({ ...base, purchasingEntity: company }), links)).toMatchObject({
+      taxMode: "EU_REVERSE_CHARGE", skip: null, customer: { type: "COMPANY", vatId: "NL005542463B59", name: "Barbershop Hozan", country: "NL" },
+    });
+    // die Nummer aus dem Checkout geht vor
+    expect(mapOrder(order({ ...base, customer: { taxSettings: { taxId: "NL111111111B01" } }, purchasingEntity: company }), links).customer.vatId).toBe("NL111111111B01");
+    // Unternehmen ohne Nummer → von Hand; normaler Kunde (Customer statt Unternehmen = leeres Objekt) → wie bisher
+    expect(mapOrder(order({ ...base, purchasingEntity: { location: { taxSettings: { taxRegistrationId: null } } } }), links).skip).toBe("noTaxEu");
+    expect(mapOrder(order({ ...base, purchasingEntity: {} }), links).skip).toBe("noTaxEu");
+    // Shop hat doch MwSt. berechnet (Nummer nicht geprüft) → EU-B2C wie berechnet, Nummer trotzdem am Kunden
+    const taxed = { nodes: [{ ...order().lineItems.nodes[0], taxLines: [{ rate: 0.19 }] }] };
+    expect(mapOrder(order({ ...base, lineItems: taxed, purchasingEntity: company }), links)).toMatchObject({ taxMode: "EU_B2C", customer: { vatId: "NL005542463B59" } });
+  });
   it("Fremdwährung wird nicht automatisch gebucht", () => {
     expect(mapOrder(order({ currencyCode: "CHF" }), links).skip).toBe("currency");
   });

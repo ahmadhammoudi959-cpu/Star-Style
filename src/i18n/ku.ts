@@ -1288,6 +1288,7 @@ const ku: Dict = {
       vatCheckLater: "Bê bac hate tomarkirin (Reverse charge, bac li ser wergir); kontrola hejmara bacê (USt-IdNr.) li fermangeha bacê wê demê nedixebitî – mişterî veke û li “Niha kontrol bike” bitikîne",
       vatCountryMismatch: "Hejmara bacê (USt-IdNr.) û navnîşana radestkirinê ji du welatên cuda yên EU ne – ji kerema xwe kontrol bike",
       needScopeTaxes: "Sepana firoşgehê hîn nikare hejmarên bacê (USt-IdNr.) yên mişteriyan bixwîne (destûra read_customers tune) – heta wê demê siparişên EU yên bê bac bi destan tên kirin",
+      needScopeCompanies: "Sepana firoşgehê hîn nikare hejmarên bacê (USt-IdNr.) yên firoşkaran (şirketên di firoşgehê de) bixwîne – heta wê demê siparişên wan ên EU yên bê bac bi destan tên kirin",
       "skip:currency": "Sipariş bi diravekî biyanî ye – ji kerema xwe bi destan çêke",
       "skip:noLines": "Siparişa bê berhem hate derbaskirin",
       unmapped: "Berhemên negirêdayî – ji stokê nehatin kêmkirin",
