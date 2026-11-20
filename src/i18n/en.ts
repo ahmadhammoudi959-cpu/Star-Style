@@ -1468,6 +1468,8 @@ const en: Dict = {
     homeRunning: "Promotion “{name}”: −{p}% on {n} items",
     homeUntil: " · until {d}",
     homeScheduled: "Promotion “{name}” starts on {d}",
+    homeLive: "{n} promotions running now", homeLiveOne: "1 promotion running now", homePlanned: "{n} promotions scheduled", homePlannedOne: "1 promotion scheduled",
+    homeUpTo: "up to {p}", homeShow: "Show all", homeHide: "Collapse", homeAll: "Go to promotions",
     errors: {
       notFound: "This promotion no longer exists.",
       noItems: "Please choose at least one item.",

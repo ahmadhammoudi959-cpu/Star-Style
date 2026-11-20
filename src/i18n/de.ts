@@ -1467,6 +1467,8 @@ const de = {
     homeRunning: "Aktion „{name}“: −{p}% auf {n} Artikel",
     homeUntil: " · bis {d}",
     homeScheduled: "Aktion „{name}“ startet am {d}",
+    homeLive: "{n} Aktionen laufen gerade", homeLiveOne: "1 Aktion läuft gerade", homePlanned: "{n} Aktionen geplant", homePlannedOne: "1 Aktion geplant",
+    homeUpTo: "bis {p}", homeShow: "Alle ansehen", homeHide: "Zuklappen", homeAll: "Zur Seite Aktionen",
     errors: {
       notFound: "Diese Aktion gibt es nicht mehr.",
       noItems: "Bitte mindestens einen Artikel wählen.",

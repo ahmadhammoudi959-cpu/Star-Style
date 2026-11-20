@@ -2401,6 +2401,8 @@ const ku: Dict = {
     homeRunning: "Kampanya „{name}“: −{p}% li ser {n} berheman",
     homeUntil: " · heta {d}",
     homeScheduled: "Kampanya „{name}“ di {d} de dest pê dike",
+    homeLive: "{n} kampanya niha çalak in", homeLiveOne: "1 kampanya niha çalak e", homePlanned: "{n} kampanya dê dest pê bikin", homePlannedOne: "1 kampanya dê dest pê bike",
+    homeUpTo: "heta {p}", homeShow: "Hemûyan bibîne", homeHide: "Bigire", homeAll: "Rûpela kampanyayan",
     errors: {
       notFound: "Ev kampanya êdî tune.",
       noItems: "Ji kerema xwe herî kêm berhemekê hilbijêre.",

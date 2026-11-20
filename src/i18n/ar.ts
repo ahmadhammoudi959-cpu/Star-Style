@@ -1468,6 +1468,8 @@ const ar: Dict = {
     homeRunning: "عرض «{name}»: −{p}% على {n} منتج",
     homeUntil: " · لحد {d}",
     homeScheduled: "عرض «{name}» بيبلّش بـ {d}",
+    homeLive: "{n} عروض شغّالة هلق", homeLiveOne: "عرض واحد شغّال هلق", homePlanned: "{n} عروض رح تبلّش قريباً", homePlannedOne: "عرض واحد رح يبلّش قريباً",
+    homeUpTo: "حتى {p}", homeShow: "شوف الكل", homeHide: "سكّر", homeAll: "صفحة العروض",
     errors: {
       notFound: "هالعرض ما عاد موجود.",
       noItems: "اختار منتج واحد عالأقل.",

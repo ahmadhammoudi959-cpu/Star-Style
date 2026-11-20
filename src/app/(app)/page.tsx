@@ -61,8 +61,16 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     ? fill(t.home.backupLast, { d: new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit" }).format(new Date(backupToday)) })
     : t.home.backupNone;
   // Aktionen-Kachel: wie viele gerade laufen (Rabatt oder Werbebild), sonst was man dort macht
-  const promoLive = promos.filter((p) => p.state.price === "active" || p.state.banner === "active").length;
+  const livePromos = promos.filter((p) => p.state.price === "active" || p.state.banner === "active");
+  const promoLive = livePromos.length, promoPlanned = promos.length - promoLive;
   const promoHint = promoLive === 1 ? t.home.promotionsRunningOne : promoLive > 1 ? fill(t.home.promotionsRunning, { n: promoLive }) : t.home.promotionsHint;
+  // eine Karte für alle Aktionen: „4 Aktionen laufen gerade · 1 geplant · bis −50 %“
+  const promoMax = Math.max(0, ...livePromos.map((p) => Math.round(p.discountBp / 100)));
+  const promoUpTo = [...t.promo.homeUpTo.split("{p}"), ""].slice(0, 2); // „bis {p}“ → Text vor/nach der Zahl
+  const promoSummary = [
+    promoLive === 1 ? t.promo.homeLiveOne : promoLive > 1 ? fill(t.promo.homeLive, { n: promoLive }) : "",
+    promoPlanned === 1 ? t.promo.homePlannedOne : promoPlanned > 1 ? fill(t.promo.homePlanned, { n: promoPlanned }) : "",
+  ].filter(Boolean).join(" · ");
   const allActions: { href: string; label: string; hint: string; icon: IconName; tone: string; soon?: boolean; warn?: boolean; badge?: string }[] = [
     { href: "/scan", label: t.home.scan, hint: t.home.scanHint, icon: "scan", tone: "from-teal-500 to-emerald-700" },
     { href: "/sales/invoices/new", label: t.home.sell, hint: t.home.sellHint, icon: "cart", tone: "from-brand-500 to-brand-700" },
@@ -125,25 +133,57 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
         </Link>
       )}
 
-      {/* laufende bzw. geplante Aktionen */}
-      {promos.map((p) => {
-        const name = p.title || fill(t.promo.name, { n: p.number });
-        const running = p.state.price === "active" || p.state.banner === "active";
-        const text = running
-          ? fill(t.promo.homeRunning, { name, p: Math.round(p.discountBp / 100), n: p.items }) + (p.state.price === "active" && p.priceUntil ? fill(t.promo.homeUntil, { d: formatDate(p.priceUntil, intl) }) : "")
-          : fill(t.promo.homeScheduled, { name, d: formatDate(p.priceFrom, intl) });
-        const body = (
-          <span className="flex items-center gap-3">
-            <span className="num grid h-10 min-w-10 shrink-0 place-items-center rounded-xl bg-accent-600 px-1.5 text-sm font-black text-white" dir="ltr">−{Math.round(p.discountBp / 100)}%</span>
-            <span className="font-bold" dir="auto">{text}</span>
-          </span>
-        );
-        return opens("/promotions") ? (
-          <Link key={p.id} href={`/promotions/${p.id}`} className="group card flex animate-rise flex-wrap items-center justify-between gap-3 p-4 ring-2 ring-accent-500/25 hover:shadow-lift" data-home-promo>
-            {body}<Icon name="arrowRight" className="h-4 w-4 text-brand-700 rtl:rotate-180" />
-          </Link>
-        ) : <div key={p.id} className="card flex animate-rise items-center gap-3 p-4 ring-2 ring-accent-500/25" data-home-promo>{body}</div>;
-      })}
+      {/* laufende bzw. geplante Aktionen – EINE Karte, Antippen klappt die Liste auf (Wunsch Inhaber 20.11.2026: „تدوس عليها الليسته
+          تروح متوسعه … كارد واحد بس“ – vorher eine Karte je Aktion, darunter war nichts mehr zu sehen). <details> = ohne JS, per Tastatur. */}
+      {promos.length > 0 && (
+        <details className="group/promos card animate-rise ring-2 ring-accent-500/25" data-home-promos>
+          <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 rounded-2xl p-4 transition hover:bg-accent-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-600 text-white"><Icon name="percent" className="icon-pop h-5 w-5" /></span>
+              <span className="font-bold">
+                {promoSummary}
+                {/* nur die Zahl links nach rechts (sonst stand in Arabisch „%حتى −50“) */}
+                {promoMax > 0 && <> · <span className="text-accent-600">{promoLive > 1 ? promoUpTo[0] : ""}<bdi dir="ltr" className="num">−{promoMax}%</bdi>{promoLive > 1 ? promoUpTo[1] : ""}</span></>}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">
+              <span className="group-open/promos:hidden">{t.promo.homeShow}</span>
+              <span className="hidden group-open/promos:inline">{t.promo.homeHide}</span>
+              <Icon name="chevronDown" className="h-4 w-4 transition-transform duration-200 group-open/promos:rotate-180" />
+            </span>
+          </summary>
+          <ul className="divide-y divide-black/5 border-t border-black/5">
+            {/* laufende zuerst, dann geplante (innerhalb wie bisher: zuletzt geändert zuerst) */}
+            {[...livePromos, ...promos.filter((p) => !livePromos.includes(p))].map((p) => {
+              const name = p.title || fill(t.promo.name, { n: p.number });
+              const running = p.state.price === "active" || p.state.banner === "active";
+              const text = running
+                ? fill(t.promo.homeRunning, { name, p: Math.round(p.discountBp / 100), n: p.items }) + (p.state.price === "active" && p.priceUntil ? fill(t.promo.homeUntil, { d: formatDate(p.priceUntil, intl) }) : "")
+                : fill(t.promo.homeScheduled, { name, d: formatDate(p.priceFrom, intl) });
+              const body = (
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className={`num grid h-9 min-w-9 shrink-0 place-items-center rounded-lg px-1.5 text-xs font-black ${running ? "bg-accent-600 text-white" : "bg-accent-50 text-accent-700 ring-1 ring-accent-500/30"}`} dir="ltr">−{Math.round(p.discountBp / 100)}%</span>
+                  <span className="font-semibold" dir="auto">{text}</span>
+                </span>
+              );
+              return (
+                <li key={p.id}>
+                  {opens("/promotions") ? (
+                    <Link href={`/promotions/${p.id}`} className="group flex items-center justify-between gap-3 px-4 py-3 text-sm transition hover:bg-accent-50/40" data-home-promo>
+                      {body}<Icon name="arrowRight" className="h-4 w-4 shrink-0 text-brand-700 rtl:rotate-180" />
+                    </Link>
+                  ) : <div className="flex items-center gap-3 px-4 py-3 text-sm" data-home-promo>{body}</div>}
+                </li>
+              );
+            })}
+          </ul>
+          {opens("/promotions") && (
+            <div className="flex justify-end border-t border-black/5 px-4 py-2.5">
+              <Link href="/promotions" className="group inline-flex items-center gap-1 text-sm font-bold text-brand-700 hover:underline">{t.promo.homeAll}<Icon name="arrowRight" className="h-4 w-4 rtl:rotate-180" /></Link>
+            </div>
+          )}
+        </details>
+      )}
 
       {/* Listen vom Bestell-Link (Direktverkauf), aus denen noch kein Angebot / keine Rechnung wurde */}
       {directNew > 0 && (
