@@ -47,6 +47,14 @@ export function companyAddress(c: B2bCustomer) {
   return { address1: c.street.trim().slice(0, 255), city: c.city.trim().slice(0, 255), zip: c.zip.trim().slice(0, 20), countryCode: countryOf(c), recipient: c.name.trim().slice(0, 255) };
 }
 
+/**
+ * Name des Standorts im Shop: „Name – Ort“ (der Kunde sieht ihn im Checkout/Kundenkonto). Folgt dem System – am 20.11.2026 stand
+ * beim Standort von K5 noch die E-Mail, weil der Kunde bei der Anlage nur sie als Namen hatte (Unternehmen war schon umbenannt).
+ */
+export function locationName(c: Pick<B2bCustomer, "name" | "city">) {
+  return (c.city.trim() ? `${c.name.trim()} – ${c.city.trim()}` : c.name.trim()).slice(0, 255);
+}
+
 /** Was beim Unternehmen im Shop mitgeschickt wird (Shopify lehnt z. B. eine ungültige PLZ ab → dann ohne Anschrift) */
 export type CompanyParts = { address: boolean; tax: boolean };
 export const ALL_PARTS: CompanyParts = { address: true, tax: true };
@@ -61,7 +69,7 @@ export function companyCreateInput(c: B2bCustomer, withContact: boolean, parts: 
   return {
     company: { name: c.name.trim().slice(0, 255), externalId: `K${c.number}` },
     companyLocation: {
-      name: (c.city.trim() ? `${c.name.trim()} – ${c.city.trim()}` : c.name.trim()).slice(0, 255),
+      name: locationName(c),
       ...(address ? { shippingAddress: address, billingSameAsShipping: true } : {}),
       ...(vat ? { taxRegistrationId: vat } : {}),
       // Firma aus einem anderen EU-Land mit gültiger USt-IdNr. → im Checkout ohne MwSt. (nur zusammen mit der Nummer)
@@ -73,9 +81,12 @@ export function companyCreateInput(c: B2bCustomer, withContact: boolean, parts: 
   };
 }
 
-/** Was im Shop zum Unternehmen steht – ändert sich das, wird es dort nachgezogen (auch: Reverse Charge an/aus nach neuer USt-Prüfung) */
+/**
+ * Was im Shop zum Unternehmen steht – ändert sich das, wird es dort nachgezogen (auch: Reverse Charge an/aus nach neuer USt-Prüfung,
+ * Name des Standorts). Neues Element = alle verbundenen Kunden gelten einmal als veraltet → der Worker zieht sie nach.
+ */
 export function companyFingerprint(c: B2bCustomer) {
-  return JSON.stringify([c.name.trim(), companyAddress(c), vatOf(c), reverseCharge(c)]);
+  return JSON.stringify([c.name.trim(), companyAddress(c), vatOf(c), reverseCharge(c), locationName(c)]);
 }
 
 /** Steuer-Einstellungen des Standorts beim Nachziehen (companyLocationTaxSettingsUpdate): Nummer + Reverse Charge an bzw. aus */

@@ -5,7 +5,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import {
-  ALL_PARTS, companyCreateInput, companyFingerprint, contactName, EU_REVERSE_CHARGE, normEmail, partNote, pickResellerSetup, planResellerPrices, rejectedParts,
+  ALL_PARTS, companyCreateInput, companyFingerprint, contactName, EU_REVERSE_CHARGE, locationName, normEmail, partNote, pickResellerSetup, planResellerPrices, rejectedParts,
   reverseCharge, shownInShop, taxSettingsUpdate, validEmail,
   type B2bCustomer, type MarketNode,
 } from "../src/lib/shopify/b2b-map";
@@ -41,6 +41,10 @@ describe("Großhandelspreise im Shop (rein)", () => {
     // Fingerabdruck ändert sich mit Name/Anschrift/USt-IdNr., nicht mit der E-Mail
     expect(companyFingerprint({ ...ali, email: "x@y.de" })).toBe(companyFingerprint(ali));
     expect(companyFingerprint({ ...ali, street: "Neue Str. 1" })).not.toBe(companyFingerprint(ali));
+    // Standort „Name – Ort“, ohne Ort nur der Name; ein anderer Ort ändert ihn auch ohne Straße (keine Anschrift im Shop)
+    expect(locationName({ name: " Salon Aya ", city: " Herne " })).toBe("Salon Aya – Herne");
+    expect(locationName({ name: "Salon Aya", city: "" })).toBe("Salon Aya");
+    expect(companyFingerprint({ ...ali, street: "", city: "Herne" })).not.toBe(companyFingerprint({ ...ali, street: "", city: "Datteln" }));
   });
 
   it("Shopify lehnt Anschrift/USt-IdNr. ab (PLZ „0000“, 12.11.2026) → erkennen, ohne diesen Teil anlegen, beim nächsten Speichern erneut", () => {
@@ -134,7 +138,7 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
 
   // Shopify-Zustand
   type Contact = { id: string; customerId: string; roles: string[] };
-  type Company = { id: string; name: string; externalId: string; mainContact: string | null; locations: { id: string; address: unknown; tax: string | null; exemptions: string[] }[]; contacts: Contact[] };
+  type Company = { id: string; name: string; externalId: string; mainContact: string | null; locations: { id: string; name: string; address: unknown; tax: string | null; exemptions: string[] }[]; contacts: Contact[] };
   const S = {
     customers: new Map<string, { id: string; email: string }>(), companies: new Map<string, Company>(), fixed: new Map<string, string>(),
     seq: 100, deny: false, b2bMarket: true, calls: [] as string[],
@@ -157,7 +161,7 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
   function mock() {
     return vi.fn(async (_url: string, init: { body: string }) => {
       const { query: q, variables: v } = JSON.parse(String(init.body)) as { query: string; variables: Record<string, any> };
-      const op = (q.match(/(markets|customers|company|companyCreate|companyAssignCustomerAsContact|companyContactCreate|companyAssignMainContact|companyContactAssignRole|companyContactRemoveFromCompany|companyContactRevokeRoles|companyUpdate|companyLocationAssignAddress|companyLocationTaxSettingsUpdate|companyLocationCreate|priceListFixedPricesUpdate|priceList)\(/) ?? [])[1] ?? "?";
+      const op = (q.match(/(markets|customers|company|companyCreate|companyAssignCustomerAsContact|companyContactCreate|companyAssignMainContact|companyContactAssignRole|companyContactRemoveFromCompany|companyContactRevokeRoles|companyUpdate|companyLocationUpdate|companyLocationAssignAddress|companyLocationTaxSettingsUpdate|companyLocationCreate|priceListFixedPricesUpdate|priceList)\(/) ?? [])[1] ?? "?";
       S.calls.push(op);
       if (S.deny && op.startsWith("compan") || S.deny && op === "customers")
         return Response.json({ errors: [{ message: "Access denied for customers field. Required access: `read_customers` access scope.", extensions: { code: "ACCESS_DENIED" } }] });
@@ -178,7 +182,7 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
           const bad = invalid(i.companyLocation.shippingAddress, i.companyLocation.taxRegistrationId, ["input", "companyLocation"]);
           if (bad.length) return ok({ companyCreate: { company: null, userErrors: bad } });
           const co: Company = { id: gid("Company"), name: i.company.name, externalId: i.company.externalId, mainContact: null, contacts: [],
-            locations: [{ id: gid("CompanyLocation"), address: i.companyLocation.shippingAddress ?? null, tax: i.companyLocation.taxRegistrationId ?? null, exemptions: i.companyLocation.taxExemptions ?? [] }] };
+            locations: [{ id: gid("CompanyLocation"), name: i.companyLocation.name, address: i.companyLocation.shippingAddress ?? null, tax: i.companyLocation.taxRegistrationId ?? null, exemptions: i.companyLocation.taxExemptions ?? [] }] };
           if (i.companyContact) {
             if (S.customers.has(i.companyContact.email)) return ok({ companyCreate: { company: null, userErrors: [{ field: ["companyContact", "email"], message: "Email has already been taken" }] } });
             const cu = newCustomer(i.companyContact.email);
@@ -208,6 +212,10 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
           return ok({ companyContactRemoveFromCompany: { removedCompanyContactId: v.id, userErrors: [] } });
         }
         case "companyUpdate": { S.companies.get(v.id)!.name = v.input.name; return ok({ companyUpdate: { company: { id: v.id }, userErrors: [] } }); }
+        case "companyLocationUpdate": {
+          for (const co of S.companies.values()) for (const l of co.locations) if (l.id === v.id) l.name = v.input.name;
+          return ok({ companyLocationUpdate: { companyLocation: { id: v.id }, userErrors: [] } });
+        }
         case "companyLocationAssignAddress": {
           const bad = invalid(v.address, null, []);
           if (bad.length) return ok({ companyLocationAssignAddress: { addresses: null, userErrors: bad } });
@@ -260,7 +268,7 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
     const r = await b2b.syncShopCompany(id);
     expect(r).toMatchObject({ status: "linked", error: "", email: mail("ali") });
     const co = S.companies.get(r!.companyId)!;
-    expect(co).toMatchObject({ name: "Ali Friseurbedarf", locations: [{ tax: "DE123456789", address: { address1: "Ringstr. 1", zip: "45711", city: "Datteln", countryCode: "DE" } }] });
+    expect(co).toMatchObject({ name: "Ali Friseurbedarf", locations: [{ name: "Ali Friseurbedarf – Datteln", tax: "DE123456789", address: { address1: "Ringstr. 1", zip: "45711", city: "Datteln", countryCode: "DE" } }] });
     expect(co.contacts).toHaveLength(1);
     expect(co.contacts[0].roles).toEqual([r!.locationId]); // darf für den Standort bestellen
     expect(custById(co.contacts[0].customerId).email).toBe(mail("ali"));
@@ -271,6 +279,11 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
     expect(await b2b.setResellerWanted(id, true)).toBe(true);
     expect(await b2b.syncShopCompany(id)).toMatchObject({ status: "linked" });
     expect(co.locations[0].address).toMatchObject({ address1: "Neue Str. 5" });
+    // Name geändert (z. B. hatte der Kunde aus dem Shop bei der Anlage nur die E-Mail als Namen) → Unternehmen UND Standort heißen wie im System
+    await db.update(schema.customers).set({ name: "Ali Friseurbedarf GmbH" }).where(eq(schema.customers.id, id));
+    expect(await b2b.setResellerWanted(id, true)).toBe(true);
+    expect(await b2b.syncShopCompany(id)).toMatchObject({ status: "linked" });
+    expect(co).toMatchObject({ name: "Ali Friseurbedarf GmbH", locations: [{ name: "Ali Friseurbedarf GmbH – Datteln" }] });
     // E-Mail geändert → alter Kontakt raus, neuer rein
     await db.update(schema.customers).set({ email: mail("ali.neu") }).where(eq(schema.customers.id, id));
     expect(await b2b.setResellerWanted(id, true)).toBe(true);
@@ -338,7 +351,7 @@ run("Großhandelspreise im Shop (Datenbank, Shopify simuliert)", async () => {
     const r = await b2b.syncShopCompany(id);
     expect(r).toMatchObject({ status: "linked", error: "" });
     const co = S.companies.get(r!.companyId)!;
-    expect(co.locations[0]).toMatchObject({ tax: "NL005542463B59", exemptions: [EU_REVERSE_CHARGE] });
+    expect(co.locations[0]).toMatchObject({ name: "Barbershop Hozan – Hardenberg", tax: "NL005542463B59", exemptions: [EU_REVERSE_CHARGE] });
     // Prüfung beim Amt jetzt ungültig (Knopf „Prüfen“, ohne Speichern) → Befreiung weg, Nummer bleibt
     await db.update(schema.customers).set({ vatIdStatus: "INVALID" }).where(eq(schema.customers.id, id));
     await b2b.refreshShopCompanies(id);

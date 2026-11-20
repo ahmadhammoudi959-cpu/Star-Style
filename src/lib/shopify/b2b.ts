@@ -16,7 +16,7 @@ import { configured, withProductLock } from "./admin";
 import { activeDiscounts } from "../promotions";
 import { CHANNELS, logEvent } from "./sync";
 import {
-  ALL_PARTS, chunks, companyAddress, companyCreateInput, companyFingerprint, contactName, normEmail, partNote, pickResellerSetup, planResellerPrices,
+  ALL_PARTS, chunks, companyAddress, companyCreateInput, companyFingerprint, contactName, locationName, normEmail, partNote, pickResellerSetup, planResellerPrices,
   rejectedParts, shownInShop, taxSettingsUpdate, validEmail,
   type B2bCustomer, type CompanyParts, type FixedPrice, type MarketNode, type ResellerProblem, type ResellerSetup,
 } from "./b2b-map";
@@ -174,6 +174,8 @@ const ASSIGN_ROLE_M = `mutation($contactId: ID!, $roleId: ID!, $locationId: ID!)
 const CONTACT_REMOVE_M = `mutation($id: ID!) { companyContactRemoveFromCompany(companyContactId: $id) { removedCompanyContactId userErrors { field message } } }`;
 const REVOKE_M = `mutation($id: ID!) { companyContactRevokeRoles(companyContactId: $id, revokeAll: true) { revokedRoleAssignmentIds userErrors { field message } } }`;
 const COMPANY_UPDATE_M = `mutation($id: ID!, $input: CompanyInput!) { companyUpdate(companyId: $id, input: $input) { company { id } userErrors { field message } } }`;
+const LOCATION_UPDATE_M = `mutation($id: ID!, $input: CompanyLocationUpdateInput!) { companyLocationUpdate(companyLocationId: $id, input: $input) {
+  companyLocation { id } userErrors { field message } } }`;
 const ADDRESS_M = `mutation($id: ID!, $address: CompanyAddressInput!) { companyLocationAssignAddress(locationId: $id, address: $address, addressTypes: [BILLING, SHIPPING]) {
   addresses { id } userErrors { field message } } }`;
 // USt-IdNr. + Reverse Charge (EU_REVERSE_CHARGE_EXEMPTION_RULE) an bzw. aus – siehe reverseCharge() in b2b-map.ts
@@ -353,6 +355,9 @@ export async function syncShopCompany(customerId: string, channel: ShopChannel =
       if (!created && row.fingerprint !== fp) {
         const u = await call<{ companyUpdate: { userErrors: UserError[] } }>(shop, COMPANY_UPDATE_M, { id: companyId, input: { name: b2b.name.trim().slice(0, 255) } });
         check(u.companyUpdate.userErrors, "companyUpdate");
+        // Standort ebenso („Name – Ort“, sieht der Kunde im Checkout) – vorher blieb dort der Name von der Anlage stehen
+        const ln = await call<{ companyLocationUpdate: { userErrors: UserError[] } }>(shop, LOCATION_UPDATE_M, { id: locationId, input: { name: locationName(b2b) } });
+        check(ln.companyLocationUpdate.userErrors, "companyLocationUpdate");
         const address = companyAddress(b2b);
         if (address) {
           const a = await call<{ companyLocationAssignAddress: { userErrors: UserError[] } }>(shop, ADDRESS_M, { id: locationId, address });
