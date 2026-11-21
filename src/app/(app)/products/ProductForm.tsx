@@ -81,13 +81,14 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
     shopStatus?.linked[c] ? { text: t.product.inShop, tone: "ok" as const }
       : shopStatus?.connected[c] && inShop[c] ? { text: t.product.willCreate, tone: "info" as const } : undefined;
   const [prices, setPrices] = useState({ p: initial.purchasePrice, w: initial.wholesalePrice, r: initial.retailPrice });
-  // Shop-Preis mit MwSt. unter „Einzelhandelspreis“ (Wunsch Inhaber 21.11.2026: damit niemand den Bruttopreis ins Nettofeld
-  // schreibt) – gleiche Rechnung wie beim Senden an den Shop (runder Bruttopreis, `shopPriceCents`)
+  // Preis im Shop mit MwSt. unter Großhandels- und Einzelhandelspreis (Wunsch Inhaber 21.11.2026: damit niemand den
+  // Bruttopreis ins Nettofeld schreibt und klar ist, dass auch Wiederverkäufer mit MwSt. sehen) – gleiche Rechnung wie
+  // beim Senden an den Shop bzw. die Preisliste der Wiederverkäufer (runder Bruttopreis, `shopPriceCents`)
   const [vatBp, setVatBp] = useState(Number(initial.vatRateBp) || 1900);
-  const shopGross = useMemo(() => {
-    const net = parseMoney(prices.r);
-    return net != null && net > 0 ? shopPriceCents(net, vatBp, true) : null;
-  }, [prices.r, vatBp]);
+  const gross = useMemo(() => {
+    const of = (s: string) => { const net = parseMoney(s); return net != null && net > 0 ? shopPriceCents(net, vatBp, true) : null; };
+    return { w: of(prices.w), r: of(prices.r) };
+  }, [prices.w, prices.r, vatBp]);
   // Versandart (Wunsch Inhaber 19.11.2026): automatisch aus Gewicht und Paketmaßen – oder fest eingestellt
   const [shipMode, setShipMode] = useState<"" | ShippingClass>(initial.shippingClass ?? "");
   const shipping = useMemo(() => productShipping(shipMode || null, variants.map((x) => ({
@@ -217,12 +218,16 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
           </Field>
         )}
         <fieldset disabled={!rights.prices} className="contents">
-          <Field label={t.product.wholesale} hint={<SeenBy note={t.product.wholesaleNote}>{rights.cost && margin.w != null && <span className="block">{`${t.product.margin}: ${margin.w} %`}</span>}</SeenBy>}>
+          <Field label={t.product.wholesale} hint={
+            <SeenBy note={t.product.wholesaleNote}>
+              {gross.w != null && <ShopGross tpl={t.product.shopGross} cents={gross.w} />}
+              {rights.cost && margin.w != null && <span className="block">{`${t.product.margin}: ${margin.w} %`}</span>}
+            </SeenBy>}>
             <MoneyInput name="wholesalePrice" value={prices.w} onChange={(w) => setPrices((x) => ({ ...x, w }))} />
           </Field>
           <Field label={t.product.retail} hint={
             <SeenBy note={t.product.retailNote}>
-              {shopGross != null && <ShopGross tpl={t.product.retailGross} cents={shopGross} />}
+              {gross.r != null && <ShopGross tpl={t.product.shopGross} cents={gross.r} />}
               {rights.cost && margin.r != null && <span className="block">{`${t.product.margin}: ${margin.r} %`}</span>}
             </SeenBy>}>
             <MoneyInput name="retailPrice" value={prices.r} onChange={(r) => setPrices((x) => ({ ...x, r }))} />
