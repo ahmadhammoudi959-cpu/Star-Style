@@ -4,10 +4,10 @@ import { flushSync } from "react-dom";
 import { saveProduct } from "./actions";
 import { ShopPushDialog, type Channel, type PushTarget } from "./ShopPushDialog";
 import { galleryItem, ShopGallery, type GItem } from "./ShopGallery";
-import { resolveStoreType, storeTypeLabel, type PushBlocker, type StoreType } from "@/lib/shopify/product-push-map";
+import { resolveStoreType, shopPriceCents, storeTypeLabel, type PushBlocker, type StoreType } from "@/lib/shopify/product-push-map";
 import { ErrorBox, Field, SubmitButton } from "@/components/Forms";
 import { Icon } from "@/components/Icon";
-import { parseMoney } from "@/lib/money";
+import { formatCents, parseMoney } from "@/lib/money";
 import { PhotoPicker } from "@/components/PhotoPicker";
 import { WeightInput } from "@/components/WeightInput";
 import { parseWeight, type WeightUnit } from "@/lib/weight";
@@ -81,6 +81,13 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
     shopStatus?.linked[c] ? { text: t.product.inShop, tone: "ok" as const }
       : shopStatus?.connected[c] && inShop[c] ? { text: t.product.willCreate, tone: "info" as const } : undefined;
   const [prices, setPrices] = useState({ p: initial.purchasePrice, w: initial.wholesalePrice, r: initial.retailPrice });
+  // Shop-Preis mit MwSt. unter „Einzelhandelspreis“ (Wunsch Inhaber 21.11.2026: damit niemand den Bruttopreis ins Nettofeld
+  // schreibt) – gleiche Rechnung wie beim Senden an den Shop (runder Bruttopreis, `shopPriceCents`)
+  const [vatBp, setVatBp] = useState(Number(initial.vatRateBp) || 1900);
+  const shopGross = useMemo(() => {
+    const net = parseMoney(prices.r);
+    return net != null && net > 0 ? shopPriceCents(net, vatBp, true) : null;
+  }, [prices.r, vatBp]);
   // Versandart (Wunsch Inhaber 19.11.2026): automatisch aus Gewicht und Paketmaßen – oder fest eingestellt
   const [shipMode, setShipMode] = useState<"" | ShippingClass>(initial.shippingClass ?? "");
   const shipping = useMemo(() => productShipping(shipMode || null, variants.map((x) => ({
@@ -186,7 +193,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
           </select>
         </Field>
         <Field label={t.product.vat}>
-          <select name="vatRateBp" defaultValue={String(v.vatRateBp)} disabled={!rights.prices} className="input disabled:opacity-60">
+          <select name="vatRateBp" defaultValue={String(v.vatRateBp)} onChange={(e) => setVatBp(Number(e.target.value))} disabled={!rights.prices} className="input disabled:opacity-60">
             <option value="1900">19 %</option>
             <option value="700">7 %</option>
           </select>
@@ -210,10 +217,14 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
           </Field>
         )}
         <fieldset disabled={!rights.prices} className="contents">
-          <Field label={t.product.wholesale} hint={<SeenBy note={t.product.wholesaleNote} extra={rights.cost && margin.w != null ? `${t.product.margin}: ${margin.w} %` : undefined} />}>
+          <Field label={t.product.wholesale} hint={<SeenBy note={t.product.wholesaleNote}>{rights.cost && margin.w != null && <span className="block">{`${t.product.margin}: ${margin.w} %`}</span>}</SeenBy>}>
             <MoneyInput name="wholesalePrice" value={prices.w} onChange={(w) => setPrices((x) => ({ ...x, w }))} />
           </Field>
-          <Field label={t.product.retail} hint={<SeenBy note={t.product.retailNote} extra={rights.cost && margin.r != null ? `${t.product.margin}: ${margin.r} %` : undefined} />}>
+          <Field label={t.product.retail} hint={
+            <SeenBy note={t.product.retailNote}>
+              {shopGross != null && <ShopGross tpl={t.product.retailGross} cents={shopGross} />}
+              {rights.cost && margin.r != null && <span className="block">{`${t.product.margin}: ${margin.r} %`}</span>}
+            </SeenBy>}>
             <MoneyInput name="retailPrice" value={prices.r} onChange={(r) => setPrices((x) => ({ ...x, r }))} />
           </Field>
         </fieldset>
@@ -344,14 +355,20 @@ function MoneyInput({ name, value, onChange }: { name: string; value: string; on
 }
 
 /** Hinweis unter einem Preisfeld: wer diesen Preis sieht (Wunsch Inhaber 21.11.2026 – die Mitarbeiter verwechselten
- *  Großhandels- und Shop-Preis), darunter z. B. die Marge */
-function SeenBy({ note, extra }: { note: string; extra?: string }) {
+ *  Großhandels- und Shop-Preis), darunter z. B. Shop-Preis mit MwSt. und Marge */
+function SeenBy({ note, children }: { note: string; children?: React.ReactNode }) {
   return (
     <>
       <span className="flex items-start gap-1"><Icon name="eye" className="mt-px h-3.5 w-3.5 shrink-0 text-brand-600" />{note}</span>
-      {extra && <span className="block">{extra}</span>}
+      {children}
     </>
   );
+}
+
+/** „Im Shop mit MwSt.: 23,80 €“ – der Betrag als `.num` (in RTL von links nach rechts) */
+function ShopGross({ tpl, cents }: { tpl: string; cents: number }) {
+  const [before, after = ""] = tpl.split("{price}");
+  return <span className="block">{before}<span className="num font-semibold text-ink">{formatCents(cents)}</span>{after}</span>;
 }
 
 function Check({ name, label, defaultChecked, checked, onChange, note }: {

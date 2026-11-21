@@ -77,6 +77,7 @@ const en: Dict = {
     purchaseNote: "No customer sees this – it's only for calculating the margin.",
     wholesaleNote: "Only customers in the “Reseller” group (traders) see it: in both shops after logging in, and on invoices.",
     retailNote: "This is the price every customer sees in both shops (incl. VAT).",
+    retailGross: "In the shop incl. VAT: {price}",
     tracksExpiry: "Has expiry date", shops: "Visible in", brandShop: "Brand shop",
     generalShop: "General shop", variants: "Variants", size: "Size", color: "Colour", barcode: "Barcode (EAN)",
     photo: "Product photo", addPhoto: "Add photo", changePhoto: "Change photo", removePhoto: "Remove photo", photoHint: "Take a photo with your phone or pick an image. Shown everywhere in the system: products, stock, goods receipt, sales. For the shop you can add several product photos below.", variantPhoto: "Photo for this variant", imageType: "Please choose a JPG, PNG or WebP image", fileTooLarge: "Image too large (max 8 MB)", photoProcessing: "Preparing photo…",

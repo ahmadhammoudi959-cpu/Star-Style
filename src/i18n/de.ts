@@ -76,6 +76,7 @@ const de = {
     purchaseNote: "Sieht kein Kunde – nur zur Berechnung der Marge.",
     wholesaleNote: "Sehen nur Kunden der Preisgruppe „Großhandel“ (Händler): in beiden Shops nach dem Anmelden und auf Rechnungen.",
     retailNote: "Diesen Preis sehen alle Kunden in beiden Shops (dort inkl. MwSt.).",
+    retailGross: "Im Shop mit MwSt.: {price}",
     tracksExpiry: "Hat Haltbarkeitsdatum", shops: "Sichtbar in", brandShop: "Marken-Shop",
     generalShop: "Allgemeiner Shop", variants: "Varianten", size: "Größe", color: "Farbe", barcode: "Barcode (EAN)",
     photo: "Produktfoto", addPhoto: "Foto hinzufügen", changePhoto: "Foto ändern", removePhoto: "Foto entfernen", photoHint: "Mit dem Handy fotografieren oder Bild auswählen. Erscheint überall im System: Artikel, Lager, Wareneingang, Verkauf. Für den Shop kannst du unten mehrere Produktfotos hinzufügen.", variantPhoto: "Foto dieser Variante", imageType: "Bitte ein JPG-, PNG- oder WebP-Bild wählen", fileTooLarge: "Bild zu groß (max. 8 MB)", photoProcessing: "Foto wird vorbereitet …",

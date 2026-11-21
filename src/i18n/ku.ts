@@ -203,6 +203,7 @@ const ku: Dict = {
     purchaseNote: "Ti mişterî vî bihayî nabîne – tenê ji bo hesabkirina qezencê.",
     wholesaleNote: "Tenê mişteriyên koma „Firoşkar“ (bazirgan) dibînin: di herdu firoşgehên online de piştî têketinê, û li ser fatûreyan.",
     retailNote: "Ev ew biha ye ku hemû mişterî di herdu firoşgehên online de dibînin (bi bac).",
+    retailGross: "Di firoşgehê de bi bac: {price}",
     tracksExpiry: "Dîroka xerabûnê (MHD) heye",
     shops: "Xuya dibe li",
     brandShop: "Firoşgeha markeyê",
