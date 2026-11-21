@@ -19,6 +19,22 @@ describe("Artikel-Import: Spalten erkennen", () => {
     expect(guessMapping(["Name NL", "Name", "Barcode", "Price", "Qty"])).toEqual({ nameNl: 0, nameDe: 1, barcode: 2, retailPrice: 3, stock: 4 });
     expect(guessMapping(["Product name", "GTIN", "Cost price", "Reseller price", "Category"])).toEqual({ nameDe: 0, barcode: 1, purchasePrice: 2, wholesalePrice: 3, category: 4 });
   });
+  it("neue Namen der Preise (seit 21.11.2026: „سعر الجملة“ = Großhandel, „سعر المتجر“ = Shop), alte Listen gehen weiter", () => {
+    // neue Namen wie im Artikel-Formular
+    expect(guessMapping(["اسم المنتج", "الباركود", "سعر الشراء", "سعر الجملة", "سعر المتجر"]))
+      .toEqual({ nameDe: 0, barcode: 1, purchasePrice: 2, wholesalePrice: 3, retailPrice: 4 });
+    expect(guessMapping(["الاسم", "سعر الجملة بدون ضريبة", "سعر المتجر بدون ضريبة"])).toEqual({ nameDe: 0, wholesalePrice: 1, retailPrice: 2 });
+    // nur „سعر الجملة“ → neuer Name = Großhandelspreis
+    expect(guessMapping(["الاسم", "الباركود", "سعر الجملة"])).toEqual({ nameDe: 0, barcode: 1, wholesalePrice: 2 });
+    // alte Liste (Spaltennamen wie früher im Formular) → „سعر الجملة“ ist dort noch der Shop-Preis
+    expect(guessMapping(["الاسم", "سعر جملة الجملة بدون ضريبة", "سعر الجملة بدون ضريبة"])).toEqual({ nameDe: 0, wholesalePrice: 1, retailPrice: 2 });
+    expect(guessMapping(["الاسم", "جملة الجملة", "سعر الجملة"])).toEqual({ nameDe: 0, wholesalePrice: 1, retailPrice: 2 });
+    // Kurdisch genauso
+    expect(guessMapping(["Nav", "Barkod", "Bihayê komfiroşiyê", "Bihayê firoşgehê"])).toEqual({ nameDe: 0, barcode: 1, wholesalePrice: 2, retailPrice: 3 });
+    expect(guessMapping(["Nav", "Bihayê ji bo firoşkaran", "Bihayê komfiroşiyê"])).toEqual({ nameDe: 0, wholesalePrice: 1, retailPrice: 2 });
+    // Englisch: Wholesale price / Shop price
+    expect(guessMapping(["Name", "Wholesale price", "Shop price"])).toEqual({ nameDe: 0, wholesalePrice: 1, retailPrice: 2 });
+  });
   it("Zuordnung aus dem Formular und Spaltennamen für die Auswahl", () => {
     const p = new URLSearchParams("m_nameDe=0&m_barcode=3&m_sku=&m_color=x");
     expect(mappingFromParams((k) => p.get(k))).toEqual({ nameDe: 0, barcode: 3 });

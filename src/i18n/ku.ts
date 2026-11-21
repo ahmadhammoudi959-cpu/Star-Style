@@ -11,8 +11,9 @@ import type { Dict } from "./de";
 //   MHD = dîroka xerabûnê (MHD) · Verlust = windabûn · Inventur = hejmartina embarê
 //   Zahlung = dravdan · Rate = qist · Anzahlung = pêşdayîn · offene Posten = deynên vekirî
 //   Mahnung = nameya bîranînê · Quittung = belgeya dravdanê · Kreditlimit = sînorê deynê
-//   EK = bihayê kirînê · Großhandelspreis (Wiederverkäufer) = bihayê ji bo firoşkaran
-//   Einzelhandelspreis (Salon, = Shop) = bihayê komfiroşiyê (salon) · netto = net (bê bac) · brutto = bi bac
+//   EK = bihayê kirînê · Großhandelspreis (Feld 2, Preisgruppe „Firoşkar“) = bihayê komfiroşiyê
+//   Einzelhandelspreis (Feld 3, = Shop) = bihayê firoşgehê (Namen seit 21.11.2026 wie ar „سعر الجملة“/„سعر المتجر“;
+//   Preisgruppen bleiben „Firoşkar“ / „Komfiroşî (salon)“) · netto = net (bê bac) · brutto = bi bac
 //   MwSt. = bac (MwSt.) · USt-IdNr. = hejmara bacê ya EU (USt-IdNr.) · Rabatt = daxistin · Summe = tevahî
 //   Shop = firoşgeh · Abgleich = hevdemkirin · Bestellung = sipariş · einschalten/aus = çalak / neçalak bike
 //   Speichern/Abbrechen/Zurück = Tomar bike / Betal bike / Vegere · Öffnen = Veke · Löschen = Jê bibe
@@ -197,8 +198,11 @@ const ku: Dict = {
     supplier: "Dabînker",
     vat: "Bac (MwSt.)",
     purchase: "Bihayê kirînê (bê bac)",
-    wholesale: "Bihayê ji bo firoşkaran (bê bac)",
-    retail: "Bihayê komfiroşiyê (salon, bê bac)",
+    wholesale: "Bihayê komfiroşiyê (bê bac)",
+    retail: "Bihayê firoşgehê (bê bac)",
+    purchaseNote: "Ti mişterî vî bihayî nabîne – tenê ji bo hesabkirina qezencê.",
+    wholesaleNote: "Tenê mişteriyên koma „Firoşkar“ (bazirgan) dibînin: di herdu firoşgehên online de piştî têketinê, û li ser fatûreyan.",
+    retailNote: "Ev ew biha ye ku hemû mişterî di herdu firoşgehên online de dibînin (bi bac).",
     tracksExpiry: "Dîroka xerabûnê (MHD) heye",
     shops: "Xuya dibe li",
     brandShop: "Firoşgeha markeyê",
@@ -239,7 +243,7 @@ const ku: Dict = {
     margin: "Rêjeya qezencê",
     reserved: "veqetandî",
     available: "amade",
-    shopsHint: "Nîşankirî = berhem aîdî vê firoşgehê ye. Dema tu tomar bikî, em dipirsin ka ew berhemeke rastîn e û divê were barkirin an na. Ger ew jixwe li wir hebe (heman barkod), tenê tê girêdan û tenê mezinahî/rengên nû lê zêde dibin. Her mezinahî/reng barkodekê dixwaze, berhemeke nû ya firoşgehê jî kategoriyeke firoşgehê dixwaze. Biha, giranî, kategorî û wêneyên firoşgehê dema tomarkirinê bixwe diçin firoşgehê (bihayê ji bo firoşkaran diçe lîsteya bihayên firoşkaran); nav û danasînê di firoşgehê de biguherîne.",
+    shopsHint: "Nîşankirî = berhem aîdî vê firoşgehê ye. Dema tu tomar bikî, em dipirsin ka ew berhemeke rastîn e û divê were barkirin an na. Ger ew jixwe li wir hebe (heman barkod), tenê tê girêdan û tenê mezinahî/rengên nû lê zêde dibin. Her mezinahî/reng barkodekê dixwaze, berhemeke nû ya firoşgehê jî kategoriyeke firoşgehê dixwaze. Biha, giranî, kategorî û wêneyên firoşgehê dema tomarkirinê bixwe diçin firoşgehê (bihayê komfiroşiyê diçe lîsteya bihayên firoşkaran); nav û danasînê di firoşgehê de biguherîne.",
     inShop: "di firoşgehê de ✓",
     willCreate: "hîn ne di firoşgehê de – dema tu tomar bikî em ê bipirsin",
     gallery: {
@@ -317,7 +321,7 @@ const ku: Dict = {
     },
     pushReasons: {
       noLocation: "Di mîhengên firoşgehê de cihê embarê nehatiye hilbijartin.",
-      noPrice: "Bihayê komfiroşiyê (salon) kêm e.",
+      noPrice: "Bihayê firoşgehê kêm e.",
       currency: "Firoşgeh bi ewro naxebite.",
       noWriteAccess: "Destûra sepana Shopify ji bo çêkirina berheman (write_products) tune.",
       duplicate: "Di firoşgehê de berhemeke din jixwe xwedî vê barkodê ye.",
@@ -348,7 +352,7 @@ const ku: Dict = {
         noBarcode: "barkodek ji bo her mezinahî/rengî",
         noCategory: "kategoriyek (li serê rûpelê)",
         unknownCategory: "kategoriya firoşgehê ya guncav (li jêr hilbijêre)",
-        noPrice: "bihayê komfiroşiyê (salon)",
+        noPrice: "bihayê firoşgehê",
       },
     },
   },
@@ -592,8 +596,8 @@ const ku: Dict = {
     minStock: "Stoka herî kêm",
     variants: "Hemû mezinahî/reng",
     totalStock: "tevahî {n}",
-    wholesale: "Bihayê ji bo firoşkaran (bê bac)",
-    retail: "Bihayê komfiroşiyê (salon, bê bac)",
+    wholesale: "Bihayê komfiroşiyê (bê bac)",
+    retail: "Bihayê firoşgehê (bê bac)",
     withVat: "bi bac",
     sold30: "Hatî firotin (30 roj)",
     sold90: "Hatî firotin (90 roj)",
@@ -638,10 +642,10 @@ const ku: Dict = {
     uploading: "Tê barkirin …", check: "Bar bike û kontrol bike", change: "Pelekî din",
     mapping: "Kîjan stûn çi ye?", mappingHint: "Bixweber hat naskirin – ji kerema xwe kontrol bike. Her guhertin yekser derbas dibe.",
     gross: "Bihayên di pelê de bi bacê ne (brût)", sheet: "Rûpel", auto: "bixweber", headerRow: "Navên stûnan li", rowN: "Rêz {n}", none: "– nayê girtin –",
-    f: { nameDe: "Nav (DE)", nameNl: "Nav (NL)", barcode: "Barkod / EAN", sku: "Hejmara berhemê", category: "Kategorî", size: "Mezinahî", color: "Reng", purchasePrice: "Bihayê kirînê", wholesalePrice: "Bihayê ji bo firoşkaran", retailPrice: "Bihayê komfiroşiyê", vat: "Bac %", stock: "Embar", expiry: "Dîroka xerabûnê", minStock: "Stoka herî kêm", weight: "Giranî", supplier: "Dabînker", description: "Danasîn" },
+    f: { nameDe: "Nav (DE)", nameNl: "Nav (NL)", barcode: "Barkod / EAN", sku: "Hejmara berhemê", category: "Kategorî", size: "Mezinahî", color: "Reng", purchasePrice: "Bihayê kirînê", wholesalePrice: "Bihayê komfiroşiyê", retailPrice: "Bihayê firoşgehê", vat: "Bac %", stock: "Embar", expiry: "Dîroka xerabûnê", minStock: "Stoka herî kêm", weight: "Giranî", supplier: "Dabînker", description: "Danasîn" },
     summary: { products: "berhemên nû", variants: "mezinahî/reng", exists: "berê di sîstemê de", errors: "bi xeletî", photos: "bi wêne", stock: "perçe di embarê de" },
     preview: "Pêşdîtin – her rêz", colRow: "Rêz", colPhoto: "Wêne", colName: "Nav", colCodes: "Barkod / hejmar", colCategory: "Kategorî", colVariant: "Mezinahî / reng", colPrices: "Biha (bê bac)", colStock: "Embar", colStatus: "Rewş",
-    short: { purchase: "Kirîn", wholesale: "Firoşkar", retail: "Komfiroşî" },
+    short: { purchase: "Kirîn", wholesale: "Komfiroşî", retail: "Firoşgeh" },
     st: { new: "dê were çêkirin", exists: "heye – tê derbaskirin", error: "nayê barkirin" }, variantOf: "mezinahî/reng ji bo berhema di rêza {n} de",
     issues: {
       noName: "nav tune", noCode: "barkod an hejmara berhemê tune", dupBarcode: "barkod di pelê de du caran", dupVariant: "heman mezinahî/reng du caran", badPrice: "biha nayê xwendin",
@@ -1137,7 +1141,7 @@ const ku: Dict = {
     off: "Nehatiye sazkirin",
   },
   shop: {
-    reseller: { title: "Bihayên firoşkaran di firoşgehê de (B2B)", ok: "Bazar „{market}“ · katalog „{catalog}“ · biha {tax}", taxIn: "bi bacê", taxOut: "bê bac (di dravdanê de tê zêdekirin)", notAll: "Hişyarî: bazar ne ji bo hemû cihên şirketan e – di firoşgehê de: Bazar → bazar → „Dihewîne“ → „Hemû cihên heyî û yên pêş“ çalak bike.", noMarket: "Di firoşgehê de hîn bazareke B2B tune. Shopify-Admin → Bazar → Bazar çêke → Dihewîne: cihên şirketan, „Hemû cihên heyî û yên pêş“ çalak → Katalog: katalogeke nû bi lîsteya bihayan → Tomar bike.", noPriceList: "Bazara B2B hîn katalogeke bi lîsteya bihayan tune (Shopify-Admin → Bazar → bazar → Katalog).", marketInactive: "Bazara B2B di firoşgehê de ne çalak e.", needScope: "Sepana firoşgehê hîn destûra read_markets tune (ji bo dîtina bazarê).", error: "Firoşgeh niha nayê gihîştin.", customers: "Mişteriyên bi bihayên firoşkaran: {n}", waiting: "li bendê: {n}", problems: "bi pirsgirêk: {n}", send: "Bihayên firoşkaran bişîne firoşgehê", sendHint: "Lîsteya bihayan a bazara B2B bi bihayên firoşkaran tijî dike (dema bihayek tê guhertin jî bixwe dibe).", sent: "Bihayên firoşkaran di firoşgehê de: {u} hatin guhertin · {d} hatin rakirin · {s} jixwe rast in", sentFailed: "Hemû negihîştin: {f} bi xeletî", howTitle: "Çawa dixebite", how: ["Li cem mişterî: koma bihayan „Firoşkar“ + e-name, „Di herdu firoşgehên online de bihayên firoşkaran dibîne“ nîşan bike, tomar bike.", "Sîstem di firoşgehê de şirketekê bi navnîşan û hejmara bacê çêdike; mişteriyê firoşgehê bi vê e-nameyê dibe têkiliya wê.", "Mişterî bi e-nameyê dikeve firoşgehê (kod bi e-nameyê tê) û bihayên firoşkaran dibîne; yên din bihayên asayî dibînin."] },
+    reseller: { title: "Bihayên firoşkaran di firoşgehê de (B2B)", ok: "Bazar „{market}“ · katalog „{catalog}“ · biha {tax}", taxIn: "bi bacê", taxOut: "bê bac (di dravdanê de tê zêdekirin)", notAll: "Hişyarî: bazar ne ji bo hemû cihên şirketan e – di firoşgehê de: Bazar → bazar → „Dihewîne“ → „Hemû cihên heyî û yên pêş“ çalak bike.", noMarket: "Di firoşgehê de hîn bazareke B2B tune. Shopify-Admin → Bazar → Bazar çêke → Dihewîne: cihên şirketan, „Hemû cihên heyî û yên pêş“ çalak → Katalog: katalogeke nû bi lîsteya bihayan → Tomar bike.", noPriceList: "Bazara B2B hîn katalogeke bi lîsteya bihayan tune (Shopify-Admin → Bazar → bazar → Katalog).", marketInactive: "Bazara B2B di firoşgehê de ne çalak e.", needScope: "Sepana firoşgehê hîn destûra read_markets tune (ji bo dîtina bazarê).", error: "Firoşgeh niha nayê gihîştin.", customers: "Mişteriyên bi bihayên firoşkaran: {n}", waiting: "li bendê: {n}", problems: "bi pirsgirêk: {n}", send: "Bihayên firoşkaran bişîne firoşgehê", sendHint: "Lîsteya bihayan a bazara B2B bi „Bihayê komfiroşiyê“ yê her berhemê tijî dike (dema bihayek tê guhertin jî bixwe dibe).", sent: "Bihayên firoşkaran di firoşgehê de: {u} hatin guhertin · {d} hatin rakirin · {s} jixwe rast in", sentFailed: "Hemû negihîştin: {f} bi xeletî", howTitle: "Çawa dixebite", how: ["Li cem mişterî: koma bihayan „Firoşkar“ + e-name, „Di herdu firoşgehên online de bihayên firoşkaran dibîne“ nîşan bike, tomar bike.", "Sîstem di firoşgehê de şirketekê bi navnîşan û hejmara bacê çêdike; mişteriyê firoşgehê bi vê e-nameyê dibe têkiliya wê.", "Mişterî bi e-nameyê dikeve firoşgehê (kod bi e-nameyê tê) û bihayên firoşkaran dibîne; yên din bihayên asayî dibînin."] },
     title: "Firoşgeh",
     subtitle: "Girêdana bi her du firoşgehên Shopify re: stok bixweber tê nûkirin, sipariş dibin fatûre.",
     names: { BRAND_SHOP: "Firoşgeha markeyê", GENERAL_SHOP: "Firoşgeha giştî" },
@@ -1156,7 +1160,7 @@ const ku: Dict = {
     importProducts: "Berhemên ku tune ne ji firoşgehê çêke",
     importConfirm: "Berhemên ku tune ne niha ji firoşgehê werin çêkirin?",
     importConfirmActive: "Têbînî, hevdemkirin çalak e: stoka berhemên nû 0 e û heta ku wergirtina malan ji bo wan neyê tomarkirin, di firoşgehê de wek ku nemane xuya dibin. Dîsa jî niha werin çêkirin?",
-    importHint: "Berhemên ku tune ne çêdike: nav, kategorî, bihayê net (bê bac), barkod, mezinahî/reng û wêne – stok 0. Berhemên heyî wek xwe dimînin (tenê heke wêne tune be, tê zêdekirin). Bihayê ji bo firoşkaran = bihayê komfiroşiyê (salon), paşê rast bike.",
+    importHint: "Berhemên ku tune ne çêdike: nav, kategorî, bihayê net (bê bac), barkod, mezinahî/reng û wêne – stok 0. Berhemên heyî wek xwe dimînin (tenê heke wêne tune be, tê zêdekirin). Bihayê komfiroşiyê = bihayê firoşgehê, paşê rast bike.",
     importDone: "{c} berhemên nû hatin çêkirin ({v} cure) · {e} jixwe hebûn · {m} hatin girêdan · {o} hîn negirêdayî.",
     importFailed: "{f} nehatin çêkirin (li tomaran binêre).",
     importImages: "{i} wêne li paşperdeyê tên barkirin.",
@@ -1211,7 +1215,7 @@ const ku: Dict = {
     pushed: "hatî şandin",
     noVariants: "Hîn tu berhem nehatine anîn.",
     sendPrices: "Hemû bihayan bişîne firoşgehê",
-    sendPricesHint: "Bihayê firoşgehê = bihayê firotana bi kom (salon), bi bacê ger firoşgeh bihayên bi bac bikar tîne. Bihayên guherî dema tomarkirinê bixweber tên şandin – ev hemû berhemên girêdayî dîsa kontrol dike.",
+    sendPricesHint: "Firoşgeh „Bihayê firoşgehê“ yê her berhemê bikar tîne, bi bacê ger firoşgeh bihayên bi bac bikar tîne. Bihayên guherî dema tomarkirinê bixweber tên şandin – ev hemû berhemên girêdayî dîsa kontrol dike.",
     pricesStarted: "Biha li paşperdeyê tên rastkirin – encam di tomaran de ye.",
     sendWeights: "Giraniyan bişîne firoşgehê",
     sendWeightsHint: "Ji bo şandina li gorî giraniyê. Giraniyên guherî bixweber tên şandin – ev hemûyan dîsa dişîne.",

@@ -71,7 +71,12 @@ const de = {
     title: "Artikel", new: "Neuer Artikel", edit: "Artikel bearbeiten", sku: "Artikelnummer",
     nameDe: "Name (Deutsch)", nameNl: "Name (Niederländisch)", descDe: "Beschreibung (Deutsch)", descNl: "Beschreibung (Niederländisch)",
     category: "Kategorie", supplier: "Lieferant", vat: "MwSt.", purchase: "Einkaufspreis netto", wholesale: "Großhandelspreis netto",
-    retail: "Einzelhandelspreis netto", tracksExpiry: "Hat Haltbarkeitsdatum", shops: "Sichtbar in", brandShop: "Marken-Shop",
+    retail: "Einzelhandelspreis netto",
+    // Hinweise unter den Preisfeldern: wer den Preis sieht (Wunsch Inhaber 21.11.2026 – die Mitarbeiter verwechselten die Felder)
+    purchaseNote: "Sieht kein Kunde – nur zur Berechnung der Marge.",
+    wholesaleNote: "Sehen nur Kunden der Preisgruppe „Großhandel“ (Händler): in beiden Shops nach dem Anmelden und auf Rechnungen.",
+    retailNote: "Diesen Preis sehen alle Kunden in beiden Shops (dort inkl. MwSt.).",
+    tracksExpiry: "Hat Haltbarkeitsdatum", shops: "Sichtbar in", brandShop: "Marken-Shop",
     generalShop: "Allgemeiner Shop", variants: "Varianten", size: "Größe", color: "Farbe", barcode: "Barcode (EAN)",
     photo: "Produktfoto", addPhoto: "Foto hinzufügen", changePhoto: "Foto ändern", removePhoto: "Foto entfernen", photoHint: "Mit dem Handy fotografieren oder Bild auswählen. Erscheint überall im System: Artikel, Lager, Wareneingang, Verkauf. Für den Shop kannst du unten mehrere Produktfotos hinzufügen.", variantPhoto: "Foto dieser Variante", imageType: "Bitte ein JPG-, PNG- oder WebP-Bild wählen", fileTooLarge: "Bild zu groß (max. 8 MB)", photoProcessing: "Foto wird vorbereitet …",
     initialQty: "Bestand jetzt", initialExpiry: "MHD", initialHint: "Ware schon da? Menge eintragen – sie wird automatisch als Wareneingang zum Einkaufspreis gebucht.", initialNote: "Anfangsbestand beim Anlegen",

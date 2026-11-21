@@ -205,15 +205,15 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
           </>
         )}
         {rights.cost && (
-          <Field label={t.product.purchase}>
+          <Field label={t.product.purchase} hint={<SeenBy note={t.product.purchaseNote} />}>
             <MoneyInput name="purchasePrice" value={prices.p} onChange={(p) => setPrices((x) => ({ ...x, p }))} />
           </Field>
         )}
         <fieldset disabled={!rights.prices} className="contents">
-          <Field label={t.product.wholesale} hint={rights.cost && margin.w != null ? `${t.product.margin}: ${margin.w} %` : undefined}>
+          <Field label={t.product.wholesale} hint={<SeenBy note={t.product.wholesaleNote} extra={rights.cost && margin.w != null ? `${t.product.margin}: ${margin.w} %` : undefined} />}>
             <MoneyInput name="wholesalePrice" value={prices.w} onChange={(w) => setPrices((x) => ({ ...x, w }))} />
           </Field>
-          <Field label={t.product.retail} hint={rights.cost && margin.r != null ? `${t.product.margin}: ${margin.r} %` : undefined}>
+          <Field label={t.product.retail} hint={<SeenBy note={t.product.retailNote} extra={rights.cost && margin.r != null ? `${t.product.margin}: ${margin.r} %` : undefined} />}>
             <MoneyInput name="retailPrice" value={prices.r} onChange={(r) => setPrices((x) => ({ ...x, r }))} />
           </Field>
         </fieldset>
@@ -340,6 +340,17 @@ function MoneyInput({ name, value, onChange }: { name: string; value: string; on
         className={`input num pe-9 disabled:bg-slate-50 disabled:opacity-70 ${bad ? "border-red-400 ring-4 ring-red-100" : ""}`} placeholder="0,00" />
       <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-ink-soft">€</span>
     </div>
+  );
+}
+
+/** Hinweis unter einem Preisfeld: wer diesen Preis sieht (Wunsch Inhaber 21.11.2026 – die Mitarbeiter verwechselten
+ *  Großhandels- und Shop-Preis), darunter z. B. die Marge */
+function SeenBy({ note, extra }: { note: string; extra?: string }) {
+  return (
+    <>
+      <span className="flex items-start gap-1"><Icon name="eye" className="mt-px h-3.5 w-3.5 shrink-0 text-brand-600" />{note}</span>
+      {extra && <span className="block">{extra}</span>}
+    </>
   );
 }
 

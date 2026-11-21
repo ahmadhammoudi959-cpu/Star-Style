@@ -12,7 +12,7 @@ export function SubmitButton({ children, className = "btn-primary w-full" }: { c
   );
 }
 
-export function Field({ label, hint, children, className = "" }: { label: string; hint?: string; children: ReactNode; className?: string }) {
+export function Field({ label, hint, children, className = "" }: { label: string; hint?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <label className={`block ${className}`}>
       <span className="label">{label}</span>

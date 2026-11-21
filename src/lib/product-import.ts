@@ -24,8 +24,8 @@ const SYN: Record<ImportField, string[]> = {
   size: ["grosse", "size", "maat", "inhalt", "volumen", "content", "الحجم", "المقاس", "القياس", "mezinahî"],
   color: ["farbe", "color", "colour", "kleur", "farbton", "اللون", "reng"],
   purchasePrice: ["ek", "einkaufspreis", "ek preis", "ek netto", "einkauf", "purchase price", "cost", "cost price", "kosten", "inkoopprijs", "سعر الشراء", "التكلفه", "سعر التكلفه", "bihayê kirînê"],
-  wholesalePrice: ["grosshandelspreis", "grosshandel", "wholesale", "wholesale price", "reseller", "reseller price", "wiederverkaufer", "wiederverkauferpreis", "handlerpreis", "haendlerpreis", "سعر جمله الجمله", "جمله الجمله"],
-  retailPrice: ["einzelhandelspreis", "vk", "vk preis", "verkaufspreis", "preis", "price", "salon", "salonpreis", "verkoopprijs", "prijs", "سعر الجمله", "سعر البيع", "السعر", "bihayê firotinê", "biha"],
+  wholesalePrice: ["grosshandelspreis", "grosshandel", "wholesale", "wholesale price", "reseller", "reseller price", "wiederverkaufer", "wiederverkauferpreis", "handlerpreis", "haendlerpreis", "سعر الجمله", "سعر جمله الجمله", "جمله الجمله", "bihayê komfiroşiyê", "bihayê ji bo firoşkaran"],
+  retailPrice: ["einzelhandelspreis", "vk", "vk preis", "verkaufspreis", "preis", "price", "salon", "salonpreis", "shop price", "store price", "shoppreis", "shop preis", "verkoopprijs", "prijs", "سعر المتجر", "سعر البيع", "السعر", "bihayê firoşgehê", "bihayê firotinê", "biha"],
   vat: ["mwst", "mwst %", "ust", "vat", "steuer", "steuersatz", "tax", "btw", "الضريبه", "باج"],
   stock: ["bestand", "menge", "anzahl", "stuck", "stueck", "lager", "lagerbestand", "stock", "qty", "quantity", "aantal", "voorraad", "الكميه", "المخزون", "العدد", "hejmar", "embar"],
   expiry: ["mhd", "haltbarkeit", "haltbar bis", "ablaufdatum", "expiry", "expiry date", "best before", "houdbaarheid", "تاريخ الانتهاء", "الصلاحيه", "انتهاء الصلاحيه"],
@@ -36,13 +36,25 @@ const SYN: Record<ImportField, string[]> = {
 };
 const key = (s: string) => norm(s).replace(/[^\p{L}\p{N}% ]+/gu, " ").replace(/\s+/g, " ").trim();
 const SYN_KEYS = Object.fromEntries(IMPORT_FIELDS.map((f) => [f, SYN[f].map(key)])) as Record<ImportField, string[]>;
+/** ar „سعر الجملة“ / ku „Bihayê komfiroşiyê“ hieß bis 21.11.2026 der Shop-(Einzelhandels-)Preis; seitdem heißt so der
+ *  Großhandelspreis und der Shop-Preis „سعر المتجر“ / „Bihayê firoşgehê“ (Wunsch Inhaber: die Mitarbeiter verwechselten die
+ *  Felder). Alte Listen erkennt man am alten Namen des Großhandelspreises („سعر جملة الجملة“ / „Bihayê ji bo firoşkaran“) ohne
+ *  den neuen Shop-Preis – dort ist der umbenannte Name noch der Shop-Preis. */
+const RENAMED = ["سعر الجمله", "bihayê komfiroşiyê"].map(key);
+const OLD_WHOLESALE = ["سعر جمله الجمله", "جمله الجمله", "bihayê ji bo firoşkaran"].map(key);
+const NEW_RETAIL = ["سعر المتجر", "bihayê firoşgehê"].map(key);
+const SYN_KEYS_OLD: Record<ImportField, string[]> = {
+  ...SYN_KEYS,
+  wholesalePrice: SYN_KEYS.wholesalePrice.filter((s) => !RENAMED.includes(s)),
+  retailPrice: [...RENAMED, ...SYN_KEYS.retailPrice],
+};
 
 /** Wie gut passt eine Spaltenüberschrift zu einem Feld? 3 = genau, 2 = beginnt damit, 1 = enthält, 0 = nein */
-function headerScore(header: string, field: ImportField): number {
+function headerScore(header: string, field: ImportField, syn = SYN_KEYS): number {
   const h = key(header);
   if (!h) return 0;
   let best = 0;
-  for (const s of SYN_KEYS[field]) {
+  for (const s of syn[field]) {
     if (h === s) return 3;
     if (h.startsWith(s + " ") || h.endsWith(" " + s)) best = Math.max(best, 2);
     else if (s.length >= 3 && ` ${h} `.includes(` ${s} `)) best = Math.max(best, 1);
@@ -62,8 +74,11 @@ export function guessHeaderRow(rows: string[][]): number {
 
 /** Spalten den Feldern zuordnen: jede Spalte höchstens einmal, jedes Feld höchstens einmal, beste Treffer zuerst */
 export function guessMapping(header: string[]): Mapping {
+  const keys = header.map(key);
+  const has = (list: string[]) => keys.some((h) => list.some((s) => h === s || h.startsWith(s + " ")));
+  const syn = has(OLD_WHOLESALE) && !has(NEW_RETAIL) ? SYN_KEYS_OLD : SYN_KEYS;
   const pairs: { f: ImportField; c: number; s: number }[] = [];
-  for (const [c, h] of header.entries()) for (const f of IMPORT_FIELDS) { const s = headerScore(h, f); if (s) pairs.push({ f, c, s }); }
+  for (const [c, h] of header.entries()) for (const f of IMPORT_FIELDS) { const s = headerScore(h, f, syn); if (s) pairs.push({ f, c, s }); }
   // „Name NL“ vor „Name“, damit die NL-Spalte nicht als deutscher Name landet
   pairs.sort((a, b) => b.s - a.s || (a.f === "nameNl" ? -1 : b.f === "nameNl" ? 1 : 0) || a.c - b.c);
   const m: Mapping = {}, usedCols = new Set<number>();
