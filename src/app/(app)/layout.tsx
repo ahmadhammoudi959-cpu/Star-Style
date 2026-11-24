@@ -13,7 +13,7 @@ import { formatDate } from "@/lib/dates";
 import { canOpen } from "@/lib/permissions";
 import { WaDock } from "@/components/WaDock";
 import { can } from "@/lib/auth";
-import { WA_EXT_READONLY_VERSION } from "@/lib/wa-extension";
+import { WA_EXT_READONLY_VERSION, WA_EXT_STAY_VERSION } from "@/lib/wa-extension";
 import { AgentDock } from "@/components/agent/AgentDock";
 import { aiConfigured } from "@/lib/ai/client";
 
@@ -122,7 +122,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="mx-auto max-w-[96rem] px-4 pb-28 pt-6 lg:px-8 lg:pb-12">
           {children}
           {/* WhatsApp Web bleibt beim Seitenwechsel offen, sichtbar nur auf /whatsapp (Wunsch Inhaber 16.11.2026) */}
-          {canOpen(session, "/whatsapp") && <Suspense fallback={null}><WaDock t={t.waWeb} canSend={can(session, "whatsapp.send")} minReadOnlyVersion={WA_EXT_READONLY_VERSION} /></Suspense>}
+          {canOpen(session, "/whatsapp") && <Suspense fallback={null}><WaDock t={t.waWeb} canSend={can(session, "whatsapp.send")} minReadOnlyVersion={WA_EXT_READONLY_VERSION} stayVersion={WA_EXT_STAY_VERSION} /></Suspense>}
         </main>
         {/* Assistent „Star Style“ (Wunsch Inhaber 17.11.2026): bedient das System sichtbar für den Nutzer, mit seinen Rechten */}
         {aiConfigured() && can(session, "assistant") && <AgentDock t={t.agent} locale={locale} />}

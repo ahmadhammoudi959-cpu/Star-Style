@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { extVersionFromMessage, unreadFromMessage, unreadFromTitle, waDigits, waMeUrl, waWebUrl } from "../src/lib/wa-web";
-import { waExtensionFiles, waExtensionHost, waExtensionHostFrom } from "../src/lib/wa-extension";
+import { extVersionFromMessage, needsRelink, stateFromMessage, unreadFromMessage, unreadFromTitle, versionAtLeast, waDigits, waMeUrl, waWebUrl } from "../src/lib/wa-web";
+import { WA_EXT_STAY_VERSION, WA_EXT_VERSION, waExtensionFiles, waExtensionHost, waExtensionHostFrom } from "../src/lib/wa-extension";
 
 describe("WhatsApp Web im System – Adressen und Zahlen", () => {
   it("Nummern wie beim Kunden eingetragen", () => {
@@ -26,6 +26,76 @@ describe("WhatsApp Web im System – Adressen und Zahlen", () => {
     expect(unreadFromMessage("x")).toBeNull();
     expect(extVersionFromMessage({ ssWaExt: "1.0.0" })).toBe("1.0.0");
     expect(extVersionFromMessage({ ssWaExt: "<script>" })).toBeNull();
+  });
+  it("Zustand aus dem Rahmen (QR-Code oder Chats) und Versionen", () => {
+    expect(stateFromMessage({ ssWaUnread: 0, ssWaState: "qr" })).toBe("qr");
+    expect(stateFromMessage({ ssWaUnread: 0, ssWaState: "app" })).toBe("app");
+    expect(stateFromMessage({ ssWaUnread: 0 })).toBeNull(); // Erweiterung vor 1.1.0
+    expect(stateFromMessage({ ssWaState: "<b>" })).toBeNull();
+    expect(stateFromMessage(null)).toBeNull();
+    expect(versionAtLeast("1.0.10", "1.0.2")).toBe(true);
+    expect(versionAtLeast("1.0.2", "1.1.0")).toBe(false);
+    expect(versionAtLeast("1.1.0", "1.1.0")).toBe(true);
+    expect(versionAtLeast("1.1", "1.1.0")).toBe(true);
+    expect(versionAtLeast(WA_EXT_VERSION, WA_EXT_STAY_VERSION)).toBe(true);
+  });
+  it("Hinweis „neu verknüpfen“ nur, wenn der Rahmen mit dem QR-Code startet und WhatsApp hier schon verknüpft war", () => {
+    expect(needsRelink("qr", "qr", "2026-11-20")).toBe(true);
+    expect(needsRelink("qr", "app", "2026-11-20")).toBe(false); // gerade gescannt
+    expect(needsRelink("app", "qr", "2026-11-20")).toBe(false); // in WhatsApp selbst abgemeldet
+    expect(needsRelink("qr", "qr", null)).toBe(false); // erstes Verknüpfen auf diesem Computer
+    expect(needsRelink(null, null, "2026-11-20")).toBe(false); // ältere Erweiterung meldet keinen Zustand
+  });
+});
+
+/** whatsapp.js der Erweiterung mit einer kleinen Nachbildung von Seite und Browser ausführen */
+function runWhatsappScript(dom: { app?: boolean; qr?: boolean; inputs?: boolean[]; roles?: string[] }) {
+  const f = waExtensionFiles("star-style.onrender.com");
+  const posted: Array<{ m: Record<string, unknown>; origin: string }> = [];
+  const clicks: string[] = [];
+  class FakeInput { constructor(public checked: boolean) {} click() { clicks.push("input"); this.checked = !this.checked; } }
+  const inputs = (dom.inputs ?? []).map((c) => new FakeInput(c));
+  const roles = (dom.roles ?? []).map((aria) => ({ getAttribute: () => aria, click: () => clicks.push("role") }));
+  const win = { top: { postMessage: (m: Record<string, unknown>, origin: string) => posted.push({ m, origin }) }, addEventListener: () => {} };
+  const doc = {
+    title: "(2) WhatsApp",
+    querySelector: (sel: string) => (sel === "#side, #pane-side" ? (dom.app ? {} : null) : sel.startsWith("div[data-ref]") ? (dom.qr ? {} : null) : null),
+    querySelectorAll: (sel: string) => (sel === "input[type='checkbox']" ? inputs : sel === "[role='checkbox']" ? roles : []),
+    createElement: () => ({ isConnected: false, remove() {} }),
+    head: { appendChild() {} },
+    documentElement: { appendChild() {} },
+  };
+  let persisted = 0;
+  const nav = { storage: { persist: () => { persisted++; return Promise.resolve(true); } } };
+  const timers: Array<() => void> = [];
+  new Function("window", "document", "navigator", "setInterval", "HTMLInputElement", f["whatsapp.js"])(
+    win, doc, nav, (fn: () => void) => { timers.push(fn); return 1; }, FakeInput);
+  return { posted, clicks, inputs, persisted: () => persisted, tick: () => timers.forEach((fn) => fn()) };
+}
+
+describe("Erweiterung im WhatsApp-Rahmen – angemeldet bleiben (1.1.0)", () => {
+  it("Anmeldeseite: das eine Häkchen „Angemeldet bleiben“ wird einmal eingeschaltet, Zustand „qr“ geht ans System", () => {
+    const r = runWhatsappScript({ qr: true, inputs: [false] });
+    expect(r.clicks).toEqual(["input"]);
+    expect(r.inputs[0].checked).toBe(true);
+    expect(r.posted[0]).toEqual({ m: { ssWaUnread: 2, ssWaState: "qr" }, origin: "https://star-style.onrender.com" });
+    expect(r.persisted()).toBe(1);
+    r.tick(); r.tick();
+    expect(r.clicks).toEqual(["input"]); // nur einmal – wer es danach selbst ausschaltet, bleibt dabei
+  });
+  it("schon angehakt, mehrere Häkchen oder Chats offen: nichts anklicken", () => {
+    expect(runWhatsappScript({ qr: true, inputs: [true] }).clicks).toEqual([]);
+    expect(runWhatsappScript({ qr: true, inputs: [false, false] }).clicks).toEqual([]);
+    const app = runWhatsappScript({ app: true, qr: true, inputs: [false] });
+    expect(app.clicks).toEqual([]);
+    expect(app.posted[0].m).toEqual({ ssWaUnread: 2, ssWaState: "app" });
+  });
+  it("Häkchen als role=checkbox ohne Eingabefeld; unbekannte Seite: kein Zustand", () => {
+    expect(runWhatsappScript({ qr: true, roles: ["false"] }).clicks).toEqual(["role"]);
+    expect(runWhatsappScript({ qr: true, roles: ["true"] }).clicks).toEqual([]);
+    const unknown = runWhatsappScript({ inputs: [false] });
+    expect(unknown.clicks).toEqual([]);
+    expect(unknown.posted[0].m).toEqual({ ssWaUnread: 2 });
   });
 });
 
@@ -66,7 +136,10 @@ describe("Chrome-Erweiterung – nur für unsere Adresse", () => {
     // das Skript im WhatsApp-Rahmen schickt nur an unsere Adresse und nur im Rahmen
     expect(f["whatsapp.js"]).toContain('const target = "https://star-style.onrender.com";');
     expect(f["whatsapp.js"]).toContain("if (window.top === window) return;");
-    expect(f["whatsapp.js"]).not.toMatch(/innerHTML|querySelector|fetch\(|XMLHttpRequest/);
+    // liest keine Inhalte (nur ob es Elemente gibt) und schickt nichts ins Netz
+    expect(f["whatsapp.js"]).not.toMatch(/innerHTML|innerText|textContent\b(?!\s*=)|\.value\b|fetch\(|XMLHttpRequest|WebSocket|sendBeacon/);
+    expect(manifest.version).toBe(WA_EXT_VERSION);
+    expect(f["LIESMICH.txt"]).toContain("Aktualisieren");
     expect(f["system.js"]).not.toMatch(/fetch\(|XMLHttpRequest|document\./);
     // Skripte sind gültiges JavaScript
     expect(() => new Function(f["system.js"].replace("chrome.runtime", "({ getManifest: () => ({ version: '1' }) })"))).not.toThrow();

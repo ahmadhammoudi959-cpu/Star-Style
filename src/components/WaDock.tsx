@@ -3,24 +3,25 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import type { Dict } from "@/i18n/de";
-import { extVersionFromMessage, unreadFromMessage, WA_UNREAD_EVENT, WA_WEB_ORIGIN, waDigits, waMeUrl, waWebUrl } from "@/lib/wa-web";
+import { formatDate, todayIso } from "@/lib/dates";
+import {
+  extVersionFromMessage, needsRelink, stateFromMessage, unreadFromMessage, versionAtLeast as atLeast,
+  WA_UNREAD_EVENT, WA_WEB_ORIGIN, waDigits, waMeUrl, waWebUrl, type WaState,
+} from "@/lib/wa-web";
 
 const ON_KEY = "ss-wa-on"; // nach dem ersten Öffnen lädt WhatsApp bei jedem Start gleich mit (Zahl im Menü, sofort da)
+const LINKED_KEY = "ss-wa-linked"; // Datum, an dem auf diesem Computer zuletzt die Chats zu sehen waren (= war verknüpft)
 
 /**
  * WhatsApp Web im System (Wunsch Inhaber 16.11.2026): ein Rahmen im Layout, der beim Wechsel zwischen Seiten
  * bestehen bleibt (WhatsApp lädt nicht jedes Mal neu) und nur auf /whatsapp sichtbar ist.
  * Braucht die Chrome-Erweiterung „Star Style – WhatsApp im System“ (src/lib/wa-extension.ts); ohne sie: Anleitung + Download,
  * auf dem Handy: Hinweis auf die App (?to=<Nummer> öffnet dort den Chat in der App).
+ * Ab Erweiterung 1.1.0 (24.11.2026: nach dem Schließen des Browsers fragte WhatsApp wieder nach dem QR-Code): die Erweiterung
+ * hakt „Angemeldet bleiben“ an und meldet, ob QR-Code oder Chats zu sehen sind. Startet der Rahmen mit dem QR-Code, obwohl
+ * WhatsApp auf diesem Computer schon verknüpft war, steht über dem Rahmen warum und was hilft; ältere Erweiterung → Hinweis zum Aktualisieren.
  */
-/** "1.0.10" ≥ "1.0.2"? */
-const atLeast = (v: string, min: string) => {
-  const a = v.split(".").map(Number), b = min.split(".").map(Number);
-  for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] ?? 0) - (b[i] ?? 0); if (d) return d > 0; }
-  return true;
-};
-
-export function WaDock({ t, canSend, minReadOnlyVersion }: { t: Dict["waWeb"]; canSend: boolean; minReadOnlyVersion: string }) {
+export function WaDock({ t, canSend, minReadOnlyVersion, stayVersion }: { t: Dict["waWeb"]; canSend: boolean; minReadOnlyVersion: string; stayVersion: string }) {
   const path = usePathname();
   const sp = useSearchParams();
   const on = path === "/whatsapp";
@@ -32,8 +33,15 @@ export function WaDock({ t, canSend, minReadOnlyVersion }: { t: Dict["waWeb"]; c
   const frame = useRef<HTMLIFrameElement>(null);
   const lastTo = useRef<string | null>(null);
   const readOnlyRef = useRef(!canSend);
+  // Was WhatsApp im Rahmen zeigt (Erweiterung ab 1.1.0): erster Zustand nach dem Laden und jetziger Zustand
+  const [waState, setWaState] = useState<WaState | null>(null);
+  const [firstState, setFirstState] = useState<WaState | null>(null);
+  const firstRef = useRef<WaState | null>(null);
+  const [linkedAt, setLinkedAt] = useState<string | null>(null);
+  const savedLinked = useRef(false);
+  const [brave, setBrave] = useState(false);
 
-  // Erweiterung da? (sie antwortet auf unserer Seite per postMessage) + Zahl ungelesener Chats aus dem Rahmen
+  // Erweiterung da? (sie antwortet auf unserer Seite per postMessage) + Zahl ungelesener Chats und Zustand aus dem Rahmen
   useEffect(() => {
     let found = false;
     const onMsg = (e: MessageEvent) => {
@@ -47,6 +55,16 @@ export function WaDock({ t, canSend, minReadOnlyVersion }: { t: Dict["waWeb"]; c
         if (n === null) return;
         (window as unknown as { __ssWaUnread?: number }).__ssWaUnread = n;
         window.dispatchEvent(new CustomEvent(WA_UNREAD_EVENT, { detail: n }));
+        const s = stateFromMessage(e.data);
+        if (!s) return;
+        setWaState(s);
+        if (firstRef.current === null) { firstRef.current = s; setFirstState(s); }
+        if (s === "app" && !savedLinked.current) {
+          savedLinked.current = true;
+          const today = todayIso();
+          try { localStorage.setItem(LINKED_KEY, today); } catch { /* ohne Speicher kein Hinweis */ }
+          setLinkedAt(today);
+        }
       }
     };
     window.addEventListener("message", onMsg);
@@ -55,8 +73,15 @@ export function WaDock({ t, canSend, minReadOnlyVersion }: { t: Dict["waWeb"]; c
     const a = window.setTimeout(ping, 400);
     const b = window.setTimeout(() => { if (!found) setExt(false); }, 1500);
     setPhone(window.matchMedia("(pointer: coarse)").matches && !window.matchMedia("(min-width: 64rem)").matches);
+    try { setLinkedAt(localStorage.getItem(LINKED_KEY)); } catch { /* egal */ }
+    // Brave löscht eingebettete Seiten (WhatsApp im Rahmen) beim Schließen – dann ein eigener Tipp
+    const nb = (navigator as unknown as { brave?: { isBrave?: () => Promise<boolean> } }).brave;
+    if (nb?.isBrave) nb.isBrave().then((v) => setBrave(!!v)).catch(() => { /* kein Brave */ });
     return () => { window.removeEventListener("message", onMsg); window.clearTimeout(a); window.clearTimeout(b); };
   }, []);
+
+  // Neuer Rahmen (Neu laden, anderer Chat) → Zustand neu erfassen
+  useEffect(() => { firstRef.current = null; setFirstState(null); setWaState(null); }, [src, key]);
 
   // Rahmen laden: beim ersten Öffnen von /whatsapp – danach (gemerkt) auch gleich beim Start
   useEffect(() => {
@@ -91,6 +116,9 @@ export function WaDock({ t, canSend, minReadOnlyVersion }: { t: Dict["waWeb"]; c
   }, [src, key, readOnly]);
 
   const visible = on && !!ext && !!src && !tooOld;
+  // Erweiterung vor 1.1.0: hält „Angemeldet bleiben“ noch nicht selbst → Hinweis zum Aktualisieren (WhatsApp läuft trotzdem)
+  const stayOld = typeof ext === "string" && !atLeast(ext, stayVersion);
+  const relink = needsRelink(firstState, waState, linkedAt);
   return (
     <>
       {on && ext === null && (
@@ -135,6 +163,27 @@ export function WaDock({ t, canSend, minReadOnlyVersion }: { t: Dict["waWeb"]; c
       {src && (
         <div className={visible ? "card animate-rise overflow-hidden p-0" : "hidden"} data-wa-dock>
           {readOnly && <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900" data-wa-readonly>{t.readOnly}</p>}
+          {stayOld && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-950" data-wa-stay-update>
+              <span className="min-w-0" dir="auto">{t.stayUpdate.replace("{v}", stayVersion)}</span>
+              <a href="/api/whatsapp/extension" className="btn-ghost group shrink-0 px-3 py-1.5 text-xs" download><Icon name="download" className="h-4 w-4" />{t.download}</a>
+            </div>
+          )}
+          {relink && (
+            <div className="space-y-1.5 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" data-wa-relink>
+              <p className="font-semibold">{t.relinkTitle}</p>
+              <p className="text-xs" dir="auto">{t.relinkHint.replace("{date}", formatDate(linkedAt))}</p>
+              <ul className="list-disc space-y-1 ps-5 text-xs">
+                <li dir="auto">{t.relinkStay}</li>
+                <li dir="auto">{brave ? t.relinkBrave : t.relinkClear}</li>
+              </ul>
+              {canSend && (
+                <a href={`${WA_WEB_ORIGIN}/`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-900 underline" data-wa-window>
+                  <Icon name="chat" className="h-4 w-4" />{t.relinkWindow}
+                </a>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/5 px-4 py-2 text-xs text-ink-soft">
             <span className="min-w-0" dir="auto">{t.linkHint} · {t.stays}</span>
             <button type="button" className="btn-ghost group shrink-0 px-3 py-1.5 text-xs" onClick={() => { setSrc(waWebUrl(null)); setKey((k) => k + 1); }}>

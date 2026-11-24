@@ -53,3 +53,32 @@ export function extVersionFromMessage(data: unknown): string | null {
   const v = (data as { ssWaExt?: unknown }).ssWaExt;
   return typeof v === "string" && /^\d+(\.\d+){0,3}$/.test(v) ? v : null;
 }
+
+/** Was WhatsApp im Rahmen gerade zeigt (Erweiterung ab 1.1.0): Anmeldeseite mit QR-Code oder die Chats */
+export type WaState = "qr" | "app";
+
+/** Nachricht der Erweiterung aus dem WhatsApp-Rahmen: { ssWaUnread: n, ssWaState: "qr" | "app" } → Zustand */
+export function stateFromMessage(data: unknown): WaState | null {
+  if (!data || typeof data !== "object") return null;
+  const s = (data as { ssWaState?: unknown }).ssWaState;
+  return s === "qr" || s === "app" ? s : null;
+}
+
+/** Version der Erweiterung mindestens `min`? ("1.0.10" ≥ "1.0.2") */
+export function versionAtLeast(v: string, min: string): boolean {
+  const a = v.split(".").map(Number), b = min.split(".").map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d) return d > 0;
+  }
+  return true;
+}
+
+/**
+ * Neu verknüpfen nötig, obwohl WhatsApp auf diesem Computer schon verknüpft war?
+ * Nur wenn der Rahmen gleich mit der Anmeldeseite startet (nicht, wenn sich jemand in WhatsApp selbst abmeldet)
+ * und noch keine Chats zu sehen sind.
+ */
+export function needsRelink(first: WaState | null, now: WaState | null, linkedAt: string | null): boolean {
+  return first === "qr" && now === "qr" && !!linkedAt;
+}

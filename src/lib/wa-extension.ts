@@ -11,11 +11,17 @@
  *  3. whatsapp.js (nur in WhatsApp-Rahmen, nicht im normalen WhatsApp-Tab): sperrt auf Wunsch des Systems das Schreiben
  *     („nur lesen“ für Mitarbeiter ohne Recht „WhatsApp schreiben“, ab 1.0.2) und liest die Zahl ungelesener Chats aus dem
  *     Fenstertitel „(3) WhatsApp“ und schickt nur diese Zahl an unsere Adresse (postMessage mit festem Ziel).
+ *     Ab 1.1.0 (24.11.2026: nach dem Schließen des Browsers fragte WhatsApp im System wieder nach dem QR-Code): schickt dazu,
+ *     ob die Anmeldeseite (QR-Code) oder die Chats zu sehen sind (nur ob es die Elemente gibt – kein Inhalt), hakt auf der
+ *     Anmeldeseite das eine Häkchen „Angemeldet bleiben“ an, falls es aus ist, und bittet Chrome, den Speicher von WhatsApp
+ *     dauerhaft zu halten (navigator.storage.persist, ohne Rückfrage).
  * Nachrichten, Kontakte, Sitzung: bleiben in WhatsApp Web im Chrome des Laptops, nichts geht an unseren Server.
  */
-export const WA_EXT_VERSION = "1.0.2";
+export const WA_EXT_VERSION = "1.1.0";
 /** ab dieser Version kann die Erweiterung „nur lesen“ (Mitarbeiter ohne Recht „WhatsApp schreiben“) */
 export const WA_EXT_READONLY_VERSION = "1.0.2";
+/** ab dieser Version hält die Erweiterung WhatsApp angemeldet („Angemeldet bleiben“) und meldet QR-Code/Chats */
+export const WA_EXT_STAY_VERSION = "1.1.0";
 export const WA_EXT_FOLDER = "star-style-whatsapp";
 
 /** Nur ein schlichter Hostname (keine Muster, kein Port, kein Pfad) – sonst Fehler */
@@ -89,14 +95,38 @@ export function waExtensionFiles(rawHost: string, withIcons = false): Record<str
   ].join("\n");
   const whatsapp = [
     "// Star Style – WhatsApp im System: nur im Rahmen der Seite „WhatsApp“ (nicht im normalen WhatsApp-Tab).",
-    "// Schickt nur die Zahl ungelesener Chats aus dem Fenstertitel „(3) WhatsApp“ an das System – sonst nichts.",
+    "// Schickt an das System nur die Zahl ungelesener Chats aus dem Fenstertitel „(3) WhatsApp“ und ob die Anmeldeseite",
+    "// (QR-Code) oder die Chats zu sehen sind – keine Namen, keine Nachrichten.",
     "(() => {",
     "  if (window.top === window) return;",
     `  const target = ${JSON.stringify(`https://${host}`)};`,
-    "  const send = () => {",
-    "    const m = /^\\s*\\((\\d{1,4})\\)/.exec(document.title || \"\");",
-    "    try { window.top.postMessage({ ssWaUnread: m ? Number(m[1]) : 0 }, target); } catch (e) { /* anderes Fenster */ }",
+    "  const started = Date.now();",
+    "  // Chats oder Anmeldeseite? Prüft nur, ob es die Elemente gibt – liest keinen Inhalt.",
+    "  const isApp = () => !!document.querySelector(\"#side, #pane-side\");",
+    "  const isQr = () => !isApp() && !!document.querySelector(\"div[data-ref], canvas[aria-label*='QR'], canvas[aria-label*='qr']\");",
+    "  // Angemeldet bleiben: nach dem Schließen des Browsers fragte WhatsApp im System wieder nach dem QR-Code. Auf der",
+    "  // Anmeldeseite gibt es genau ein Häkchen („Angemeldet bleiben“) – ist es aus, einmal einschalten. Nur in den ersten",
+    "  // zwei Minuten und nur auf der Anmeldeseite, damit nie ein anderes Häkchen in WhatsApp angefasst wird.",
+    "  let kept = false;",
+    "  const keep = () => {",
+    "    if (kept || Date.now() - started > 120000 || !isQr()) return;",
+    "    const inputs = document.querySelectorAll(\"input[type='checkbox']\");",
+    "    const roles = document.querySelectorAll(\"[role='checkbox']\");",
+    "    const box = inputs.length === 1 ? inputs[0] : (inputs.length === 0 && roles.length === 1 ? roles[0] : null);",
+    "    if (!box) return;",
+    "    kept = true;",
+    "    const on = box instanceof HTMLInputElement ? box.checked : box.getAttribute(\"aria-checked\") === \"true\";",
+    "    if (!on) box.click();",
     "  };",
+    "  const send = () => {",
+    "    keep();",
+    "    const m = /^\\s*\\((\\d{1,4})\\)/.exec(document.title || \"\");",
+    "    const msg = { ssWaUnread: m ? Number(m[1]) : 0 };",
+    "    if (isApp()) msg.ssWaState = \"app\"; else if (isQr()) msg.ssWaState = \"qr\";",
+    "    try { window.top.postMessage(msg, target); } catch (e) { /* anderes Fenster */ }",
+    "  };",
+    "  // Speicher von WhatsApp möglichst dauerhaft halten (Chrome entscheidet selbst, ohne Rückfrage)",
+    "  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* egal */ }",
     "  send();",
     "  setInterval(send, 2000);",
     "  // Nur lesen (Wunsch Inhaber 16.11.2026: Rechte lesen/schreiben getrennt): das System meldet { ssWaReadOnly: true }",
@@ -133,9 +163,14 @@ export function waExtensionFiles(rawHost: string, withIcons = false): Record<str
     "3) Oben rechts „Entwicklermodus“ einschalten.",
     "4) „Entpackte Erweiterung laden“ → Ordner star-style-whatsapp wählen.",
     `5) Im System (${host}) → WhatsApp öffnen und den Code mit WhatsApp Business am Handy scannen: Einstellungen → Verknüpfte Geräte → Gerät hinzufügen.`,
+    "   Unter dem Code muss „Angemeldet bleiben“ angehakt sein (die Erweiterung hakt es selbst an) – dann bleibt WhatsApp auch nach dem Schließen von Chrome verknüpft.",
+    "",
+    "AR – التحديث: فك ضغط الملف الجديد، بدّل المجلد القديم star-style-whatsapp فيه، وبـ chrome://extensions اكبس ↻ عند الإضافة.",
+    "DE – Aktualisieren: neue ZIP entpacken, den alten Ordner star-style-whatsapp damit ersetzen und in chrome://extensions bei der Erweiterung auf ↻ drücken.",
     "",
     "Sicherheit: Die Erweiterung erlaubt nur dieser Adresse, WhatsApp Web in der Seite zu zeigen. Sie liest keine Nachrichten;",
-    "nur die Zahl ungelesener Chats (aus dem Fenstertitel) geht an die Seite für die Zahl im Menü. Alles bleibt im Chrome dieses Computers.",
+    "nur die Zahl ungelesener Chats (aus dem Fenstertitel) und ob der QR-Code oder die Chats zu sehen sind gehen an die Seite.",
+    "Alles bleibt im Chrome dieses Computers.",
     "",
   ].join("\n");
   return {
