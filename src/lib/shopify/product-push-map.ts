@@ -11,6 +11,7 @@ import { grossFromNet, netFromGross, priceRoundness } from "../money";
 export type PushVariant = {
   id: string; size: string; color: string; barcode: string | null;
   retailPriceCents: number | null; // eigener Preis der Variante, sonst Artikelpreis
+  purchasePriceCents?: number | null; // eigener Einkaufspreis (Kosten im Shop), sonst der des Artikels
   imageFileId: string | null; available: number;
   weightGrams?: number | null; // Versand nach Gewicht im Shop
 };
@@ -32,6 +33,10 @@ const PLACEHOLDER = "Standard";
 /** Gewicht für Shopify (am Lagerartikel der Variante) */
 export const shopWeight = (grams: number | null | undefined) =>
   grams && grams > 0 ? { measurement: { weight: { unit: "GRAMS", value: grams } } } : {};
+
+/** Einkaufspreis einer Variante für das Feld „Kosten“ im Shop: eigener der Größe/Farbe, sonst der des Artikels */
+export const variantCost = (p: Pick<PushProduct, "purchasePriceCents">, v: Pick<PushVariant, "purchasePriceCents">) =>
+  v.purchasePriceCents && v.purchasePriceCents > 0 ? v.purchasePriceCents : p.purchasePriceCents;
 
 /** Netto-Cent → Shop-Preis-Cent (Shops mit Bruttopreisen: inkl. MwSt., der „runde“ Bruttopreis – siehe grossFromNet) */
 export function shopPriceCents(netCents: number, vatRateBp: number, taxesIncluded: boolean): number {
@@ -100,7 +105,7 @@ export function buildProductSet(p: PushProduct, o: { taxesIncluded: boolean; loc
       ...(v.barcode ? { barcode: v.barcode } : {}),
       inventoryItem: {
         sku: variantSku(p.sku, v, single), tracked: true,
-        ...(p.purchasePriceCents > 0 ? { cost: money(p.purchasePriceCents) } : {}),
+        ...(variantCost(p, v) > 0 ? { cost: money(variantCost(p, v)) } : {}),
         ...shopWeight(v.weightGrams),
       },
       inventoryQuantities: [{ locationId: o.locationId, name: "available", quantity: Math.max(0, v.available) }],

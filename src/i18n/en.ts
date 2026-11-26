@@ -16,11 +16,12 @@ const en: Dict = {
     returns: "Returns", mail: "Email", whatsapp: "WhatsApp",
     users: "Staff",
     account: "My account",
+    nextStep: "Next step",
     menu: "Menu", scan: "Scan barcode", scanShort: "Scan", home: "Home", products: "Products", categories: "Categories", receive: "Goods in", stock: "Stock", writeOffs: "Losses",
     receivables: "Receivables", customers: "Customers", suppliers: "Suppliers", settings: "Settings", sales: "Sales", reports: "Reports", expenses: "Expenses", insights: "Insights", shops: "Shops", ask: "Ask your business", design: "Document design",
   },
   setup1: {
-    showGuide: "Show “Getting started”", showGuideHint: "Shows the numbered steps on the home page and in the menu – even when everything is done. Handy for training someone new.",
+    showGuide: "Show “Getting started”", showGuideHint: "Shows the numbered steps on the home page and in the menu – including finished ones. Handy for training someone new. When off, only open steps are shown (the next one in blue with an arrow); once all are done, they disappear.",
     title: "Getting started", intro: "Follow the numbers in order. Each finished step gets a ✓. When everything is done, this list disappears.", progress: "{d} of {n}", start: "Start here", done: "Done", company: "Complete company details", companyHint: "Address, tax number, bank and logo", supplier: "Add your first supplier", supplierHint: "Who you buy goods from", product: "Add products", productHint: "Photo, name, prices and current stock", receive: "Book incoming goods", receiveHint: "Every new delivery from a supplier", customer: "Add your first customer", customerHint: "The salon or person buying from you", invoice: "Write your first invoice", invoiceHint: "Or a quote – then print it", payment: "Record your first payment", paymentHint: "When the customer pays",
   },
   home: {
@@ -78,6 +79,14 @@ const en: Dict = {
     wholesaleNote: "Only customers in the “Reseller” group (traders) see it: in both shops after logging in (incl. VAT), and on invoices.",
     retailNote: "This is the price every customer sees in both shops (incl. VAT).",
     shopGross: "In the shop incl. VAT: {price}",
+    // eigene Preise je Größe/Farbe (Wunsch Inhaber 26.11.2026)
+    basePricesHint: "These prices apply to all sizes/colours. If a size or colour has a different price, enter it below in its row.",
+    vPrices: "Prices for this size/colour",
+    vSame: "empty = prices above",
+    vOwn: "own prices",
+    vReset: "Same as above",
+    vResetHint: "Remove the own prices of this size/colour – then the prices above apply.",
+    variantPrice: "A price for a size/colour is invalid – please write e.g. 12,50 or leave the field empty.",
     tracksExpiry: "Has expiry date", shops: "Visible in", brandShop: "Brand shop",
     generalShop: "General shop", variants: "Variants", size: "Size", color: "Colour", barcode: "Barcode (EAN)",
     photo: "Product photo", addPhoto: "Add photo", changePhoto: "Change photo", removePhoto: "Remove photo", photoHint: "Take a photo with your phone or pick an image. Shown everywhere in the system: products, stock, goods receipt, sales. For the shop you can add several product photos below.", variantPhoto: "Photo for this variant", imageType: "Please choose a JPG, PNG or WebP image", fileTooLarge: "Image too large (max 8 MB)", photoProcessing: "Preparing photo…",
@@ -125,7 +134,7 @@ const en: Dict = {
     price: {
       ok: "{shop}: new price is in the shop ✓{price}",
       same: "{shop}: price in the shop is already right ✓{price}",
-      own: "{shop}: this size/colour has its own price – that one applies in the shop{price}. The item price does not change it.",
+      own: "{shop}: prices in the shop are up to date ✓{price} – sizes/colours with their own price (in their row below) keep that price there.",
       fail: "{shop}: the new price did not reach the shop{price} – reason in the shop log.",
       retry: "{shop}: shop not reachable right now – the new price{price} is sent automatically within minutes.",
       pending: "The new price is being sent to the shop – it will be there in a few seconds.",

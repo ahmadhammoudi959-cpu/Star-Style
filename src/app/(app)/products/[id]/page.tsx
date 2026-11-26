@@ -47,6 +47,10 @@ export default async function EditProduct({ params, searchParams }: { params: Pr
         variants: vs.map((v) => ({
           id: v.id, size: v.size, color: v.color, barcode: v.barcode ?? "", minStock: v.minStock, stockQty: v.stockQty, imageFileId: v.imageFileId,
           ...weightInputParts(v.weightGrams), ...dimsInputParts(dimsOf(v)),
+          // eigene Preise dieser Größe/Farbe (leer = Artikelpreis); Einkaufspreis nur mit Recht
+          purchasePrice: rights.cost && v.purchasePriceCents ? toInput(v.purchasePriceCents) : "",
+          wholesalePrice: v.wholesalePriceCents ? toInput(v.wholesalePriceCents) : "",
+          retailPrice: v.retailPriceCents ? toInput(v.retailPriceCents) : "",
         })),
       }} />
       {deletable && rights.edit && <DeleteProduct t={t} id={p.id} />}
@@ -81,7 +85,8 @@ function PriceNotes({ t, s }: { t: Dict; s?: string }) {
   const { pending, notes } = decodePriceNotes(s);
   if (!pending && !notes.length) return null;
   const items = pending ? [{ kind: "wait" as const, text: t.product.price.pending }] : notes.map((n) => ({
-    kind: n.state === "ok" || n.state === "same" ? ("ok" as const) : n.state === "fail" ? ("bad" as const) : ("wait" as const),
+    // „own“ = gemeldet, aber eine Größe/Farbe hat einen eigenen Preis (seit 26.11.2026 im Formular je Größe/Farbe sichtbar) → auch grün
+    kind: n.state === "ok" || n.state === "same" || n.state === "own" ? ("ok" as const) : n.state === "fail" ? ("bad" as const) : ("wait" as const),
     text: fill(t.product.price[n.state], { shop: t.shop.names[n.channel], price: n.priceCents != null ? ` (${formatCents(n.priceCents)})` : "" }),
   }));
   const tone = { ok: "bg-emerald-50 text-emerald-800 ring-emerald-100", wait: "bg-amber-50 text-amber-900 ring-amber-200", bad: "bg-red-50 text-red-800 ring-red-200" };

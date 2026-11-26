@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   buildProductSet, decodePriceNotes, decodePush, encodePriceNotes, descriptionHtml, encodePush, matchCreatedVariants, planPriceUpdates, planVariantAdds, pushBlockers, resolveStoreType, shopPriceCents,
-  storeTypesFrom, variantOptions, variantSku, type PushProduct, type PushVariant, type ShopProductShape,
+  storeTypesFrom, variantCost, variantOptions, variantSku, type PushProduct, type PushVariant, type ShopProductShape,
 } from "../src/lib/shopify/product-push-map";
 
 const v = (x: Partial<PushVariant> = {}): PushVariant => ({ id: "v1", size: "", color: "", barcode: "4006381333931", retailPriceCents: null, imageFileId: null, available: 0, ...x });
@@ -95,6 +95,22 @@ describe("Artikel → Shopify-Produkt", () => {
     const s = buildProductSet(product({ variants: [v({ weightGrams: 150 }), v({ id: "v2", size: "M", barcode: "222", weightGrams: null })] }), opts);
     expect(s.variants[0].inventoryItem).toMatchObject({ measurement: { weight: { unit: "GRAMS", value: 150 } } });
     expect(s.variants[1].inventoryItem).not.toHaveProperty("measurement");
+  });
+
+  it("Eigene Preise je Größe (Barber-Leuchte 26.11.2026): 45 cm mit eigenem Preis + EK, 58 cm wie der Artikel", () => {
+    const p = product({
+      retailPriceCents: 17999, purchasePriceCents: 5500,
+      variants: [
+        v({ id: "s45", size: "45 cm", barcode: "8721399642016", retailPriceCents: 15000, purchasePriceCents: 4500 }),
+        v({ id: "s58", size: "58 cm", barcode: "8721399642009", retailPriceCents: null, purchasePriceCents: null }),
+      ],
+    });
+    const s = buildProductSet(p, opts);
+    expect(s.variants.map((x) => [x.price, x.inventoryItem.cost])).toEqual([["178.50", "45.00"], ["214.19", "55.00"]]);
+    expect(variantCost(p, p.variants[0])).toBe(4500);
+    expect(variantCost(p, p.variants[1])).toBe(5500);
+    expect(variantCost(p, v({ purchasePriceCents: 0 }))).toBe(5500); // 0 = kein eigener Preis
+    expect(variantCost(product({ purchasePriceCents: 0 }), v())).toBe(0);
   });
 
   it("Produkttyp des Shops statt Kategorie, wenn angegeben", () => {

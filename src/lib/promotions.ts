@@ -281,7 +281,7 @@ export async function promotionDetail(id: string): Promise<PromoDetail | null> {
     select pr.id, pr.name_de, pr.category, pr.sku, pr.image_file_id, pr.vat_rate_bp,
       min(coalesce(nullif(v.retail_price_cents, 0), pr.retail_price_cents)) as retail,
       min(coalesce(nullif(v.wholesale_price_cents, 0), pr.wholesale_price_cents)) as wholesale,
-      greatest(max(nullif(v.avg_cost_cents, 0)), pr.purchase_price_cents, 0) as cost,
+      greatest(max(nullif(v.avg_cost_cents, 0)), max(coalesce(nullif(v.purchase_price_cents, 0), pr.purchase_price_cents)), 0) as cost,
       count(v.id)::int as variants,
       array_remove(array_agg(distinct sv.channel::text), null) as in_shops,
       coalesce((select max(o.discount_bp) from promotion_items oi join promotions o on o.id = oi.promotion_id

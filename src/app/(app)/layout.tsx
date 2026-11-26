@@ -62,7 +62,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const setup = session.admin ? await setupSteps() : null;
   if (setup && !setup.allDone) for (const s of setup.steps) {
     const it = items.find((i) => i.href === s.nav);
-    if (it && (!s.done || setup.showGuide)) it.step = { n: s.n, next: s.key === setup.next };
+    if (!it || (s.done && !setup.showGuide)) continue;
+    const next = s.key === setup.next;
+    // Tooltip: Nummer + was zu tun ist; der nächste Schritt heißt so (blau mit Pfeil, nicht rot wie eine wartende Zahl)
+    const what = t.setup1[s.key as keyof typeof t.setup1];
+    it.step = { n: s.n, next, title: next ? `${t.nav.nextStep} (${s.n}): ${what}` : `${s.n}. ${what}${s.done ? " ✓" : ""}` };
   }
   // Handy unten: Start, Verkauf, Scanner (hervorgehoben, Mitte), Lager, „Menü“ = alle Seiten der Seitenleiste
   const pick = (href: string) => items.find((i) => i.href === href);
@@ -93,7 +97,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <span className={`h-2 w-2 shrink-0 rounded-full ${live.live ? "bg-emerald-400" : "animate-pulse bg-amber-400"}`} />{liveText}
             </MaybeLink>
           </div>
-          <SideNav items={items} soonLabel={t.home.comingSoon} />
+          <SideNav items={items} soonLabel={t.home.comingSoon} nextLabel={t.nav.nextStep} />
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-white/10 px-1 pt-3">
           <div className="min-w-0 truncate text-xs text-white/70" dir="auto">{session.name}</div>
@@ -127,7 +131,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {/* Assistent „Star Style“ (Wunsch Inhaber 17.11.2026): bedient das System sichtbar für den Nutzer, mit seinen Rechten */}
         {aiConfigured() && can(session, "assistant") && <AgentDock t={t.agent} locale={locale} />}
       </div>
-      <BottomNav items={mobile} all={items.map((it) => (it.href === "/scan" ? { ...it, highlight: true } : it))} menuLabel={t.nav.menu} closeLabel={t.common.close} footer={menuFooter} />
+      <BottomNav items={mobile} all={items.map((it) => (it.href === "/scan" ? { ...it, highlight: true } : it))} menuLabel={t.nav.menu} closeLabel={t.common.close} nextLabel={t.nav.nextStep} footer={menuFooter} />
     </div>
   );
 }

@@ -225,14 +225,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
               const k = s.key as keyof typeof t.setup1;
               return (
                 <li key={s.key}>
-                  <Link href={s.href} className={`group flex h-full items-start gap-2 rounded-xl p-2.5 ring-1 transition sm:gap-3 sm:p-3 hover:-translate-y-0.5 hover:shadow-card ${s.done ? "bg-emerald-50/60 ring-emerald-100" : isNext ? "bg-white ring-2 ring-accent-500 shadow-card" : "bg-white ring-black/5"}`}>
-                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm font-bold sm:h-9 sm:w-9 sm:text-base ${s.done ? "bg-emerald-500 text-white" : isNext ? "bg-accent-500 text-white animate-pulse" : "bg-brand-50 text-brand-700"}`}>
+                  <Link href={s.href} className={`group flex h-full items-start gap-2 rounded-xl p-2.5 ring-1 transition sm:gap-3 sm:p-3 hover:-translate-y-0.5 hover:shadow-card ${s.done ? "bg-emerald-50/60 ring-emerald-100" : isNext ? "step-ring-blink bg-brand-50/60" : "bg-white ring-black/5"}`} data-next-step={isNext ? "1" : undefined}>
+                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm font-bold sm:h-9 sm:w-9 sm:text-base ${s.done ? "bg-emerald-500 text-white" : isNext ? "step-blink text-white ring-4 ring-brand-100" : "bg-brand-50 text-brand-700"}`}>
                       {s.done ? <Icon name="check" className="h-5 w-5" /> : s.n}
                     </span>
                     <span className="min-w-0">
                       <span className={`block text-sm font-bold leading-snug sm:text-base ${s.done ? "text-emerald-800 line-through decoration-emerald-300" : ""}`}>{t.setup1[k]}</span>
                       <span className="hidden text-xs text-ink-soft sm:block">{t.setup1[(s.key + "Hint") as keyof typeof t.setup1]}</span>
-                      {isNext && <span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-accent-600">{t.setup1.start} <Icon name="arrowRight" className="h-3.5 w-3.5 rtl:rotate-180" /></span>}
+                      {/* nächster Schritt: blau mit Pfeil, der weiterzeigt (Wunsch Inhaber 26.11.2026 – nicht rot/pulsierend wie eine Benachrichtigung) */}
+                      {isNext && <span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-brand-600">{t.setup1.start}
+                        <span aria-hidden className="nudge-end inline-flex"><Icon name="arrowRight" className="h-3.5 w-3.5 rtl:hidden" /><Icon name="arrowLeft" className="h-3.5 w-3.5 ltr:hidden" /></span>
+                      </span>}
                     </span>
                   </Link>
                 </li>

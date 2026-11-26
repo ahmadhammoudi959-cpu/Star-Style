@@ -1,0 +1,1 @@
+ALTER TABLE "variants" ADD COLUMN "purchase_price_cents" integer;

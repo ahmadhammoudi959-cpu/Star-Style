@@ -260,6 +260,13 @@
       "when": 1795130102538,
       "tag": "0036_direct_manual",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1795704455209,
+      "tag": "0037_variant_purchase_price",
+      "breakpoints": true
     }
   ]
 }

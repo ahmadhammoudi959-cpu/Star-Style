@@ -21,6 +21,8 @@ type V = {
   imageFileId?: string | null; weight?: string; weightUnit?: WeightUnit;
   /** Paketmaße in cm (Länge, Breite, Höhe) */
   pkgL?: string; pkgW?: string; pkgH?: string;
+  /** eigene Preise dieser Größe/Farbe (netto, wie die Felder oben); leer = Preis des Artikels (Wunsch Inhaber 26.11.2026) */
+  purchasePrice?: string; wholesalePrice?: string; retailPrice?: string;
 };
 export type ProductFormData = {
   id?: string; sku: string; nameDe: string; nameNl: string; descriptionDe: string; descriptionNl: string; category: string;
@@ -37,6 +39,9 @@ export type ProductFormData = {
 
 const fmt = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 export const centsToInput = fmt;
+/** hat diese Größe/Farbe eigene Preise? */
+const hasOwnPrice = (v: Pick<V, "purchasePrice" | "wholesalePrice" | "retailPrice">) =>
+  Boolean(v.purchasePrice?.trim() || v.wholesalePrice?.trim() || v.retailPrice?.trim());
 
 type ShopFlags = { BRAND_SHOP: boolean; GENERAL_SHOP: boolean };
 const CHANNELS: Channel[] = ["BRAND_SHOP", "GENERAL_SHOP"];
@@ -100,6 +105,9 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
     const calc = (s: string) => { const v = parseMoney(s) ?? 0; return v > 0 && p > 0 ? Math.round(((v - p) / v) * 100) : null; };
     return { w: calc(prices.w), r: calc(prices.r) };
   }, [prices]);
+  // eigene Preise je Größe/Farbe (Wunsch Inhaber 26.11.2026: „ما عندنا خانات نحط فيها الاسعار للقياس الثاني“) – sichtbar, sobald es
+  // mehrere Größen/Farben gibt oder eine schon eigene Preise hat (z. B. aus dem Shop-Import; vorher waren die unsichtbar)
+  const showVariantPrices = variants.length > 1 || variants.some(hasOwnPrice);
 
   // nach einer Fehlermeldung: zuletzt eingegebene Texte statt der Ausgangswerte (React setzt das Formular zurück)
   const v = { ...initial, ...(state?.values ?? {}) } as ProductFormData & Record<string, unknown>;
@@ -233,6 +241,11 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
             <MoneyInput name="retailPrice" value={prices.r} onChange={(r) => setPrices((x) => ({ ...x, r }))} />
           </Field>
         </fieldset>
+        {showVariantPrices && (
+          <p className="col-span-2 flex items-start gap-2 rounded-xl bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-800 ring-1 ring-brand-100 md:col-span-3" data-base-prices-hint>
+            <Icon name="tag" className="mt-px h-4 w-4 shrink-0 text-brand-600" />{t.product.basePricesHint}
+          </p>
+        )}
         <div className="col-span-2 flex flex-wrap items-center gap-x-6 gap-y-3 md:col-span-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
             <input type="checkbox" name="tracksExpiry" checked={tracksExpiry} onChange={(e) => setTracksExpiry(e.target.checked)} className="h-5 w-5 rounded accent-brand-600" />
@@ -290,6 +303,11 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
                   <Icon name="trash" className="h-4 w-4" />
                 </button>
               </div>
+              {showVariantPrices && (
+                <div className="col-span-2 lg:col-span-7">
+                  <VariantPrices t={t} v={v} base={prices} vatBp={vatBp} rights={rights} onChange={(patch) => upd(v.key, patch)} />
+                </div>
+              )}
               <div className="col-span-2 lg:col-span-7">
                 <PackageInput t={t} v={v} onChange={(patch) => upd(v.key, patch)} />
               </div>
@@ -348,13 +366,68 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
   );
 }
 
-function MoneyInput({ name, value, onChange }: { name: string; value: string; onChange: (v: string) => void }) {
+function MoneyInput({ name, value, onChange, placeholder = "0,00", label }: {
+  name?: string; value: string; onChange: (v: string) => void; placeholder?: string; label?: string;
+}) {
   const bad = value.trim() !== "" && parseMoney(value) == null;
   return (
     <div className="relative" dir="ltr">
-      <input name={name} value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" dir="ltr"
-        className={`input num pe-9 disabled:bg-slate-50 disabled:opacity-70 ${bad ? "border-red-400 ring-4 ring-red-100" : ""}`} placeholder="0,00" />
+      <input name={name} value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" dir="ltr" aria-label={label}
+        className={`input num pe-9 placeholder:text-ink-soft/60 disabled:bg-slate-50 disabled:opacity-70 ${bad ? "border-red-400 ring-4 ring-red-100" : ""}`} placeholder={placeholder} />
       <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-ink-soft">€</span>
+    </div>
+  );
+}
+
+/**
+ * Eigene Preise einer Größe/Farbe (Wunsch Inhaber 26.11.2026). Leer = Preis von oben (grau als Platzhalter). Darunter steht,
+ * was im Shop wirklich gilt (mit MwSt., gleiche Rechnung wie beim Senden) – so sieht man je Größe den Preis im Shop.
+ * Einkaufspreis nur mit Recht „Einkaufspreis“, Verkaufspreise ändern nur mit Recht „Preise“ (der Server prüft es noch einmal).
+ */
+function VariantPrices({ t, v, base, vatBp, rights, onChange }: {
+  t: Dict; v: V; base: { p: string; w: string; r: string }; vatBp: number; rights: ProductRights; onChange: (patch: Partial<V>) => void;
+}) {
+  const own = hasOwnPrice(v);
+  const eff = (mine: string | undefined, fallback: string) => { const s = mine?.trim() ? mine : fallback; const c = parseMoney(s); return c != null && c > 0 ? c : null; };
+  const p = eff(v.purchasePrice, base.p), w = eff(v.wholesalePrice, base.w), r = eff(v.retailPrice, base.r);
+  const margin = (sale: number | null) => (sale && p ? Math.round(((sale - p) / sale) * 100) : null);
+  const note = (sale: number | null) => (
+    <>
+      {sale != null && <ShopGross tpl={t.product.shopGross} cents={shopPriceCents(sale, vatBp, true)} />}
+      {rights.cost && margin(sale) != null && <span className="block">{`${t.product.margin}: ${margin(sale)} %`}</span>}
+    </>
+  );
+  const name = [v.size, v.color].filter(Boolean).join(" · ");
+  return (
+    <div className={`rounded-xl p-3 ring-1 ${own ? "bg-amber-50/70 ring-amber-200" : "bg-white/70 ring-black/5"}`} data-variant-prices={own ? "own" : "base"}>
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-bold">
+        <Icon name="tag" className="h-4 w-4 text-brand-600" />
+        <span>{t.product.vPrices}{name && <span className="font-semibold text-ink-soft"> (<bdi dir="auto">{name}</bdi>)</span>}</span>
+        {own
+          ? <span className="badge bg-amber-100 text-amber-900 ring-1 ring-amber-200">{t.product.vOwn}</span>
+          : <span className="font-normal text-ink-soft">{t.product.vSame}</span>}
+        {own && (rights.prices || rights.cost) && (
+          <button type="button" title={t.product.vResetHint} className="ms-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 font-semibold text-brand-700 hover:bg-white"
+            onClick={() => onChange({ ...(rights.cost ? { purchasePrice: "" } : {}), ...(rights.prices ? { wholesalePrice: "", retailPrice: "" } : {}) })} data-variant-prices-reset>
+            <Icon name="undo" className="h-3.5 w-3.5" />{t.product.vReset}
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        {rights.cost && (
+          <Field label={t.product.purchase}>
+            <MoneyInput value={v.purchasePrice ?? ""} placeholder={base.p.trim() || "0,00"} label={`${t.product.purchase} ${name}`} onChange={(x) => onChange({ purchasePrice: x })} />
+          </Field>
+        )}
+        <fieldset disabled={!rights.prices} className="contents">
+          <Field label={t.product.wholesale} hint={note(w)}>
+            <MoneyInput value={v.wholesalePrice ?? ""} placeholder={base.w.trim() || "0,00"} label={`${t.product.wholesale} ${name}`} onChange={(x) => onChange({ wholesalePrice: x })} />
+          </Field>
+          <Field label={t.product.retail} hint={note(r)}>
+            <MoneyInput value={v.retailPrice ?? ""} placeholder={base.r.trim() || "0,00"} label={`${t.product.retail} ${name}`} onChange={(x) => onChange({ retailPrice: x })} />
+          </Field>
+        </fieldset>
+      </div>
     </div>
   );
 }

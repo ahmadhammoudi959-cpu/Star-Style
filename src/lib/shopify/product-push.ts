@@ -19,7 +19,7 @@ import { gql, getShop, ShopifyError, type Shop, type ShopChannel } from "./clien
 import { CHANNELS, logEvent } from "./sync";
 import { audit } from "../stock";
 import {
-  buildProductSet, matchCreatedVariants, planVariantAdds, pushBlockers, resolveStoreType, shopPriceCents, shopWeight, storeTypesFrom, variantSku,
+  buildProductSet, matchCreatedVariants, planVariantAdds, pushBlockers, resolveStoreType, shopPriceCents, shopWeight, storeTypesFrom, variantCost, variantSku,
   type CollectionRules, type PushBlocker, type PushImage, type PushProduct, type PushReason, type PushResult, type ShopProductShape, type StoreType,
 } from "./product-push-map";
 import { configured, isAccessDenied, publishToOnlineStore, uploadImages, withFreshToken, withProductLock } from "./admin";
@@ -103,7 +103,7 @@ async function loadProduct(productId: string, buffer: number, channel: ShopChann
     vatRateBp: p.vatRateBp, retailPriceCents: p.retailPriceCents, purchasePriceCents: p.purchasePriceCents,
     imageFileId: p.imageFileId, gallery: [...new Set(gallery)],
     variants: vs.map((v) => ({
-      id: v.id, size: v.size, color: v.color, barcode: v.barcode, retailPriceCents: v.retailPriceCents,
+      id: v.id, size: v.size, color: v.color, barcode: v.barcode, retailPriceCents: v.retailPriceCents, purchasePriceCents: v.purchasePriceCents,
       imageFileId: v.imageFileId, available: avail.get(v.id) ?? 0, weightGrams: v.weightGrams,
     })),
   };
@@ -440,7 +440,7 @@ async function addVariants(shop: Shop, channel: ShopChannel, p: PushProduct, lin
       optionValues: pv.optionValues,
       price: money(shopPriceCents(v.retailPriceCents ?? p.retailPriceCents, p.vatRateBp, info.taxesIncluded)),
       ...(v.barcode ? { barcode: v.barcode } : {}),
-      inventoryItem: { sku: variantSku(p.sku, v, false), tracked: true, ...(p.purchasePriceCents > 0 ? { cost: money(p.purchasePriceCents) } : {}), ...shopWeight(v.weightGrams) },
+      inventoryItem: { sku: variantSku(p.sku, v, false), tracked: true, ...(variantCost(p, v) > 0 ? { cost: money(variantCost(p, v)) } : {}), ...shopWeight(v.weightGrams) },
       inventoryQuantities: [{ locationId: shop.locationId, availableQuantity: Math.max(0, v.available) }],
       ...(img ? { mediaSrc: [img.resourceUrl] } : {}),
     };

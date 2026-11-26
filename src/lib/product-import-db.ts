@@ -160,6 +160,7 @@ export async function runImport(uid: string, input: AnalyzeInput & { general: bo
         const [v] = await tx.insert(schema.variants).values({
           productId: p.id, size: r.size, color: r.color, barcode: r.barcode || null, minStock: r.minStock, weightGrams: r.weightGrams,
           wholesalePriceCents: own(r.wholesale, values.wholesalePriceCents), retailPriceCents: own(r.retail, values.retailPriceCents),
+          purchasePriceCents: rights.cost && r.purchase > 0 && r.purchase !== values.purchasePriceCents ? r.purchase : null,
           imageFileId: variantImg.get(r) ?? null,
         }).returning({ id: schema.variants.id });
         variants++;

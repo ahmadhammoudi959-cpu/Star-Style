@@ -7,18 +7,19 @@ import { zoomPlacement, zoomSize } from "@/lib/zoom-place";
 
 export type ZoomInfo = { title: string; sub?: string; price?: string };
 
-/** Mit Maus (nicht am Handy): Zeigen auf das Foto öffnet es groß daneben (Wunsch Inhaber 17.11.2026 – der Kunde neben
- *  dem Mitarbeiter soll den Artikel sehen). Mit `onOpen`: Klick öffnet die Kundenansicht (ProductShowcase). */
-export function ZoomThumb({ id, size = 40, info, onOpen, openLabel, className = "" }: {
-  id?: string | null; size?: number; info?: ZoomInfo; onOpen?: () => void; openLabel?: string; className?: string;
-}) {
+/**
+ * Mit Maus (nicht am Handy): Zeigen auf ein Foto öffnet es nach 120 ms groß daneben (Portal, über allem, nimmt keine Klicks).
+ * Weg bei Maus weg, Scrollen, Taste oder Klick. src = Bildadresse (gespeicherte Datei oder eben gewähltes Foto als blob:).
+ * Benutzt von ZoomThumb und PhotoPicker (Artikel-Formular: Foto oben und je Größe/Farbe, Wunsch Inhaber 26.11.2026).
+ */
+export function useHoverZoom(src: string | null | undefined, info?: ZoomInfo) {
   const [box, setBox] = useState<{ left: number; top: number; width: number; caption: number } | null>(null);
   const ref = useRef<HTMLElement>(null);
   const timer = useRef<number | undefined>(undefined);
 
   const hide = () => { window.clearTimeout(timer.current); setBox(null); };
   const show = () => {
-    if (!id || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+    if (!src || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
       const el = ref.current;
@@ -42,15 +43,16 @@ export function ZoomThumb({ id, size = 40, info, onOpen, openLabel, className = 
     return () => { window.removeEventListener("scroll", off, true); window.removeEventListener("keydown", off); window.removeEventListener("pointerdown", off, true); };
   }, [box]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  // anderes Foto (z. B. eben ein neues gewählt): alte Vorschau weg
+  useEffect(() => { window.clearTimeout(timer.current); setBox(null); }, [src]);
 
-  const enter = (e: React.PointerEvent) => { if (e.pointerType === "mouse") show(); };
-  const thumb = <Thumb id={id} size={size} className={className} />;
-  const preview = box && id ? createPortal(
+  const onPointerEnter = (e: React.PointerEvent) => { if (e.pointerType === "mouse") show(); };
+  const preview = box && src ? createPortal(
     <div aria-hidden className="pointer-events-none fixed z-[70] overflow-hidden rounded-2xl bg-white shadow-lift ring-1 ring-black/10 motion-safe:animate-zoom"
       style={{ left: box.left, top: box.top, width: box.width }} data-zoom-preview>
       <div className="flex items-center justify-center bg-white p-3" style={{ height: box.width }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/api/files/${id}`} alt="" className="max-h-full max-w-full object-contain" />
+        <img src={src} alt="" className="max-h-full max-w-full object-contain" />
       </div>
       {info && (
         <div className="space-y-0.5 border-t border-black/5 px-4 py-2.5" style={{ minHeight: box.caption }}>
@@ -64,10 +66,20 @@ export function ZoomThumb({ id, size = 40, info, onOpen, openLabel, className = 
     </div>,
     document.body,
   ) : null;
+  return { ref, onPointerEnter, onPointerLeave: hide, hide, preview };
+}
+
+/** Kleines Artikelfoto, mit Maus groß beim Zeigen (Wunsch Inhaber 17.11.2026 – der Kunde neben dem Mitarbeiter soll den Artikel
+ *  sehen; 26.11.2026 auch in Artikel- und Lagerliste). Mit `onOpen`: Klick öffnet die Kundenansicht (ProductShowcase). */
+export function ZoomThumb({ id, size = 40, info, onOpen, openLabel, className = "" }: {
+  id?: string | null; size?: number; info?: ZoomInfo; onOpen?: () => void; openLabel?: string; className?: string;
+}) {
+  const { ref, onPointerEnter: enter, onPointerLeave, hide, preview } = useHoverZoom(id ? `/api/files/${id}` : null, info);
+  const thumb = <Thumb id={id} size={size} className={className} />;
 
   if (onOpen) return (
     <>
-      <button type="button" ref={ref as RefObject<HTMLButtonElement>} onPointerEnter={enter} onPointerLeave={hide}
+      <button type="button" ref={ref as RefObject<HTMLButtonElement>} onPointerEnter={enter} onPointerLeave={onPointerLeave}
         onClick={(e) => { e.stopPropagation(); hide(); onOpen(); }} title={openLabel} aria-label={openLabel}
         className="group/zoom relative shrink-0 cursor-zoom-in rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
         {thumb}
@@ -80,7 +92,7 @@ export function ZoomThumb({ id, size = 40, info, onOpen, openLabel, className = 
   );
   return (
     <>
-      <span ref={ref as RefObject<HTMLSpanElement>} onPointerEnter={enter} onPointerLeave={hide} className={`inline-flex shrink-0 ${id ? "cursor-zoom-in" : ""}`}>{thumb}</span>
+      <span ref={ref as RefObject<HTMLSpanElement>} onPointerEnter={enter} onPointerLeave={onPointerLeave} className={`inline-flex shrink-0 ${id ? "cursor-zoom-in" : ""}`}>{thumb}</span>
       {preview}
     </>
   );

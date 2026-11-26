@@ -88,6 +88,27 @@ body { font-family: var(--font-sans), system-ui, sans-serif; -webkit-font-smooth
 @keyframes scan-line { 0%, 100% { top: 10%; } 50% { top: 88%; } }
 .scan-line { top: 10%; animation: scan-line 1.8s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .scan-line { animation: none; top: 50%; } }
+/* Nächster Schritt der „Ersten Schritte“ (Wunsch Inhaber 26.11.2026): Pfeil stupst hin und her – nudge-start zeigt zum
+   Textanfang (zum Menüpunkt), nudge-end nach vorn („Hier starten →“); in RTL gespiegelt. Bewusst kein Pulsieren (= Benachrichtigung). */
+@keyframes ss-nudge { 0%, 100% { translate: 0 0; } 50% { translate: var(--nudge) 0; } }
+.nudge-start, .nudge-end { animation: ss-nudge 1s ease-in-out infinite; }
+.nudge-start { --nudge: -0.4rem; }
+.nudge-end { --nudge: 0.4rem; }
+[dir="rtl"] .nudge-start { --nudge: 0.4rem; }
+[dir="rtl"] .nudge-end { --nudge: -0.4rem; }
+/* … und der nächste Schritt wechselt die Farbe: Blau → Rot → zurück zu Blau (Wunsch Inhaber 26.11.2026: „تتلوّن أحمر وترجع
+   للونها الأصلي“). Eine Zahl, bei der wirklich etwas wartet, bleibt dagegen fest rot, ohne Pfeil und ohne „Nächster Schritt“. */
+@keyframes ss-step-blink { 0%, 100% { background-color: #2f6cf0; } 50% { background-color: #e3191c; } }
+.step-blink { background-color: #2f6cf0; animation: ss-step-blink 1.6s ease-in-out infinite; }
+/* Menüzeile (Seitenleiste, dunkel): Hintergrund und Rand wechseln mit */
+@keyframes ss-step-row {
+  0%, 100% { background-color: rgb(47 108 240 / 0.16); box-shadow: inset 0 0 0 1px rgb(91 142 247 / 0.55); }
+  50% { background-color: rgb(227 25 28 / 0.24); box-shadow: inset 0 0 0 1px rgb(255 99 99 / 0.8); }
+}
+.step-row-blink { background-color: rgb(47 108 240 / 0.16); box-shadow: inset 0 0 0 1px rgb(91 142 247 / 0.55); animation: ss-step-row 1.6s ease-in-out infinite; }
+/* Kachel (Handy-Menü, Startseite – hell): nur der Rand wechselt */
+@keyframes ss-step-ring { 0%, 100% { box-shadow: 0 0 0 2px #2f6cf0, 0 6px 18px rgb(16 24 40 / 0.07); } 50% { box-shadow: 0 0 0 2px #e3191c, 0 6px 18px rgb(16 24 40 / 0.07); } }
+.step-ring-blink { box-shadow: 0 0 0 2px #2f6cf0, 0 6px 18px rgb(16 24 40 / 0.07); animation: ss-step-ring 1.6s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

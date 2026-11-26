@@ -5,7 +5,7 @@ import { db, schema } from "@/db";
 import { fill, getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
-import { Thumb } from "@/components/Thumb";
+import { ZoomThumb } from "@/components/ZoomThumb";
 import { formatCents } from "@/lib/money";
 import { formatWeight } from "@/lib/weight";
 import { daysBetween, formatDate, todayIso } from "@/lib/dates";
@@ -49,7 +49,7 @@ export default async function VariantStock({ params }: { params: Promise<{ id: s
         actions={<Link href={`/products/${v.productId}`} className="btn-primary group"><Icon name={can(session, "products.edit") ? "edit" : "eye"} className="h-4 w-4" />{can(session, "products.edit") ? t.product.edit : t.product.open}</Link>} />
       {/* Das Produkt auf einen Blick: Foto, Nummern, Kategorie */}
       <section className="card mb-4 flex flex-col gap-4 p-4 animate-rise sm:flex-row sm:items-center">
-        <Thumb id={v.imageFileId ?? v.product.imageFileId} size={96} />
+        <ZoomThumb id={v.imageFileId ?? v.product.imageFileId} size={96} info={{ title: v.product.nameDe, sub: [v.size, v.color].filter(Boolean).join(" · ") }} />
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="text-lg font-bold leading-snug [overflow-wrap:anywhere]" dir="auto">{v.product.nameDe}</div>
           {v.product.nameNl && <div className="text-sm text-ink-soft [overflow-wrap:anywhere]" dir="auto">{v.product.nameNl}</div>}

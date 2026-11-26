@@ -11,7 +11,7 @@ export async function loadStockItems(): Promise<StockItem[]> {
   const since = addDaysIso(todayIso(), -WINDOW_DAYS);
   const r = await db.execute<Row>(sql`
     select v.id, p.name_de, v.size, v.color, p.sku, v.barcode, p.supplier_id, coalesce(s.name, '') as supplier,
-      v.stock_qty, v.min_stock, greatest(v.avg_cost_cents, 0) as avg_cost, p.purchase_price_cents,
+      v.stock_qty, v.min_stock, greatest(v.avg_cost_cents, 0) as avg_cost, coalesce(nullif(v.purchase_price_cents, 0), p.purchase_price_cents) as purchase_price_cents,
       coalesce((select sum(qty) from reservations r where r.variant_id = v.id and r.active and r.expires_at > now()), 0)::int as reserved,
       coalesce((select -sum(m.qty) from stock_movements m where m.variant_id = v.id and m.ref_type = 'invoice'
         and m.type in ('SALE', 'CANCEL') and m.created_at >= ${since}::date), 0)::int as sold,

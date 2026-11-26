@@ -283,6 +283,9 @@ export const variants = pgTable("variants", {
   size: text("size").notNull().default(""),
   color: text("color").notNull().default(""),
   barcode: text("barcode").unique(),
+  // eigene Preise dieser Größe/Farbe (netto); null = Preis des Artikels. Einkaufspreis seit 26.11.2026 (Wunsch Inhaber: z. B. Barber-Leuchte
+  // 45 cm EK 45 / Großhandel 55 / Shop 150, 58 cm wie der Artikel) – nur Vorschlag für Wareneingang/Marge, Wareneinsatz kommt aus den Chargen
+  purchasePriceCents: integer("purchase_price_cents"),
   wholesalePriceCents: integer("wholesale_price_cents"),
   retailPriceCents: integer("retail_price_cents"),
   minStock: integer("min_stock").notNull().default(0),

@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { getI18n, type Dict } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
-import { Thumb } from "@/components/Thumb";
+import { ZoomThumb } from "@/components/ZoomThumb";
 import { formatCents } from "@/lib/money";
 import { systemDiscounts } from "@/lib/promotions";
 import { PromoPrice } from "@/components/PromoPrice";
@@ -21,6 +21,8 @@ import { LIST_STEP, listLimit, ShowMore } from "@/components/ShowMore";
 type Row = {
   id: string; imageFileId: string | null; sku: string; nameDe: string; nameNl: string; category: string;
   wholesaleCents: number; active: boolean; variants: number; stock: number; low: boolean; barcodes: string[];
+  /** Großhandelspreis von–bis, wenn Größen/Farben eigene Preise haben (sonst beide = Artikelpreis) */
+  wMin: number; wMax: number;
 };
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; cat?: string; n?: string }> }) {
@@ -32,16 +34,26 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const edit = can(session, "products.edit"), manageShops = can(session, "shops.manage");
   const [cats, pend, promo] = await Promise.all([productCategories(), manageShops ? pendingSummary() : [], systemDiscounts()]);
   // Aktion im System: „-20%“ + Streichpreis (Wunsch Inhaber 19.11.2026)
-  const price = (r: { id: string; wholesaleCents: number }, cls = "") => {
+  // Größen/Farben mit eigenem Preis (Wunsch Inhaber 26.11.2026): von–bis, z. B. „55,00 €“ und darunter „– 64,99 €“
+  const price = (r: { id: string; wMin: number; wMax: number }, cls = "") => {
     const bp = promo.get(r.id) ?? 0;
-    return bp ? <PromoPrice price={formatCents(discounted(r.wholesaleCents, bp), intl)} was={formatCents(r.wholesaleCents, intl)} pct={Math.round(bp / 100)} className={cls} />
-      : <span className={`num ${cls}`}>{formatCents(r.wholesaleCents, intl)}</span>;
+    const main = bp ? <PromoPrice price={formatCents(discounted(r.wMin, bp), intl)} was={formatCents(r.wMin, intl)} pct={Math.round(bp / 100)} className={cls} />
+      : <span className={`num ${cls}`}>{formatCents(r.wMin, intl)}</span>;
+    if (r.wMin === r.wMax) return main;
+    return (
+      <span className="inline-flex flex-col items-end" data-price-range>
+        {main}
+        <span className="num text-xs text-ink-soft">– {formatCents(bp ? discounted(r.wMax, bp) : r.wMax, intl)}</span>
+      </span>
+    );
   };
   const rows: Row[] = (await db.execute<Record<string, unknown>>(sql`
     select p.id, p.image_file_id, p.sku, p.name_de, p.name_nl, p.category, p.wholesale_price_cents, p.active,
            count(v.id) filter (where v.active)::int as variants,
            coalesce(sum(v.stock_qty) filter (where v.active),0)::int as stock,
            bool_or(v.active and v.min_stock > 0 and v.stock_qty <= v.min_stock) as low,
+           min(coalesce(nullif(v.wholesale_price_cents, 0), p.wholesale_price_cents)) filter (where v.active) as w_min,
+           max(coalesce(nullif(v.wholesale_price_cents, 0), p.wholesale_price_cents)) filter (where v.active) as w_max,
            coalesce(array_agg(v.barcode order by v.created_at, v.id) filter (where v.active and v.barcode is not null and v.barcode <> ''), '{}') as barcodes
     from products p left join variants v on v.product_id = p.id
     where (${like}::text is null or lower(p.name_de) like ${like} or lower(p.name_nl) like ${like} or lower(p.sku) like ${like}
@@ -52,6 +64,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     id: String(r.id), imageFileId: (r.image_file_id as string) ?? null, sku: String(r.sku), nameDe: String(r.name_de), nameNl: String(r.name_nl),
     category: String(r.category), wholesaleCents: Number(r.wholesale_price_cents), active: Boolean(r.active), variants: Number(r.variants),
     stock: Number(r.stock), low: Boolean(r.low), barcodes: (r.barcodes as string[] | null) ?? [],
+    wMin: r.w_min == null ? Number(r.wholesale_price_cents) : Number(r.w_min), wMax: r.w_max == null ? Number(r.wholesale_price_cents) : Number(r.w_max),
   }));
 
   // nur die ersten Zeilen zeigen, „Weitere anzeigen“ holt mehr (sonst lädt die Seite bei vielen Artikeln sehr lange)
@@ -110,7 +123,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                     <td><Barcodes list={r.barcodes} t={t} /></td>
                     <td>
                       <Link href={`/products/${r.id}`} className="group flex items-center gap-2.5">
-                        <Thumb id={r.imageFileId} size={40} />
+                        {/* Maus auf das Foto → groß (Wunsch Inhaber 26.11.2026: kleine Artikel erkennt man sonst schlecht) */}
+                        <ZoomThumb id={r.imageFileId} size={40} info={{ title: r.nameDe, sub: [r.sku, r.category].filter(Boolean).join(" · ") }} />
                         <span className="min-w-0">
                           <span className="font-semibold [overflow-wrap:anywhere] group-hover:text-brand-700">{r.nameDe}</span>
                           {r.variants > 1 && <span className="badge mt-0.5 flex w-fit bg-brand-50 text-brand-700">{r.variants} {t.product.variants}</span>}
@@ -134,7 +148,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             {shown.map((r) => (
               <div key={r.id} className={`card p-3 animate-rise ${r.active ? "" : "opacity-50"}`}>
                 <div className="flex items-start gap-2.5">
-                  <Link href={`/products/${r.id}`} className="shrink-0"><Thumb id={r.imageFileId} size={44} /></Link>
+                  <Link href={`/products/${r.id}`} className="shrink-0"><ZoomThumb id={r.imageFileId} size={44} info={{ title: r.nameDe, sub: [r.sku, r.category].filter(Boolean).join(" · ") }} /></Link>
                   <div className="min-w-0 flex-1">
                     <Link href={`/products/${r.id}`} className="block text-sm font-semibold leading-snug [overflow-wrap:anywhere]">{r.nameDe}</Link>
                     {r.nameNl && <div className="truncate text-xs text-ink-soft" dir="auto">{r.nameNl}</div>}

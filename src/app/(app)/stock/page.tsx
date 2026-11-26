@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Thumb } from "@/components/Thumb";
+import { ZoomThumb } from "@/components/ZoomThumb";
 import { getI18n } from "@/i18n";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
@@ -149,7 +149,7 @@ function NameCell({ r, big = false }: { r: StockRow; big?: boolean }) {
   const variant = [r.size, r.color].filter(Boolean).join(" · ");
   return (
     <Link href={`/stock/${r.id}`} className="group flex items-center gap-2.5">
-      <Thumb id={r.imageId} size={big ? 56 : 40} />
+      <ZoomThumb id={r.imageId} size={big ? 56 : 40} info={{ title: r.nameDe, sub: [variant, r.barcode ?? r.sku].filter(Boolean).join(" · ") }} />
       <span className="min-w-0">
         <span className="block font-semibold leading-snug [overflow-wrap:anywhere] group-hover:text-brand-700">{r.nameDe}</span>
         {variant && <span className="badge mt-0.5 bg-brand-50 text-brand-700" dir="auto">{variant}</span>}

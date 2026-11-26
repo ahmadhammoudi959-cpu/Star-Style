@@ -14,11 +14,12 @@ const de = {
     returns: "Retouren", mail: "E-Mail", whatsapp: "WhatsApp",
     users: "Mitarbeiter",
     account: "Mein Konto",
+    nextStep: "Nächster Schritt",
     menu: "Menü", scan: "Barcode scannen", scanShort: "Scan", home: "Start", products: "Artikel", categories: "Kategorien", receive: "Wareneingang", stock: "Lager", writeOffs: "Verluste",
     receivables: "Offene Posten", customers: "Kunden", suppliers: "Lieferanten", settings: "Einstellungen", sales: "Verkauf", reports: "Berichte", expenses: "Ausgaben", insights: "Hinweise", shops: "Shops", ask: "Frag dein Geschäft", design: "Belegdesign",
   },
   setup1: {
-    showGuide: "„Erste Schritte“ anzeigen", showGuideHint: "Zeigt die nummerierten Schritte auf der Startseite und im Menü – auch wenn alles erledigt ist. Praktisch zum Einarbeiten neuer Mitarbeiter.",
+    showGuide: "„Erste Schritte“ anzeigen", showGuideHint: "Zeigt die nummerierten Schritte auf der Startseite und im Menü – auch die schon erledigten. Praktisch zum Einarbeiten neuer Mitarbeiter. Ausgeschaltet stehen nur die offenen Schritte da (der nächste blau mit Pfeil); sind alle erledigt, verschwinden sie.",
     title: "Erste Schritte", intro: "Einfach der Reihe nach. Jeder erledigte Schritt bekommt ein ✓. Wenn alles erledigt ist, verschwindet diese Liste.", progress: "{d} von {n}", start: "Hier starten", done: "Erledigt", company: "Firmendaten ergänzen", companyHint: "Adresse, Steuernummer, Bank und Logo", supplier: "Ersten Lieferanten anlegen", supplierHint: "Bei wem du die Ware kaufst", product: "Artikel anlegen", productHint: "Foto, Name, Preise und vorhandene Menge", receive: "Wareneingang buchen", receiveHint: "Jede neue Lieferung vom Lieferanten", customer: "Ersten Kunden anlegen", customerHint: "Salon oder Person, die bei dir kauft", invoice: "Erste Rechnung schreiben", invoiceHint: "Oder ein Angebot – danach drucken", payment: "Erste Zahlung erfassen", paymentHint: "Wenn der Kunde bezahlt",
   },
   home: {
@@ -77,6 +78,14 @@ const de = {
     wholesaleNote: "Sehen nur Kunden der Preisgruppe „Großhandel“ (Händler): in beiden Shops nach dem Anmelden (inkl. MwSt.) und auf Rechnungen.",
     retailNote: "Diesen Preis sehen alle Kunden in beiden Shops (dort inkl. MwSt.).",
     shopGross: "Im Shop mit MwSt.: {price}",
+    // eigene Preise je Größe/Farbe (Wunsch Inhaber 26.11.2026)
+    basePricesHint: "Diese Preise gelten für alle Größen/Farben. Hat eine Größe oder Farbe einen anderen Preis, trag ihn unten in ihrer Zeile ein.",
+    vPrices: "Preise dieser Größe/Farbe",
+    vSame: "leer = Preise von oben",
+    vOwn: "eigene Preise",
+    vReset: "Wie oben",
+    vResetHint: "Eigene Preise dieser Größe/Farbe löschen – dann gelten die Preise von oben.",
+    variantPrice: "Ein Preis bei einer Größe/Farbe ist ungültig – bitte z. B. 12,50 schreiben oder das Feld leer lassen.",
     tracksExpiry: "Hat Haltbarkeitsdatum", shops: "Sichtbar in", brandShop: "Marken-Shop",
     generalShop: "Allgemeiner Shop", variants: "Varianten", size: "Größe", color: "Farbe", barcode: "Barcode (EAN)",
     photo: "Produktfoto", addPhoto: "Foto hinzufügen", changePhoto: "Foto ändern", removePhoto: "Foto entfernen", photoHint: "Mit dem Handy fotografieren oder Bild auswählen. Erscheint überall im System: Artikel, Lager, Wareneingang, Verkauf. Für den Shop kannst du unten mehrere Produktfotos hinzufügen.", variantPhoto: "Foto dieser Variante", imageType: "Bitte ein JPG-, PNG- oder WebP-Bild wählen", fileTooLarge: "Bild zu groß (max. 8 MB)", photoProcessing: "Foto wird vorbereitet …",
@@ -125,7 +134,7 @@ const de = {
     price: {
       ok: "{shop}: neuer Preis im Shop ✓{price}",
       same: "{shop}: Preis im Shop stimmt schon ✓{price}",
-      own: "{shop}: Diese Größe/Farbe hat einen eigenen Preis – der gilt im Shop{price}. Der Artikelpreis ändert ihn nicht.",
+      own: "{shop}: Preise im Shop sind aktuell ✓{price} – Größen/Farben mit eigenem Preis (unten in ihrer Zeile) haben dort ihren eigenen Preis.",
       fail: "{shop}: neuer Preis nicht im Shop angekommen{price} – Grund im Shop-Protokoll.",
       retry: "{shop}: Shop gerade nicht erreichbar – der neue Preis{price} wird in den nächsten Minuten automatisch gesendet.",
       pending: "Der neue Preis wird gerade an den Shop gesendet – in wenigen Sekunden ist er dort.",

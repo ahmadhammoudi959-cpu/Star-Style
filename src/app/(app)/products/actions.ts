@@ -49,6 +49,10 @@ const VariantSchema = z.object({
   pkgL: z.string().trim().max(12).default(""),
   pkgW: z.string().trim().max(12).default(""),
   pkgH: z.string().trim().max(12).default(""),
+  // eigene Preise dieser Größe/Farbe (netto, Text wie die Preisfelder); leer = Preis des Artikels (Wunsch Inhaber 26.11.2026)
+  purchasePrice: z.string().trim().max(20).default(""),
+  wholesalePrice: z.string().trim().max(20).default(""),
+  retailPrice: z.string().trim().max(20).default(""),
   // Anfangsbestand nur für neue Varianten: wird als Wareneingang gebucht (Bestand nie direkt setzen)
   initialQty: z.coerce.number().int().min(0).max(1_000_000).default(0),
   initialExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal("")).default(""),
@@ -100,6 +104,15 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
   if (weights.some((w) => w === undefined)) return { error: "weightInvalid" };
   const dims = d.variants.map((v) => parseDims(v.pkgL, v.pkgW, v.pkgH));
   if (dims.some((x) => x === undefined)) return { error: "pkgInvalid" };
+  // eigene Preise je Größe/Farbe: leer (oder 0) = Artikelpreis, unlesbar → verständliche Meldung
+  const ownCents = (txt: string): number | null | undefined => {
+    if (!txt) return null;
+    const c = parseMoney(txt);
+    return c == null || c < 0 ? undefined : c === 0 ? null : c;
+  };
+  const rawPrices = d.variants.map((v) => ({ p: ownCents(v.purchasePrice), w: ownCents(v.wholesalePrice), r: ownCents(v.retailPrice) }));
+  if (rawPrices.some((x) => x.p === undefined || x.w === undefined || x.r === undefined)) return { error: "variantPrice" };
+  const vPrices = rawPrices.map((x) => ({ p: x.p ?? null, w: x.w ?? null, r: x.r ?? null }));
   // Art.-Nr. = Barcode (Wunsch Inhaber 03.11.2026): leer gelassen → Barcode der ersten Variante mit Barcode
   const sku = d.sku || barcodes[0] || "";
   if (!sku) return { error: "skuOrBarcode" };
@@ -167,8 +180,7 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
         priceChanged = before.retailPriceCents !== values.retailPriceCents || before.vatRateBp !== values.vatRateBp;
         // Großhandelspreis (جملة الجملة) → Preisliste der Wiederverkäufer im Shop (Shopify B2B)
         resellerChanged = before.wholesalePriceCents !== values.wholesalePriceCents || before.vatRateBp !== values.vatRateBp;
-        if (priceChanged || resellerChanged)
-          await tx.insert(schema.shopPriceDirty).values({ productId: d.id }).onConflictDoUpdate({ target: schema.shopPriceDirty.productId, set: { at: new Date() } });
+        // (geänderte eigene Preise einer Größe/Farbe kommen unten bei den Varianten dazu; vorgemerkt wird danach)
       } else {
         const [p] = await tx.insert(schema.products).values(values).returning({ id: schema.products.id });
         productId = p.id;
@@ -178,17 +190,40 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
       // Varianten: bestehende aktualisieren, neue anlegen, entfernte deaktivieren (Historie bleibt erhalten)
       // Barcodes dieses Artikels zuerst leeren, damit Tausch zwischen Varianten möglich ist
       await tx.update(schema.variants).set({ barcode: null }).where(eq(schema.variants.productId, productId!));
-      const opening: { variantId: string; qty: number; expiryDate: string | null }[] = [];
-      const oldRows = await tx.select({ id: schema.variants.id, w: schema.variants.weightGrams, l: schema.variants.pkgLengthMm, b: schema.variants.pkgWidthMm, h: schema.variants.pkgHeightMm })
-        .from(schema.variants).where(eq(schema.variants.productId, productId!));
+      const opening: { variantId: string; qty: number; expiryDate: string | null; unitCostCents: number }[] = [];
+      const oldRows = await tx.select({
+        id: schema.variants.id, size: schema.variants.size, color: schema.variants.color, w: schema.variants.weightGrams, l: schema.variants.pkgLengthMm, b: schema.variants.pkgWidthMm, h: schema.variants.pkgHeightMm,
+        pp: schema.variants.purchasePriceCents, wp: schema.variants.wholesalePriceCents, rp: schema.variants.retailPriceCents,
+      }).from(schema.variants).where(eq(schema.variants.productId, productId!));
       const oldWeights = new Map(oldRows.map((r) => [r.id, r.w]));
       const oldDims = new Map(oldRows.map((r) => [r.id, r.l && r.b && r.h ? [r.l, r.b, r.h] : null]));
+      // bisherige eigene Preise (auch einer früher entfernten Größe/Farbe, die gleich wieder auflebt – gefunden über Größe/Farbe)
+      const oldPrice = (v: { id?: string; size: string; color: string }) => {
+        const row = oldRows.find((r) => (v.id ? r.id === v.id : r.size === v.size && r.color === v.color));
+        return row ? { id: row.id, p: row.pp ?? null, w: row.wp ?? null, r: row.rp ?? null } : null;
+      };
       for (const [vi, v] of d.variants.entries()) {
         const weightGrams = weights[vi] ?? null;
         const pkg = dims[vi] ?? null;
+        // eigene Preise: gleich dem Artikelpreis = keiner (folgt dann dem Artikel); ohne Recht bleibt der bisherige Wert
+        const old = oldPrice(v);
+        const own = (c: number | null, base: number) => (c != null && c !== base ? c : null);
+        const price = {
+          purchasePriceCents: canCost ? own(vPrices[vi].p, values.purchasePriceCents) : (old?.p ?? null),
+          wholesalePriceCents: canPrices ? own(vPrices[vi].w, values.wholesalePriceCents) : (old?.w ?? null),
+          retailPriceCents: canPrices ? own(vPrices[vi].r, values.retailPriceCents) : (old?.r ?? null),
+        };
+        vPrices[vi].p = price.purchasePriceCents; // für den Anfangsbestand unten
+        if (old && d.id) {
+          const before = { purchasePriceCents: old.p, wholesalePriceCents: old.w, retailPriceCents: old.r };
+          if (JSON.stringify(before) !== JSON.stringify(price))
+            await audit(tx, { entity: "variant", entityId: old.id, action: "prices", before, after: price, userId: session.uid });
+          if ((old.r ?? null) !== price.retailPriceCents) priceChanged = true;
+          if ((old.w ?? null) !== price.wholesalePriceCents) resellerChanged = true;
+        }
         const vals = {
           size: v.size, color: v.color, barcode: v.barcode || null, minStock: v.minStock, active: true, weightGrams,
-          pkgLengthMm: pkg?.l ?? null, pkgWidthMm: pkg?.w ?? null, pkgHeightMm: pkg?.h ?? null,
+          pkgLengthMm: pkg?.l ?? null, pkgWidthMm: pkg?.w ?? null, pkgHeightMm: pkg?.h ?? null, ...price,
           ...(variantImages.has(v.ref) ? { imageFileId: variantImages.get(v.ref) ?? null } : {}),
         };
         if (v.id && oldWeights.has(v.id) && (oldWeights.get(v.id) ?? null) !== weightGrams) {
@@ -207,9 +242,12 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
           let variantId = existing?.id;
           if (existing) await tx.update(schema.variants).set(vals).where(eq(schema.variants.id, existing.id));
           else [{ id: variantId }] = await tx.insert(schema.variants).values({ productId: productId!, ...vals }).returning({ id: schema.variants.id });
-          if (v.initialQty > 0) opening.push({ variantId: variantId!, qty: v.initialQty, expiryDate: d.tracksExpiry && v.initialExpiry ? v.initialExpiry : null });
+          if (v.initialQty > 0) opening.push({ variantId: variantId!, qty: v.initialQty, expiryDate: d.tracksExpiry && v.initialExpiry ? v.initialExpiry : null, unitCostCents: vPrices[vi].p ?? values.purchasePriceCents });
         }
       }
+      // Shop-Preis bzw. Preisliste der Wiederverkäufer geändert (Artikel oder eine Größe/Farbe) → an die verbundenen Shops melden
+      if (d.id && (priceChanged || resellerChanged))
+        await tx.insert(schema.shopPriceDirty).values({ productId: d.id }).onConflictDoUpdate({ target: schema.shopPriceDirty.productId, set: { at: new Date() } });
       const activeIds = (await tx.select({ id: schema.variants.id }).from(schema.variants)
         .where(and(eq(schema.variants.productId, productId!), eq(schema.variants.active, true)))).map((r) => r.id);
       const wanted = new Set<string>();
@@ -238,7 +276,7 @@ async function saveProductInner(_: ProductFormState, fd: FormData): Promise<Prod
       if (opening.length) {
         await receiveGoodsTx(tx, {
           supplierId: d.supplierId || null, date: todayIso(), supplierInvoiceNo: "", note: "Anfangsbestand beim Anlegen",
-          lines: opening.map((o) => ({ variantId: o.variantId, qty: o.qty, unitCostCents: d.purchasePrice, batchNo: "", expiryDate: o.expiryDate })),
+          lines: opening.map((o) => ({ variantId: o.variantId, qty: o.qty, unitCostCents: o.unitCostCents, batchNo: "", expiryDate: o.expiryDate })),
         }, session.uid);
       }
     });

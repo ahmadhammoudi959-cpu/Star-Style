@@ -1,11 +1,13 @@
 "use client";
-import { useRef, useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { Icon } from "./Icon";
+import { useHoverZoom } from "./ZoomThumb";
 import { shrinkImage } from "@/lib/image-client";
 
 /**
  * Foto wählen oder mit der Handy-Kamera aufnehmen; wird vor dem Hochladen verkleinert.
  * Sendet die Datei unter `name`, und `${name}Remove=1`, wenn das bisherige Foto entfernt wurde.
+ * Mit Maus: Zeigen auf das Foto zeigt es groß daneben (Wunsch Inhaber 26.11.2026 – kleine Artikel erkennt man sonst schlecht).
  */
 export function PhotoPicker({ name, initialId, size = 128, labels, compact = false }: {
   name: string; initialId?: string | null; size?: number; compact?: boolean;
@@ -16,6 +18,7 @@ export function PhotoPicker({ name, initialId, size = 128, labels, compact = fal
   const [removed, setRemoved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const zoom = useHoverZoom(preview);
 
   async function onFile(f: File | undefined) {
     if (!f || !input.current) return;
@@ -38,6 +41,7 @@ export function PhotoPicker({ name, initialId, size = 128, labels, compact = fal
   return (
     <div className={compact ? "flex items-center gap-2" : "flex flex-wrap items-center gap-4"}>
       <button type="button" onClick={() => input.current?.click()} style={box} title={preview ? labels.change : labels.add}
+        ref={zoom.ref as RefObject<HTMLButtonElement>} onPointerEnter={zoom.onPointerEnter} onPointerLeave={zoom.onPointerLeave}
         className="group relative shrink-0 overflow-hidden rounded-xl bg-brand-50 ring-1 ring-black/5 transition hover:-translate-y-0.5 hover:shadow-lift">
         {preview
           // eslint-disable-next-line @next/next/no-img-element
@@ -59,6 +63,7 @@ export function PhotoPicker({ name, initialId, size = 128, labels, compact = fal
         </div>
       )}
       {err && <p className="w-full text-sm font-semibold text-red-600">{err}</p>}
+      {zoom.preview}
     </div>
   );
 }
