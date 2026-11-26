@@ -752,6 +752,9 @@ export const shops = pgTable("shops", {
   // Metafelds star_style.banner (Werbebilder über/unter dem Hero) – geschrieben wird nur bei Änderung (src/lib/shopify/promo-shop.ts)
   offersCollectionId: text("offers_collection_id").notNull().default(""),
   promoBanner: text("promo_banner").notNull().default(""),
+  // Preise im Shop mit MwSt. (true) oder netto, MwSt. erst an der Kasse (false) – zuletzt gesehene Shopify-Einstellung;
+  // ändert sie sich, schickt der Worker alle Preise neu (src/lib/shopify/tax-mode.ts). null = noch nicht gesehen.
+  taxesIncluded: boolean("taxes_included"),
   updatedAt: updatedAt(),
 });
 

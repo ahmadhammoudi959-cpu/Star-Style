@@ -6,6 +6,7 @@ import "server-only";
  *   im Shop zu löschende Galerie-Fotos und geänderte Preise, bei denen das noch nicht geklappt hat, erneut versuchen;
  *   Gewichte melden, die im Shop noch fehlen oder veraltet sind (pushDueWeights); Tag „spedition“ nach der Versandart (pushFreightTags);
  *   Aktionen: Rabatt-Datum erreicht → Preise neu (syncPromoPriceStates), Werbebild + Kollektion „Angebote“ (syncPromoShops)
+ * - jede Minute: Preise im Shop mit/ohne MwSt. umgestellt? → alle Preise neu (watchTaxModes)
  */
 import { runCycle } from "./sync";
 import { retryGalleryDeletes } from "./gallery";
@@ -20,6 +21,7 @@ import { CHANNELS } from "./sync";
 import { purgeDirectOrders } from "../direct";
 import { syncPromoPriceStates } from "../promotions";
 import { syncPromoShops } from "./promo-shop";
+import { watchTaxModes } from "./tax-mode";
 
 let started = false, busy = false, ticks = 0;
 
@@ -33,6 +35,8 @@ export function startWorker() {
     try {
       const full = ticks % 15 === 0; // 15 × 20 s = 5 min
       await runCycle({ orders: full, reconcile: full });
+      // Shop zeigt Preise jetzt netto bzw. wieder brutto (Shopify-Einstellung) → sofort alle Preise passend neu senden
+      if (ticks % 3 === 0) await watchTaxModes().catch((e) => console.error("shopify tax mode", e));
       // im Shop zu löschende Fotos, bei denen es noch nicht geklappt hat (Wahl des Nutzers beim Entfernen)
       if (full) await retryGalleryDeletes().catch((e) => console.error("shopify gallery retry", e));
       // Aktionen: Rabatt hat sein Datum erreicht (startet/endet) → Artikel vormerken, damit der Preis-Abgleich sie gleich mitnimmt

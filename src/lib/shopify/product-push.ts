@@ -25,6 +25,7 @@ import {
 import { configured, isAccessDenied, publishToOnlineStore, uploadImages, withFreshToken, withProductLock } from "./admin";
 import { mapCreatedMedia, productFiles } from "./gallery-map";
 import { syncGalleryLater } from "./gallery";
+import { shopsShowNet } from "./tax-mode-map";
 
 export { decodePush, encodePush, type PushResult, type StoreType } from "./product-push-map";
 
@@ -540,12 +541,16 @@ const none = <T,>(v: () => T): Record<ShopChannel, T> => ({ BRAND_SHOP: v(), GEN
 export type ShopFormStatus = {
   connected: Record<ShopChannel, boolean>; linked: Record<ShopChannel, boolean>; linkedVariantIds: Record<ShopChannel, string[]>;
   storeTypes: Record<ShopChannel, StoreType[]>; categoryMap: Record<ShopChannel, Record<string, string>>;
+  /** Shops zeigen Nettopreise, MwSt. erst an der Kasse (src/lib/shopify/tax-mode.ts) – für die Hinweise unter den Preisen */
+  pricesNet?: boolean;
 };
 
 /** Welche Shops sind eingerichtet, welche Varianten sind dort schon verbunden, welche Kategorien hat der Shop? (für die Rückfrage beim Speichern) */
 export async function productShopStatus(productId?: string): Promise<ShopFormStatus> {
   const st: ShopFormStatus = { connected: none(() => false), linked: none(() => false), linkedVariantIds: none(() => []), storeTypes: none(() => []), categoryMap: none(() => ({})) };
-  for (const s of await db.select().from(schema.shops)) {
+  const shopRows = await db.select().from(schema.shops);
+  st.pricesNet = shopsShowNet(shopRows);
+  for (const s of shopRows) {
     const c = s.channel as ShopChannel;
     if (!configured(s)) continue;
     st.connected[c] = true;

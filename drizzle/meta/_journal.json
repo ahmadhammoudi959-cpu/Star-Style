@@ -267,6 +267,13 @@
       "when": 1795704455209,
       "tag": "0037_variant_purchase_price",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795722149237,
+      "tag": "0038_shop_taxes_included",
+      "breakpoints": true
     }
   ]
 }

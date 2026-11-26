@@ -209,6 +209,9 @@ const ku: Dict = {
     wholesaleNote: "Tenê mişteriyên koma „Firoşkar“ (bazirgan) dibînin: di herdu firoşgehên online de piştî têketinê (bi bac), û li ser fatûreyan.",
     retailNote: "Ev ew biha ye ku hemû mişterî di herdu firoşgehên online de dibînin (bi bac).",
     shopGross: "Di firoşgehê de bi bac: {price}",
+    wholesaleNoteNet: "Tenê mişteriyên koma „Firoşkar“ (bazirgan) dibînin: di herdu firoşgehên online de piştî têketinê (bê bac – bac di dravdanê de tê zêdekirin), û li ser fatûreyan.",
+    retailNoteNet: "Ev ew biha ye ku hemû mişterî di herdu firoşgehên online de dibînin (bê bac – bac di dravdanê de tê zêdekirin).",
+    shopGrossNet: "Di dravdanê de bi bac: {price}",
     // eigene Preise je Größe/Farbe (Wunsch Inhaber 26.11.2026)
     basePricesHint: "Ev biha ji bo hemû mezinahî û rengan in. Ger mezinahiyek an rengek bihayekî din hebe, li jêr di rêza wê de binivîse.",
     vPrices: "Bihayên vî cureyî",
@@ -1284,7 +1287,7 @@ const ku: Dict = {
       typeMissing: "Kategorî di firoşgehê de tune – berhem li cihê xwe dimîne: {p}",
       typeFailed: "Kategorî di firoşgehê de nehate guhertin: {p}",
       needScopeNavigation: "Sepana firoşgehê hîn nikare menûyê biguherîne (destûra read/write_online_store_navigation tune) – ji kerema xwe kategoriyên nû di panela Shopify de li menûyê zêde bike",
-      pricesPushed: "Biha di firoşgehê de hatin nûkirin: {u} · bi çewtî: {f}",
+      pricesPushed: "Biha di firoşgehê de hatin nûkirin: {u} · bi çewtî: {f}", "taxMode:net": "Firoşgeh niha bihayên bê bac nîşan dide (bac di dravdanê de tê zêdekirin) – hemû biha dîsa hatin şandin", "taxMode:gross": "Firoşgeh niha bihayan bi bac nîşan dide – hemû biha dîsa hatin şandin",
       weightsPushed: "Giranî ji firoşgehê re hatin şandin: {u} · bi çewtî: {f}",
       variantsAdded: "Mezinahî/reng di firoşgehê de hatin zêdekirin: {p}",
       bulkPushed: "Hemû hatin barkirin: {c} nû · {l} hatin girêdan · {u} hatin temamkirin · {f} bi pirsgirêk · {s} hatin derbaskirin",

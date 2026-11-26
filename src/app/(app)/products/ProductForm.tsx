@@ -55,6 +55,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
   shopStatus?: {
     connected: ShopFlags; linked: ShopFlags; linkedVariantIds?: Record<Channel, string[]>;
     storeTypes?: Record<Channel, StoreType[]>; categoryMap?: Record<Channel, Record<string, string>>;
+    pricesNet?: boolean;
   };
 }) {
   const [state, action] = useActionState(saveProduct, undefined);
@@ -90,6 +91,10 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
   // Bruttopreis ins Nettofeld schreibt und klar ist, dass auch Wiederverkäufer mit MwSt. sehen) – gleiche Rechnung wie
   // beim Senden an den Shop bzw. die Preisliste der Wiederverkäufer (runder Bruttopreis, `shopPriceCents`)
   const [vatBp, setVatBp] = useState(Number(initial.vatRateBp) || 1900);
+  // Shops zeigen Nettopreise (Wunsch Inhaber 26.11.2026): dann steht unter dem Preis, dass die MwSt. erst an der Kasse dazukommt,
+  // und der Betrag mit MwSt. als „an der Kasse“ (src/lib/shopify/tax-mode.ts)
+  const net = Boolean(shopStatus?.pricesNet);
+  const grossTpl = net ? t.product.shopGrossNet : t.product.shopGross;
   const gross = useMemo(() => {
     const of = (s: string) => { const net = parseMoney(s); return net != null && net > 0 ? shopPriceCents(net, vatBp, true) : null; };
     return { w: of(prices.w), r: of(prices.r) };
@@ -227,15 +232,15 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
         )}
         <fieldset disabled={!rights.prices} className="contents">
           <Field label={t.product.wholesale} hint={
-            <SeenBy note={t.product.wholesaleNote}>
-              {gross.w != null && <ShopGross tpl={t.product.shopGross} cents={gross.w} />}
+            <SeenBy note={net ? t.product.wholesaleNoteNet : t.product.wholesaleNote}>
+              {gross.w != null && <ShopGross tpl={grossTpl} cents={gross.w} />}
               {rights.cost && margin.w != null && <span className="block">{`${t.product.margin}: ${margin.w} %`}</span>}
             </SeenBy>}>
             <MoneyInput name="wholesalePrice" value={prices.w} onChange={(w) => setPrices((x) => ({ ...x, w }))} />
           </Field>
           <Field label={t.product.retail} hint={
-            <SeenBy note={t.product.retailNote}>
-              {gross.r != null && <ShopGross tpl={t.product.shopGross} cents={gross.r} />}
+            <SeenBy note={net ? t.product.retailNoteNet : t.product.retailNote}>
+              {gross.r != null && <ShopGross tpl={grossTpl} cents={gross.r} />}
               {rights.cost && margin.r != null && <span className="block">{`${t.product.margin}: ${margin.r} %`}</span>}
             </SeenBy>}>
             <MoneyInput name="retailPrice" value={prices.r} onChange={(r) => setPrices((x) => ({ ...x, r }))} />
@@ -305,7 +310,7 @@ export function ProductForm({ t, initial, suppliers, categories, shopStatus, rig
               </div>
               {showVariantPrices && (
                 <div className="col-span-2 lg:col-span-7">
-                  <VariantPrices t={t} v={v} base={prices} vatBp={vatBp} rights={rights} onChange={(patch) => upd(v.key, patch)} />
+                  <VariantPrices t={t} v={v} base={prices} vatBp={vatBp} rights={rights} grossTpl={grossTpl} onChange={(patch) => upd(v.key, patch)} />
                 </div>
               )}
               <div className="col-span-2 lg:col-span-7">
@@ -384,8 +389,8 @@ function MoneyInput({ name, value, onChange, placeholder = "0,00", label }: {
  * was im Shop wirklich gilt (mit MwSt., gleiche Rechnung wie beim Senden) – so sieht man je Größe den Preis im Shop.
  * Einkaufspreis nur mit Recht „Einkaufspreis“, Verkaufspreise ändern nur mit Recht „Preise“ (der Server prüft es noch einmal).
  */
-function VariantPrices({ t, v, base, vatBp, rights, onChange }: {
-  t: Dict; v: V; base: { p: string; w: string; r: string }; vatBp: number; rights: ProductRights; onChange: (patch: Partial<V>) => void;
+function VariantPrices({ t, v, base, vatBp, rights, grossTpl, onChange }: {
+  t: Dict; v: V; base: { p: string; w: string; r: string }; vatBp: number; rights: ProductRights; grossTpl: string; onChange: (patch: Partial<V>) => void;
 }) {
   const own = hasOwnPrice(v);
   const eff = (mine: string | undefined, fallback: string) => { const s = mine?.trim() ? mine : fallback; const c = parseMoney(s); return c != null && c > 0 ? c : null; };
@@ -393,7 +398,7 @@ function VariantPrices({ t, v, base, vatBp, rights, onChange }: {
   const margin = (sale: number | null) => (sale && p ? Math.round(((sale - p) / sale) * 100) : null);
   const note = (sale: number | null) => (
     <>
-      {sale != null && <ShopGross tpl={t.product.shopGross} cents={shopPriceCents(sale, vatBp, true)} />}
+      {sale != null && <ShopGross tpl={grossTpl} cents={shopPriceCents(sale, vatBp, true)} />}
       {rights.cost && margin(sale) != null && <span className="block">{`${t.product.margin}: ${margin(sale)} %`}</span>}
     </>
   );
