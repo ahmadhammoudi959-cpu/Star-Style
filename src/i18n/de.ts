@@ -15,11 +15,15 @@ const de = {
     users: "Mitarbeiter",
     account: "Mein Konto",
     nextStep: "Nächster Schritt",
+    badgeOrders: "{n} Online-Bestellungen warten (Versand oder Abholung)",
+    badgeLists: "{n} neue Listen vom Bestell-Link",
+    badgeChat: "{n} ungelesene WhatsApp-Chats",
+    badgeMail: "{n} ungelesene E-Mails",
     menu: "Menü", scan: "Barcode scannen", scanShort: "Scan", home: "Start", products: "Artikel", categories: "Kategorien", receive: "Wareneingang", stock: "Lager", writeOffs: "Verluste",
     receivables: "Offene Posten", customers: "Kunden", suppliers: "Lieferanten", settings: "Einstellungen", sales: "Verkauf", reports: "Berichte", expenses: "Ausgaben", insights: "Hinweise", shops: "Shops", ask: "Frag dein Geschäft", design: "Belegdesign",
   },
   setup1: {
-    showGuide: "„Erste Schritte“ anzeigen", showGuideHint: "Zeigt die nummerierten Schritte auf der Startseite und im Menü – auch die schon erledigten. Praktisch zum Einarbeiten neuer Mitarbeiter. Ausgeschaltet stehen nur die offenen Schritte da (der nächste blau mit Pfeil); sind alle erledigt, verschwinden sie.",
+    showGuide: "„Erste Schritte“ anzeigen", showGuideHint: "Zeigt die nummerierten Schritte auf der Startseite – auch die schon erledigten. Praktisch zum Einarbeiten neuer Mitarbeiter. Im Menü steht immer nur der nächste Schritt (mit Pfeil, blau/rot); sind alle erledigt, verschwindet er.",
     title: "Erste Schritte", intro: "Einfach der Reihe nach. Jeder erledigte Schritt bekommt ein ✓. Wenn alles erledigt ist, verschwindet diese Liste.", progress: "{d} von {n}", start: "Hier starten", done: "Erledigt", company: "Firmendaten ergänzen", companyHint: "Adresse, Steuernummer, Bank und Logo", supplier: "Ersten Lieferanten anlegen", supplierHint: "Bei wem du die Ware kaufst", product: "Artikel anlegen", productHint: "Foto, Name, Preise und vorhandene Menge", receive: "Wareneingang buchen", receiveHint: "Jede neue Lieferung vom Lieferanten", customer: "Ersten Kunden anlegen", customerHint: "Salon oder Person, die bei dir kauft", invoice: "Erste Rechnung schreiben", invoiceHint: "Oder ein Angebot – danach drucken", payment: "Erste Zahlung erfassen", paymentHint: "Wenn der Kunde bezahlt",
   },
   home: {

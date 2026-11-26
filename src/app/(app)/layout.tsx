@@ -30,15 +30,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const allItems: NavItem[] = [
     { href: "/", label: t.nav.home, icon: "home" },
     // rote Zahl = Online-Bestellungen, die noch verschickt/abgeholt werden müssen (Wunsch Inhaber 19.11.2026, wie WhatsApp/E-Mail)
-    { href: "/sales", label: t.nav.sales, icon: "cart", badge: can(session, "sales.shipping") ? "/api/sales/waiting" : undefined },
+    { href: "/sales", label: t.nav.sales, icon: "cart", badge: can(session, "sales.shipping") ? "/api/sales/waiting" : undefined, badgeKind: "orders", badgeTip: t.nav.badgeOrders },
     // Direktverkauf (Wunsch Inhaber 19.11.2026): Listen vom Bestell-Link – Zahl der neuen
-    { href: "/direct", label: t.nav.direct, icon: "list", badge: "/api/direct/unread" },
+    { href: "/direct", label: t.nav.direct, icon: "list", badge: "/api/direct/unread", badgeKind: "lists", badgeTip: t.nav.badgeLists },
     { href: "/promotions", label: t.nav.promotions, icon: "percent" },
     { href: "/returns", label: t.nav.returns, icon: "undo" },
     { href: "/receivables", label: t.nav.receivables, icon: "euro" },
     { href: "/customers", label: t.nav.customers, icon: "users" },
-    { href: "/whatsapp", label: t.nav.whatsapp, icon: "chat", badge: "event:ss:wa-unread" }, // Zahl aus WhatsApp Web (WaDock)
-    { href: "/mail", label: t.nav.mail, icon: "inbox", badge: "/api/mail/unread" },
+    { href: "/whatsapp", label: t.nav.whatsapp, icon: "chat", badge: "event:ss:wa-unread", badgeKind: "chat", badgeTip: t.nav.badgeChat }, // Zahl aus WhatsApp Web (WaDock)
+    { href: "/mail", label: t.nav.mail, icon: "inbox", badge: "/api/mail/unread", badgeKind: "mail", badgeTip: t.nav.badgeMail },
     { href: "/products", label: t.nav.products, icon: "box" },
     { href: "/categories", label: t.nav.categories, icon: "tag" },
     { href: "/receive", label: t.nav.receive, icon: "truck" },
@@ -58,16 +58,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ];
   // Menü je nach Rechten (Wunsch Inhaber 12.11.2026): nur Seiten, die diese Person öffnen darf
   const items = allItems.filter((it) => canOpen(session, it.href));
-  // Nummern der ersten Schritte am Menü (nur Admin), solange noch nicht alles erledigt ist
+  // „Erste Schritte“ im Menü (nur Admin): NUR der nächste Schritt, mit Pfeil und blau/rot wechselnd (Wunsch Inhaber 26.11.2026:
+  // spätere Schritte erst zeigen, wenn sie dran sind – vorher stand z. B. eine weiße „7“ an den offenen Posten). Alle Schritte stehen
+  // weiter auf der Startseite in der Karte „Erste Schritte“.
   const setup = session.admin ? await setupSteps() : null;
-  if (setup && !setup.allDone) for (const s of setup.steps) {
-    const it = items.find((i) => i.href === s.nav);
-    if (!it || (s.done && !setup.showGuide)) continue;
-    const next = s.key === setup.next;
-    // Tooltip: Nummer + was zu tun ist; der nächste Schritt heißt so (blau mit Pfeil, nicht rot wie eine wartende Zahl)
-    const what = t.setup1[s.key as keyof typeof t.setup1];
-    it.step = { n: s.n, next, title: next ? `${t.nav.nextStep} (${s.n}): ${what}` : `${s.n}. ${what}${s.done ? " ✓" : ""}` };
-  }
+  const nextStep = setup && !setup.allDone ? setup.steps.find((s) => s.key === setup.next) : undefined;
+  const nextItem = nextStep && items.find((i) => i.href === nextStep.nav);
+  if (nextStep && nextItem)
+    nextItem.step = { n: nextStep.n, next: true, title: `${t.nav.nextStep} (${nextStep.n}): ${t.setup1[nextStep.key as keyof typeof t.setup1]}` };
   // Handy unten: Start, Verkauf, Scanner (hervorgehoben, Mitte), Lager, „Menü“ = alle Seiten der Seitenleiste
   const pick = (href: string) => items.find((i) => i.href === href);
   const scan = pick("/scan");

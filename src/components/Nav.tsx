@@ -11,7 +11,30 @@ export type NavItem = {
   step?: { n: number; next: boolean; title?: string };
   /** Zahl am Menüpunkt (z. B. ungelesene E-Mails): API liefert { count } – im Browser geladen, blockiert die Seite nicht */
   badge?: string;
+  /** Art der Zahl – bestimmt Symbol und Farbe (Wunsch Inhaber 26.11.2026: „كل حاجة تعبر عن نفسها“) */
+  badgeKind?: BadgeKind;
+  /** Tooltip/Vorlesetext mit {n}, z. B. „{n} ungelesene E-Mails“ */
+  badgeTip?: string;
 };
+
+/**
+ * Zahlen, bei denen etwas wartet, sehen je Art anders aus (Wunsch Inhaber 26.11.2026: „الرسائل تكون بشكل مميز … مش بنفس
+ * الدايره الحمراء“): Symbol + Zahl in der Farbe der Kachel – Online-Bestellungen rot mit Wagen, Listen vom Bestell-Link lila mit
+ * Liste, WhatsApp grün als Sprechblase, E-Mail indigo mit Briefumschlag. Der nächste Schritt (blau/rot wechselnd mit Pfeil) ist
+ * etwas ganz anderes.
+ */
+export type BadgeKind = "orders" | "lists" | "chat" | "mail";
+const BADGE_LOOK: Record<BadgeKind, { icon: IconName; cls: string }> = {
+  orders: { icon: "cart", cls: "bg-accent-500 text-white" },
+  lists: { icon: "list", cls: "bg-fuchsia-600 text-white" },
+  chat: { icon: "chat", cls: "bg-emerald-500 text-white rounded-es-[0.2rem]" }, // Sprechblase: eine Ecke spitz
+  mail: { icon: "mail", cls: "bg-indigo-500 text-white" },
+};
+const BADGE_SIZE = {
+  sm: { box: "h-[1.125rem] gap-0.5 px-1 text-[0.625rem]", icon: "h-2.5 w-2.5" },
+  md: { box: "h-[1.375rem] gap-1 px-1.5 text-[0.6875rem]", icon: "h-3 w-3" },
+  lg: { box: "h-6 gap-1 px-2 text-xs", icon: "h-3.5 w-3.5" },
+} as const;
 
 /**
  * Nächster Schritt der „Ersten Schritte“ (Wunsch Inhaber 26.11.2026): Pfeil, der hin und her stupst, „Nächster Schritt“ in Worten,
@@ -42,7 +65,9 @@ function NextStepChip({ n, title, onLight = false, small = false, toward = "star
 }
 
 /** Zahl am Menüpunkt: lädt nach dem Anzeigen und jede Minute neu (nur wenn die Seite sichtbar ist) */
-export function NavBadge({ src, className }: { src: string; className: string }) {
+export function NavBadge({ src, kind, tip, size = "md", className = "" }: {
+  src: string; kind?: BadgeKind; tip?: string; size?: keyof typeof BADGE_SIZE; className?: string;
+}) {
   const [n, setN] = useState(0);
   useEffect(() => {
     // „event:<Name>“: Zahl kommt als Fenster-Ereignis (z. B. WhatsApp Web im Rahmen, WaDock) statt vom Server
@@ -64,7 +89,16 @@ export function NavBadge({ src, className }: { src: string; className: string })
     return () => { stop = true; clearInterval(id); window.removeEventListener("ss:badges", now); };
   }, [src]);
   if (!n) return null;
-  return <span className={className}>{n > 99 ? "99+" : n}</span>;
+  const look = kind ? BADGE_LOOK[kind] : null, sz = BADGE_SIZE[size];
+  const label = tip?.replace("{n}", String(n));
+  return (
+    <span title={label} data-badge={kind ?? "count"}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-bold leading-none ${look?.cls ?? "bg-accent-500 text-white"} ${sz.box} ${className}`}>
+      {look && <Icon name={look.icon} className={sz.icon} strokeWidth={2.4} />}
+      <span aria-hidden={label ? true : undefined}>{n > 99 ? "99+" : n}</span>
+      {label && <span className="sr-only">{label}</span>}
+    </span>
+  );
 }
 
 /** Aktiv ist der längste passende Eintrag (/settings/users statt /settings) */
@@ -101,11 +135,9 @@ export function SideNav({ items, soonLabel, nextLabel }: { items: NavItem[]; soo
               {next && <span className={`block text-[0.6875rem] font-bold leading-tight ${active ? "text-brand-600" : "text-brand-300"}`}>{nextLabel}</span>}
             </span>
             {/* rote Zahl = da wartet wirklich etwas (z. B. Online-Bestellungen zum Versenden) */}
-            {it.badge && <NavBadge src={it.badge} className="ms-auto min-w-[1.375rem] rounded-full bg-accent-500 px-1.5 text-center text-[0.6875rem] font-bold leading-[1.375rem] text-white" />}
-            {it.step && (next
-              ? <NextStepChip n={it.step.n} title={it.step.title} onLight={active} />
-              : <span title={it.step.title ?? String(it.step.n)} className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold ${active ? "bg-brand-100 text-brand-700" : "bg-white/15 text-white"}`}>{it.step.n}</span>
-            )}
+            {it.badge && <NavBadge src={it.badge} kind={it.badgeKind} tip={it.badgeTip} />}
+            {/* nur der nächste Schritt steht im Menü (Wunsch Inhaber 26.11.2026: spätere erst, wenn sie dran sind) */}
+            {it.step?.next && <NextStepChip n={it.step.n} title={it.step.title} onLight={active} />}
           </Link>
         );
       })}
@@ -152,7 +184,7 @@ export function BottomNav({ items, all, menuLabel, closeLabel, nextLabel, footer
               <span className="relative">
                 <Icon name={it.icon} className="h-5 w-5" />
                 {/* Zahl am Symbol (z. B. Online-Bestellungen am „Verkauf“) */}
-                {it.badge && <NavBadge src={it.badge} className="absolute -top-1.5 start-3 min-w-[1.125rem] rounded-full bg-accent-500 px-1 text-center text-[0.625rem] font-bold leading-[1.125rem] text-white ring-2 ring-white" />}
+                {it.badge && <NavBadge src={it.badge} kind={it.badgeKind} tip={it.badgeTip} size="sm" className="absolute -top-1.5 start-3 ring-2 ring-white" />}
                 {/* nächster Schritt: blauer Pfeil, der auf das Symbol zeigt (nicht rot – das sind Zahlen, bei denen etwas wartet) */}
                 {it.step?.next && (
                   <span aria-hidden title={it.step.title} className="step-blink absolute -top-2.5 start-[-0.85rem] grid h-4 w-4 place-items-center rounded-full text-white ring-2 ring-white motion-safe:animate-bounce" data-next-step-chip>
@@ -212,12 +244,9 @@ function MenuSheet({ items, title, closeLabel, nextLabel, footer, onClose }: { i
                 </span>
                 <span className="[overflow-wrap:anywhere]">{it.label}</span>
                 {next && <span className={`-mt-1 text-[0.625rem] font-bold ${active ? "text-white/90" : "text-brand-600"}`}>{nextLabel}</span>}
-                {/* Zahl oben in der Ecke (rot) = da wartet etwas; nächster Schritt steht dann in der anderen Ecke */}
-                {it.badge && <NavBadge src={it.badge} className="absolute end-1.5 top-1.5 min-w-[1.25rem] rounded-full bg-accent-500 px-1 text-center text-[0.625rem] font-bold leading-5 text-white" />}
-                {it.step && (next
-                  ? <span className={`absolute top-1.5 ${it.badge ? "start-1.5" : "end-1.5"}`}><NextStepChip n={it.step.n} title={it.step.title} onLight={!active} small toward={it.badge ? "end" : "start"} /></span>
-                  : <span title={it.step.title} className="absolute end-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-white text-[0.625rem] font-bold text-brand-700 ring-1 ring-brand-100">{it.step.n}</span>
-                )}
+                {/* Zahl oben in der Ecke (je Art mit Symbol) = da wartet etwas; nächster Schritt steht dann in der anderen Ecke */}
+                {it.badge && <NavBadge src={it.badge} kind={it.badgeKind} tip={it.badgeTip} className="absolute end-1.5 top-1.5" />}
+                {it.step?.next && <span className={`absolute top-1.5 ${it.badge ? "start-1.5" : "end-1.5"}`}><NextStepChip n={it.step.n} title={it.step.title} onLight={!active} small toward={it.badge ? "end" : "start"} /></span>}
               </Link>
             );
           })}

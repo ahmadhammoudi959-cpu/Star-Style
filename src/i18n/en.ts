@@ -17,11 +17,15 @@ const en: Dict = {
     users: "Staff",
     account: "My account",
     nextStep: "Next step",
+    badgeOrders: "{n} online orders waiting (ship or pick-up)",
+    badgeLists: "{n} new lists from the order link",
+    badgeChat: "{n} unread WhatsApp chats",
+    badgeMail: "{n} unread emails",
     menu: "Menu", scan: "Scan barcode", scanShort: "Scan", home: "Home", products: "Products", categories: "Categories", receive: "Goods in", stock: "Stock", writeOffs: "Losses",
     receivables: "Receivables", customers: "Customers", suppliers: "Suppliers", settings: "Settings", sales: "Sales", reports: "Reports", expenses: "Expenses", insights: "Insights", shops: "Shops", ask: "Ask your business", design: "Document design",
   },
   setup1: {
-    showGuide: "Show “Getting started”", showGuideHint: "Shows the numbered steps on the home page and in the menu – including finished ones. Handy for training someone new. When off, only open steps are shown (the next one in blue with an arrow); once all are done, they disappear.",
+    showGuide: "Show “Getting started”", showGuideHint: "Shows the numbered steps on the home page – including finished ones. Handy for training someone new. The menu always shows only the next step (with an arrow, blue/red); once all are done, it disappears.",
     title: "Getting started", intro: "Follow the numbers in order. Each finished step gets a ✓. When everything is done, this list disappears.", progress: "{d} of {n}", start: "Start here", done: "Done", company: "Complete company details", companyHint: "Address, tax number, bank and logo", supplier: "Add your first supplier", supplierHint: "Who you buy goods from", product: "Add products", productHint: "Photo, name, prices and current stock", receive: "Book incoming goods", receiveHint: "Every new delivery from a supplier", customer: "Add your first customer", customerHint: "The salon or person buying from you", invoice: "Write your first invoice", invoiceHint: "Or a quote – then print it", payment: "Record your first payment", paymentHint: "When the customer pays",
   },
   home: {
